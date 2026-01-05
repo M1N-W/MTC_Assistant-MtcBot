@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-MTC Assistant - Handlers Module (Optimized)
+MTC Assistant - Handlers Module (Optimized & Fixed)
 Contains LINE webhook handlers, command routing, and rate limiting
 
 Improvements:
@@ -8,6 +8,7 @@ Improvements:
 - Enhanced rate limiting with exponential backoff
 - Better error handling
 - Performance optimizations
+- Fixed: Missing imports and function order
 """
 
 import time
@@ -17,14 +18,16 @@ from flask import request
 
 from linebot.v3 import WebhookHandler
 from linebot.v3.messaging import (
-    Configuration, ApiClient, MessagingApi, ReplyMessageRequest, TextMessage, ImageMessage
+    Configuration, ApiClient, MessagingApi, ReplyMessageRequest, 
+    TextMessage, ImageMessage, FlexMessage, FlexContainer
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent, FollowEvent
 
 # Import from config
 from config import (
     logger, ACCESS_TOKEN, CHANNEL_SECRET, MESSAGES,
-    RATE_LIMIT_MAX, RATE_LIMIT_WINDOW, ADMIN_USER_IDS
+    RATE_LIMIT_MAX, RATE_LIMIT_WINDOW, ADMIN_USER_IDS,
+    SCHOOL_LINK, GRADE_LINK, ABSENCE_LINK, Bio_LINK, Physic_LINK  # ← เพิ่มมา!
 )
 
 # Import from features
@@ -147,6 +150,118 @@ def get_rate_limit_status(user_id: str) -> dict:
         }
 
 # ============================================================================
+# FLEX MESSAGE HELPERS (ย้ายมาก่อน COMMANDS)
+# ============================================================================
+
+def get_links_menu_message(user_message: str = "") -> FlexMessage:
+    """แสดงเมนูลิงก์ทั้งหมดด้วย Flex Message"""
+    
+    flex_content = {
+        "type": "bubble",
+        "header": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": "🔗 ลิงก์สำคัญทั้งหมด",
+                    "weight": "bold",
+                    "size": "xl",
+                    "color": "#00C300"
+                }
+            ]
+        },
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {
+                    "type": "button",
+                    "action": {
+                        "type": "uri",
+                        "label": "🏫 เว็บโรงเรียน",
+                        "uri": SCHOOL_LINK
+                    },
+                    "style": "primary",
+                    "color": "#00C300",
+                    "margin": "sm"
+                },
+                {
+                    "type": "button",
+                    "action": {
+                        "type": "uri",
+                        "label": "📊 เช็คเกรด",
+                        "uri": GRADE_LINK
+                    },
+                    "style": "primary",
+                    "color": "#0099FF",
+                    "margin": "sm"
+                },
+                {
+                    "type": "button",
+                    "action": {
+                        "type": "uri",
+                        "label": "📝 แบบฟอร์มลา",
+                        "uri": ABSENCE_LINK
+                    },
+                    "style": "primary",
+                    "color": "#FF9900",
+                    "margin": "sm"
+                },
+                {
+                    "type": "button",
+                    "action": {
+                        "type": "uri",
+                        "label": "🧬 เฉลยชีววิทยา",
+                        "uri": Bio_LINK
+                    },
+                    "style": "link",
+                    "margin": "sm"
+                },
+                {
+                    "type": "button",
+                    "action": {
+                        "type": "uri",
+                        "label": "⚛️ เฉลยฟิสิกส์",
+                        "uri": Physic_LINK
+                    },
+                    "style": "link",
+                    "margin": "sm"
+                },
+                {
+                    "type": "button",
+                    "action": {
+                        "type": "message",
+                        "label": "🎵 ค้นหาเพลง",
+                        "text": "เปิดเพลง"
+                    },
+                    "style": "link",
+                    "margin": "sm"
+                }
+            ],
+            "spacing": "md"
+        },
+        "footer": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": "กดปุ่มเพื่อเข้าถึงลิงก์",
+                    "size": "xs",
+                    "color": "#AAAAAA",
+                    "align": "center"
+                }
+            ]
+        }
+    }
+    
+    return FlexMessage(
+        alt_text="🔗 ลิงก์สำคัญทั้งหมด",
+        contents=FlexContainer.from_dict(flex_content)
+    )
+
+# ============================================================================
 # COMMAND MATCHING & DISPATCHING (Optimized)
 # ============================================================================
 
@@ -154,7 +269,7 @@ def _keyword_matches(message_lower: str, keyword_lower: str) -> bool:
     """Check if keyword matches in message"""
     return keyword_lower in message_lower
 
-def call_action(action: Callable, user_message: str) -> Union[TextMessage, ImageMessage]:
+def call_action(action: Callable, user_message: str) -> Union[TextMessage, ImageMessage, FlexMessage]:
     """
     Call action function with proper argument handling and error recovery
     
@@ -163,7 +278,7 @@ def call_action(action: Callable, user_message: str) -> Union[TextMessage, Image
         user_message: User's message
     
     Returns:
-        TextMessage or ImageMessage response
+        TextMessage, ImageMessage or FlexMessage response
     """
     try:
         # Check if function accepts arguments
@@ -198,18 +313,18 @@ COMMANDS = [
     # เพลง
     (("เปิดเพลง", "หาเพลง", "ขอเพลง"), get_music_link_message),
     
+    # เมนูลิงก์ (ใหม่!) - ใส่ก่อน help เพื่อไม่ให้ conflict
+    (("เมนูลิงก์", "links", "ลิงค์ทั้งหมด"), get_links_menu_message),
+    
     # Help (ต้องอยู่ท้ายสุด)
     (("คำสั่ง", "help", "ช่วยเหลือ"), get_help_message),
-    
-     # เมนูลิงก์ (ใหม่!)
-    (("เมนูลิงก์", "links", "ลิงก์"), get_links_menu_message),
 ]
 
 # ============================================================================
 # LINE REPLY HELPER (Optimized with connection pooling)
 # ============================================================================
 
-def reply_to_line(reply_token: str, messages: List[Union[TextMessage, ImageMessage]]) -> bool:
+def reply_to_line(reply_token: str, messages: List[Union[TextMessage, ImageMessage, FlexMessage]]) -> bool:
     """
     Send reply to LINE with connection pooling and better error handling
     
@@ -489,119 +604,6 @@ def _handle_add_homework(user_message: str) -> TextMessage:
             text="⚠️ รูปแบบที่แนะนำ: สั่งการบ้าน | วิชา | รายละเอียด | วันส่ง\n"
                  "ตัวอย่าง: สั่งการบ้าน | ฟิสิกส์ | ทำแบบฝึกหัดบทที่ 4 ข้อ 1-5 | วันศุกร์"
         )
-    
-# ============================================================================
-# LINK MENU (Flex Message for Links)
-# ============================================================================
-
-def get_links_menu_message(user_message: str = ""):
-    """แสดงเมนูลิงก์ทั้งหมดด้วย Flex Message"""
-    from linebot.v3.messaging import FlexMessage, FlexContainer
-    
-    flex_content = {
-        "type": "bubble",
-        "header": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-                {
-                    "type": "text",
-                    "text": "🔗 ลิงก์สำคัญทั้งหมด",
-                    "weight": "bold",
-                    "size": "xl",
-                    "color": "#00C300"
-                }
-            ]
-        },
-        "body": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-                {
-                    "type": "button",
-                    "action": {
-                        "type": "uri",
-                        "label": "🏫 เว็บโรงเรียน",
-                        "uri": SCHOOL_LINK
-                    },
-                    "style": "primary",
-                    "color": "#00C300",
-                    "margin": "sm"
-                },
-                {
-                    "type": "button",
-                    "action": {
-                        "type": "uri",
-                        "label": "📊 เช็คเกรด",
-                        "uri": GRADE_LINK
-                    },
-                    "style": "primary",
-                    "color": "#0099FF",
-                    "margin": "sm"
-                },
-                {
-                    "type": "button",
-                    "action": {
-                        "type": "uri",
-                        "label": "📝 แบบฟอร์มลา",
-                        "uri": ABSENCE_LINK
-                    },
-                    "style": "primary",
-                    "color": "#FF9900",
-                    "margin": "sm"
-                },
-                {
-                    "type": "button",
-                    "action": {
-                        "type": "uri",
-                        "label": "🧬 เฉลยชีววิทยา",
-                        "uri": Bio_LINK
-                    },
-                    "style": "link",
-                    "margin": "sm"
-                },
-                {
-                    "type": "button",
-                    "action": {
-                        "type": "uri",
-                        "label": "⚛️ เฉลยฟิสิกส์",
-                        "uri": Physic_LINK
-                    },
-                    "style": "link",
-                    "margin": "sm"
-                },
-                {
-                    "type": "button",
-                    "action": {
-                        "type": "message",
-                        "label": "🎵 ค้นหาเพลง",
-                        "text": "เปิดเพลง"
-                    },
-                    "style": "link",
-                    "margin": "sm"
-                }
-            ],
-            "spacing": "md"
-        },
-        "footer": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-                {
-                    "type": "text",
-                    "text": "กดปุ่มเพื่อเข้าถึงลิงก์",
-                    "size": "xs",
-                    "color": "#AAAAAA",
-                    "align": "center"
-                }
-            ]
-        }
-    }
-    
-    return FlexMessage(
-        alt_text="🔗 ลิงก์สำคัญทั้งหมด",
-        contents=FlexContainer.from_dict(flex_content)
-    )
 
 # ============================================================================
 # EXPORTS
@@ -616,4 +618,5 @@ __all__ = [
     'is_rate_limited',
     'get_rate_limit_status',
     'get_line_api',
+    'get_links_menu_message',
 ]
