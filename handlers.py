@@ -200,6 +200,9 @@ COMMANDS = [
     
     # Help (ต้องอยู่ท้ายสุด)
     (("คำสั่ง", "help", "ช่วยเหลือ"), get_help_message),
+    
+     # เมนูลิงก์ (ใหม่!)
+    (("เมนูลิงก์", "links", "ลิงก์"), get_links_menu_message),
 ]
 
 # ============================================================================
@@ -486,10 +489,124 @@ def _handle_add_homework(user_message: str) -> TextMessage:
             text="⚠️ รูปแบบที่แนะนำ: สั่งการบ้าน | วิชา | รายละเอียด | วันส่ง\n"
                  "ตัวอย่าง: สั่งการบ้าน | ฟิสิกส์ | ทำแบบฝึกหัดบทที่ 4 ข้อ 1-5 | วันศุกร์"
         )
+    
+# ============================================================================
+# LINK MENU (Flex Message for Links)
+# ============================================================================
+
+def get_links_menu_message(user_message: str = ""):
+    """แสดงเมนูลิงก์ทั้งหมดด้วย Flex Message"""
+    from linebot.v3.messaging import FlexMessage, FlexContainer
+    
+    flex_content = {
+        "type": "bubble",
+        "header": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": "🔗 ลิงก์สำคัญทั้งหมด",
+                    "weight": "bold",
+                    "size": "xl",
+                    "color": "#00C300"
+                }
+            ]
+        },
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {
+                    "type": "button",
+                    "action": {
+                        "type": "uri",
+                        "label": "🏫 เว็บโรงเรียน",
+                        "uri": SCHOOL_LINK
+                    },
+                    "style": "primary",
+                    "color": "#00C300",
+                    "margin": "sm"
+                },
+                {
+                    "type": "button",
+                    "action": {
+                        "type": "uri",
+                        "label": "📊 เช็คเกรด",
+                        "uri": GRADE_LINK
+                    },
+                    "style": "primary",
+                    "color": "#0099FF",
+                    "margin": "sm"
+                },
+                {
+                    "type": "button",
+                    "action": {
+                        "type": "uri",
+                        "label": "📝 แบบฟอร์มลา",
+                        "uri": ABSENCE_LINK
+                    },
+                    "style": "primary",
+                    "color": "#FF9900",
+                    "margin": "sm"
+                },
+                {
+                    "type": "button",
+                    "action": {
+                        "type": "uri",
+                        "label": "🧬 เฉลยชีววิทยา",
+                        "uri": Bio_LINK
+                    },
+                    "style": "link",
+                    "margin": "sm"
+                },
+                {
+                    "type": "button",
+                    "action": {
+                        "type": "uri",
+                        "label": "⚛️ เฉลยฟิสิกส์",
+                        "uri": Physic_LINK
+                    },
+                    "style": "link",
+                    "margin": "sm"
+                },
+                {
+                    "type": "button",
+                    "action": {
+                        "type": "message",
+                        "label": "🎵 ค้นหาเพลง",
+                        "text": "เปิดเพลง"
+                    },
+                    "style": "link",
+                    "margin": "sm"
+                }
+            ],
+            "spacing": "md"
+        },
+        "footer": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": "กดปุ่มเพื่อเข้าถึงลิงก์",
+                    "size": "xs",
+                    "color": "#AAAAAA",
+                    "align": "center"
+                }
+            ]
+        }
+    }
+    
+    return FlexMessage(
+        alt_text="🔗 ลิงก์สำคัญทั้งหมด",
+        contents=FlexContainer.from_dict(flex_content)
+    )
 
 # ============================================================================
 # EXPORTS
 # ============================================================================
+
 __all__ = [
     'handler',
     'configuration',
