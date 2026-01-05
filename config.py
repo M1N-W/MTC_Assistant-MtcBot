@@ -109,9 +109,9 @@ EXAM_DATES = {
         datetime.date(2025, 12, 25),
     ],
     "ปลายภาค": [
+        datetime.date(2026, 2, 16),
+        datetime.date(2026, 2, 18),
         datetime.date(2026, 2, 20),
-        datetime.date(2026, 2, 22),
-        datetime.date(2026, 2, 24),
     ]
 }
 
