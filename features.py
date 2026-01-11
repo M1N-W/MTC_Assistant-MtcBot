@@ -152,7 +152,7 @@ def get_help_message(user_message: str = "") -> TextMessage:
         '- การบ้าน / ดูการบ้าน = ดูการบ้านทั้งหมด\n'
         '- ลบการบ้านทั้งหมด = ล้างข้อมูล\n\n'
         '🤖 AI\n'
-        '- พิมพ์ข้อความอื่นๆ = ตอบด้วย AI\n\n'
+        '- พิมพ์ข้อความอื่นๆ = ตอบด้วย AI'
     )
     return TextMessage(text=help_text)
 
