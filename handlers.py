@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-MTC Assistant - Handlers Module (Fixed for Current Rich Menu)
-แก้ไขให้รองรับปุ่ม Rich Menu ปัจจุบัน
+MTC Assistant - Handlers Module (Enhanced Flex Message)
+แก้ไข Flex Message ให้สวยงามและทุกปุ่มมีสี
 """
 
 import time
@@ -128,14 +128,15 @@ def get_rate_limit_status(user_id: str) -> dict:
         }
 
 # ============================================================================
-# FLEX MESSAGE - LINKS MENU
+# FLEX MESSAGE - ENHANCED LINKS MENU
 # ============================================================================
 
 def get_links_menu_message(user_message: str = "") -> FlexMessage:
-    """แสดงเมนูลิงก์ทั้งหมดด้วย Flex Message"""
+    """แสดงเมนูลิงก์ทั้งหมดด้วย Flex Message (Enhanced Design)"""
     
     flex_content = {
         "type": "bubble",
+        "size": "kilo",
         "header": {
             "type": "box",
             "layout": "vertical",
@@ -145,14 +146,37 @@ def get_links_menu_message(user_message: str = "") -> FlexMessage:
                     "text": "🔗 ลิงก์สำคัญทั้งหมด",
                     "weight": "bold",
                     "size": "xl",
-                    "color": "#00C300"
+                    "color": "#FFFFFF"
+                },
+                {
+                    "type": "text",
+                    "text": "เลือกลิงก์ที่ต้องการเข้าถึง",
+                    "size": "xs",
+                    "color": "#FFFFFF",
+                    "margin": "sm",
+                    "wrap": True
                 }
-            ]
+            ],
+            "backgroundColor": "#7C3AED",
+            "paddingAll": "20px"
         },
         "body": {
             "type": "box",
             "layout": "vertical",
             "contents": [
+                # Section 1: การเรียน
+                {
+                    "type": "text",
+                    "text": "📚 การเรียน",
+                    "weight": "bold",
+                    "size": "md",
+                    "color": "#666666",
+                    "margin": "none"
+                },
+                {
+                    "type": "separator",
+                    "margin": "sm"
+                },
                 {
                     "type": "button",
                     "action": {
@@ -162,7 +186,8 @@ def get_links_menu_message(user_message: str = "") -> FlexMessage:
                     },
                     "style": "primary",
                     "color": "#00C300",
-                    "margin": "sm"
+                    "height": "sm",
+                    "margin": "md"
                 },
                 {
                     "type": "button",
@@ -172,7 +197,8 @@ def get_links_menu_message(user_message: str = "") -> FlexMessage:
                         "uri": GRADE_LINK
                     },
                     "style": "primary",
-                    "color": "#0099FF",
+                    "color": "#3B82F6",
+                    "height": "sm",
                     "margin": "sm"
                 },
                 {
@@ -183,7 +209,21 @@ def get_links_menu_message(user_message: str = "") -> FlexMessage:
                         "uri": ABSENCE_LINK
                     },
                     "style": "primary",
-                    "color": "#FF9900",
+                    "color": "#F59E0B",
+                    "height": "sm",
+                    "margin": "sm"
+                },
+                # Section 2: เฉลยวิชา
+                {
+                    "type": "text",
+                    "text": "📖 เฉลยวิชา",
+                    "weight": "bold",
+                    "size": "md",
+                    "color": "#666666",
+                    "margin": "xl"
+                },
+                {
+                    "type": "separator",
                     "margin": "sm"
                 },
                 {
@@ -193,8 +233,10 @@ def get_links_menu_message(user_message: str = "") -> FlexMessage:
                         "label": "🧬 เฉลยชีววิทยา",
                         "uri": Bio_LINK
                     },
-                    "style": "link",
-                    "margin": "sm"
+                    "style": "primary",
+                    "color": "#10B981",
+                    "height": "sm",
+                    "margin": "md"
                 },
                 {
                     "type": "button",
@@ -203,7 +245,22 @@ def get_links_menu_message(user_message: str = "") -> FlexMessage:
                         "label": "⚛️ เฉลยฟิสิกส์",
                         "uri": Physic_LINK
                     },
-                    "style": "link",
+                    "style": "primary",
+                    "color": "#8B5CF6",
+                    "height": "sm",
+                    "margin": "sm"
+                },
+                # Section 3: ความบันเทิง
+                {
+                    "type": "text",
+                    "text": "🎵 ความบันเทิง",
+                    "weight": "bold",
+                    "size": "md",
+                    "color": "#666666",
+                    "margin": "xl"
+                },
+                {
+                    "type": "separator",
                     "margin": "sm"
                 },
                 {
@@ -213,11 +270,14 @@ def get_links_menu_message(user_message: str = "") -> FlexMessage:
                         "label": "🎵 ค้นหาเพลง",
                         "text": "เปิดเพลง"
                     },
-                    "style": "link",
-                    "margin": "sm"
+                    "style": "primary",
+                    "color": "#EC4899",
+                    "height": "sm",
+                    "margin": "md"
                 }
             ],
-            "spacing": "md"
+            "spacing": "none",
+            "paddingAll": "20px"
         },
         "footer": {
             "type": "box",
@@ -225,17 +285,20 @@ def get_links_menu_message(user_message: str = "") -> FlexMessage:
             "contents": [
                 {
                     "type": "text",
-                    "text": "กดปุ่มเพื่อเข้าถึงลิงก์",
-                    "size": "xs",
-                    "color": "#AAAAAA",
-                    "align": "center"
+                    "text": "💡 Tip: บันทึกลิงก์ที่ใช้บ่อยไว้",
+                    "size": "xxs",
+                    "color": "#999999",
+                    "align": "center",
+                    "wrap": True
                 }
-            ]
+            ],
+            "backgroundColor": "#F3F4F6",
+            "paddingAll": "12px"
         }
     }
     
     return FlexMessage(
-        alt_text="🔗 ลิงก์สำคัญทั้งหมด",
+        alt_text="🔗 ลิงก์สำคัญทั้งหมด - MTC Assistant",
         contents=FlexContainer.from_dict(flex_content)
     )
 
@@ -259,54 +322,28 @@ def call_action(action: Callable, user_message: str) -> Union[TextMessage, Image
         return TextMessage(text=MESSAGES.get("ACTION_ERROR", "เกิดข้อผิดพลาด"))
 
 # ============================================================================
-# COMMANDS LIST - แก้ให้รองรับ Rich Menu ปัจจุบัน!
+# COMMANDS LIST - รองรับ Rich Menu
 # ============================================================================
 
 COMMANDS = [
-    # ============================================
-    # 🆕 คำสั่งจาก Rich Menu ปัจจุบัน (เพิ่มมาใหม่!)
-    # ============================================
-    
-    # ปุ่ม 1: ตารางเรียน → ทำงานแล้ว ✅
+    # Rich Menu Commands
     (("ตารางเรียน", "ตารางสอน"), get_timetable_image_message),
-    
-    # ปุ่ม 2: เช็คเวลาเรียน → แก้ให้รองรับ!
     (("เช็คเวลาเรียน", "เช็คเวลา", "ดูเวลาเรียน"), get_time_until_next_class_message),
-    
-    # ปุ่ม 3: บันทึกการบ้าน → แก้ให้แสดงรายการการบ้าน!
     (("บันทึกการบ้าน", "บันทึกงาน", "ดูงาน"), lambda msg: TextMessage(text=get_homeworks_from_db())),
-    
-    # ปุ่ม 4: ลิงก์ที่สำคัญ → แก้ให้แสดง Flex Message!
     (("ลิงก์ที่สำคัญ", "ลิงค์สำคัญ", "ลิงก์", "links"), get_links_menu_message),
-    
-    # ปุ่ม 5: ปฏิทินกิจกรรม → แก้ให้นับถอยหลังสอบ!
     (("ปฏิทินกิจกรรม", "ปฏิทิน", "กิจกรรม", "ดูกิจกรรม"), get_exam_countdown_message),
-    
-    # ปุ่ม 6: ช่วยเหลือ → ทำงานแล้ว ✅
     (("ช่วยเหลือ", "คำสั่ง", "help"), get_help_message),
     
-    # ============================================
-    # คำสั่งเดิมที่มีอยู่แล้ว
-    # ============================================
-    
-    # งาน & ลิงก์พื้นฐาน
+    # Other Commands
     (("งาน", "การบ้าน", "เช็คงาน", "ใบงาน"), get_worksheet_message),
     (("เว็บโรงเรียน", "เว็บ"), get_school_link_message),
     (("เกรด", "ดูเกรด"), get_grade_link_message),
     (("ลาป่วย", "ลากิจ", "ลา"), get_absence_form_message),
-    
-    # เฉลย
     (("ชีวะ", "เฉลยชีวะ"), get_bio_link_message),
     (("ฟิสิกส์", "เฉลยฟิสิกส์"), get_physic_link_message),
-    
-    # ตารางเรียน & เวลา
     (("คาบต่อไป", "เรียนอะไร", "เรียนไรต่อ"), get_next_class_message),
     (("อีกกี่นาที", "เหลือเวลา"), get_time_until_next_class_message),
-    
-    # สอบ
     (("สอบ", "วันสอบ", "นับถอยหลังสอบ"), get_exam_countdown_message),
-    
-    # เพลง
     (("เปิดเพลง", "หาเพลง", "ขอเพลง"), get_music_link_message),
 ]
 
@@ -401,9 +438,7 @@ def handle_message(event):
     user_message_lower = user_message.lower()
     reply_message = None
     
-    # ===============================================
     # Admin Commands
-    # ===============================================
     if user_id in ADMIN_USER_IDS:
         if user_message.startswith("ประกาศ "):
             message_to_broadcast = user_message.replace("ประกาศ ", "", 1).strip()
