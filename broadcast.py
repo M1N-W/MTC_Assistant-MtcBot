@@ -4,6 +4,8 @@ MTC Assistant - Broadcast Module
 ระบบประกาศ Push สำหรับส่งข้อความไปหาผู้ใช้ทั้งหมด
 """
 
+import datetime  # FIXED: Added missing import for broadcast_homework_reminder
+
 from linebot.v3.messaging import (
     ApiClient, MessagingApi, Configuration,
     BroadcastRequest, TextMessage, PushMessageRequest
@@ -154,6 +156,7 @@ def broadcast_homework_reminder():
     
     try:
         # ดึงการบ้านที่ต้องส่งพรุ่งนี้
+        # FIXED: Now datetime is properly imported
         tomorrow = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         
         homeworks = db.collection('homeworks').where('due_date', '==', tomorrow).stream()
