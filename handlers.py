@@ -2,6 +2,7 @@
 """
 MTC Assistant - Handlers Module (Enhanced Flex Message)
 แก้ไข Flex Message ให้สวยงามและทุกปุ่มมีสี
+FIXED: user_id order bug
 """
 
 import time
@@ -406,18 +407,12 @@ def handle_message(event):
     """Handle incoming text messages"""
     user_text = getattr(event.message, "text", "")
     user_message = user_text.strip()
-
-    # Check if user is banned
-    is_banned, ban_message = check_user_banned(user_id)
-    if is_banned:
-        logger.warning(f"Banned user {user_id} attempted to use bot")
-        reply_to_line(event.reply_token, [TextMessage(text=ban_message)])
-        return  # Stop processing
     
     if not user_message:
         reply_to_line(event.reply_token, [TextMessage(text=MESSAGES["INVALID_MESSAGE"])])
         return
     
+    # ===== FIXED: Get user_id FIRST! =====
     # Get user ID
     user_id = None
     try:
@@ -429,6 +424,14 @@ def handle_message(event):
         user_id = f"anon-{request.remote_addr or 'unknown'}"
     
     logger.info("Message from %s: %s", user_id, user_message[:100])
+    # ===== End of fix =====
+    
+    # Check if user is banned (NOW user_id is defined!)
+    is_banned, ban_message = check_user_banned(user_id)
+    if is_banned:
+        logger.warning(f"🚫 Banned user {user_id} attempted to use bot")
+        reply_to_line(event.reply_token, [TextMessage(text=ban_message)])
+        return  # Stop processing immediately
     
     # Track user for broadcast
     try:
@@ -460,21 +463,22 @@ def handle_message(event):
             from user_blacklist import handle_ban_user_command
             result = handle_ban_user_command(user_id, user_message)
             reply_message = TextMessage(text=result)
-    
+        
         elif user_message.startswith("ปลดแบน ") or user_message.startswith("unban "):
             from user_blacklist import handle_unban_user_command
             result = handle_unban_user_command(user_id, user_message)
             reply_message = TextMessage(text=result)
-    
+        
         elif user_message in ["รายชื่อแบน", "banned list", "ดูคนแบน"]:
             from user_blacklist import handle_list_banned_command
             result = handle_list_banned_command(user_id)
             reply_message = TextMessage(text=result)
-    
+        
         elif user_message in ["สถิติแบน", "ban stats"]:
             from user_blacklist import handle_ban_stats_command
             result = handle_ban_stats_command(user_id)
             reply_message = TextMessage(text=result)
+            
         # Broadcast Management
         elif user_message.startswith("ประกาศ "):
             message_to_broadcast = user_message.replace("ประกาศ ", "", 1).strip()
@@ -514,19 +518,18 @@ def handle_message(event):
             reply_message = TextMessage(text=f"👥 จำนวนผู้ใช้ทั้งหมด: {count} คน")
         
         elif user_message in ["admin", "คำสั่งแอดมิน"]:
-            from user_blacklist import get_admin_ban_help
-
             admin_help = (
-                "👨‍💼 *คำสั่งแอดมินแบ่งเป็น 2 ประเภท*\n\n"
+                "👨‍💼 *คำสั่งแอดมิน*\n\n"
                 "📢 *การประกาศ:*\n"
                 "• ประกาศ [ข้อความ]\n"
                 "• ประกาศด่วน [ข้อความ]\n"
                 "• เตือนการบ้าน [รายละเอียด]\n\n"
                 "📊 *สถิติ:*\n"
-                "• ประกาศสถิติ\n"
-                "• จำนวนผู้ใช้"
+                "• สถิติประกาศ\n"
+                "• จำนวนผู้ใช้\n"
             )
-
+            
+            # เพิ่ม ban help
             admin_help += "\n" + get_admin_ban_help()
             
             reply_message = TextMessage(text=admin_help)
