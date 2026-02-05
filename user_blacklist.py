@@ -175,14 +175,14 @@ class BlacklistManager:
             return "⚠️ คุณถูกจำกัดการใช้งานชั่วคราว"
         
         message = "🚫 *คุณถูกแบนจากการใช้งาน*\n\n"
-        message += f"เหตุผล: {record.reason}\n"
-        message += f"วันที่แบน: {record.banned_at}\n"
+        message += f"เหตุผล {record.reason}\n"
+        message += f"วันที่แบน {record.banned_at}\n"
         
         if record.is_permanent:
-            message += f"\nสถานะ: ถาวร\n"
+            message += f"\nสถานะ = ถาวร\n"
             message += f"หากต้องการอุทธรณ์ กรุณาติดต่อผู้ดูแลระบบ"
         else:
-            message += f"\nสถานะ: ชั่วคราว"
+            message += f"\nสถานะ = ชั่วคราว"
         
         return message
 
@@ -216,7 +216,7 @@ def handle_ban_user_command(admin_id: str, user_message: str) -> str:
     
     if len(parts) < 2:
         return (
-            "⚠️ รูปแบบคำสั่ง:\n"
+            "⚠️ รูปแบบคำสั่ง\n"
             "แบน [user_id] [เหตุผล]\n\n"
             "ตัวอย่าง:\n"
             "แบน U1234567890 Spamming"
@@ -250,7 +250,7 @@ def handle_unban_user_command(admin_id: str, user_message: str) -> str:
     
     if len(parts) < 2:
         return (
-            "⚠️ รูปแบบคำสั่ง:\n"
+            "⚠️ รูปแบบคำสั่ง\n"
             "ปลดแบน [user_id]\n\n"
             "ตัวอย่าง:\n"
             "ปลดแบน U1234567890"
