@@ -177,7 +177,7 @@ def callback():
 def home():
     """Health check and status endpoint"""
     cfg_ok = "OK" if ACCESS_TOKEN and CHANNEL_SECRET else "CONFIG_MISSING"
-    gemini_status = "OK" if GEMINI_API_KEY else "MISSING"
+    gemini_status = "OK" if (GEMINI_API_KEY_V3 or GEMINI_API_KEY_V25) else "MISSING"
     db_status = "OK" if db else "DISCONNECTED"
     broadcast_status = "OK" if line_config else "DISABLED"
     
