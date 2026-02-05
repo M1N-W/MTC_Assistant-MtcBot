@@ -70,7 +70,7 @@ if not ADMIN_USER_IDS or ADMIN_USER_IDS == ['']:
 # CONSTANTS
 # ============================================================================
 LINE_MAX_TEXT = 5000
-LINE_SAFE_TRUNCATE = 4800
+LINE_SAFE_TRUNCATE = 4000  # To avoid cutting in the middle of multi-byte chars
 LOCAL_TZ = ZoneInfo("Asia/Bangkok")
 
 # ============================================================================
