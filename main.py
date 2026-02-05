@@ -20,7 +20,7 @@ from flask import Flask, request, abort, jsonify, g
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# Gemini imports
+# Gemini imports (google-genai)
 from google import genai
 
 # LINE imports
@@ -78,12 +78,12 @@ def after_request(response):
     if hasattr(g, 'start_time'):
         elapsed = (time.time() - g.start_time) * 1000
         _metrics["total_response_time"] += elapsed
-        
+
         if elapsed > 1000:  # Log slow requests
             logger.warning(f"Slow request to {request.path}: {elapsed:.2f}ms")
         else:
             logger.debug(f"Request to {request.path}: {elapsed:.2f}ms")
-    
+
     return response
 
 # ============================================================================
@@ -98,38 +98,37 @@ try:
         db = firestore.client()
         features.set_database(db)  # Set database in features module
         broadcast.set_database(db)  # Set database in broadcast module
-        logger.info("🔥 Firebase Connected Successfully!")
+        logger.info("Firebase Connected Successfully!")
     else:
-        logger.warning(f"⚠️ Missing {FIREBASE_KEY_PATH}. Homework DB features will be disabled.")
+        logger.warning(f"Missing {FIREBASE_KEY_PATH}. Homework DB features will be disabled.")
 except Exception as e:
-    logger.exception(f"❌ Firebase Init Error: {e}")
+    logger.exception(f"Firebase Init Error: {e}")
 
 # ============================================================================
-# GEMINI AI INITIALIZATION
+# GEMINI AI INITIALIZATION (google-genai client)
 # ============================================================================
-# GEMINI AI INITIALIZATION (primary + secondary) using google-genai
 gemini_client_v3 = None
 gemini_client_v25 = None
 
 try:
     if GEMINI_API_KEY_V3:
         gemini_client_v3 = genai.Client(api_key=GEMINI_API_KEY_V3)
-        logger.info(f"🤖 Gemini primary model '{GEMINI_MODEL_V3}' instantiated (client ready)")
+        logger.info(f"Gemini primary client created for model '{GEMINI_MODEL_V3}'")
 
     if GEMINI_API_KEY_V25:
         gemini_client_v25 = genai.Client(api_key=GEMINI_API_KEY_V25)
-        logger.info(f"🤖 Gemini secondary model '{GEMINI_MODEL_V25}' instantiated (client ready)")
+        logger.info(f"Gemini secondary client created for model '{GEMINI_MODEL_V25}'")
 
-    # ส่งทั้ง client และชื่อโมเดลไปให้ features
+    # ส่งทั้ง client และชื่อโมเดลไปให้ features (พารามิเตอร์ต้องตรงกับ features.set_gemini_models)
     features.set_gemini_models(
-        client_v3=gemini_client_v3,
-        model_name_v3=GEMINI_MODEL_V3,
-        client_v25=gemini_client_v25,
-        model_name_v25=GEMINI_MODEL_V25
+        client_primary=gemini_client_v3,
+        model_primary=GEMINI_MODEL_V3,
+        client_fallback=gemini_client_v25,
+        model_fallback=GEMINI_MODEL_V25,
     )
 
 except Exception as e:
-    logger.error(f"❌ Gemini model init failed: {e}")
+    logger.error(f"Gemini model init failed: {e}")
 
 # ============================================================================
 # LINE API INITIALIZATION (for Broadcast)
@@ -138,7 +137,7 @@ from linebot.v3.messaging import Configuration as LineConfig
 line_config = LineConfig(access_token=ACCESS_TOKEN) if ACCESS_TOKEN else None
 if line_config:
     broadcast.set_line_api(line_config)
-    logger.info("📢 Broadcast system initialized")
+    logger.info("Broadcast system initialized")
 
 # ============================================================================
 # FLASK ROUTES
@@ -152,15 +151,15 @@ def callback():
         logger.error("Missing X-Line-Signature header.")
         _metrics["total_errors"] += 1
         abort(400)
-    
+
     body = request.get_data(as_text=True)
     logger.debug("Request body: %s", body[:200])
-    
+
     if handler is None:
         logger.error("Webhook handler not configured (missing CHANNEL_SECRET).")
         _metrics["total_errors"] += 1
         abort(500)
-    
+
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
@@ -171,7 +170,7 @@ def callback():
         logger.exception("Error handling request: %s", e)
         _metrics["total_errors"] += 1
         abort(500)
-    
+
     return "OK", 200
 
 @app.route("/", methods=['GET'])
@@ -181,11 +180,11 @@ def home():
     gemini_status = "OK" if (GEMINI_API_KEY_V3 or GEMINI_API_KEY_V25) else "MISSING"
     db_status = "OK" if db else "DISCONNECTED"
     broadcast_status = "OK" if line_config else "DISABLED"
-    
+
     uptime = int(time.time() - _metrics["start_time"])
-    
+
     return (
-        f"🤖 MTC Assistant v21 (Optimized Edition)\n\n"
+        f"MTC Assistant v21 (Optimized Edition)\n\n"
         f"Status:\n"
         f"  LINE: {cfg_ok}\n"
         f"  Gemini AI: {gemini_status}\n"
@@ -207,13 +206,15 @@ def home():
 def healthz():
     """Enhanced health check endpoint with connectivity test"""
     start_time = time.time()
-    
+
     services_status = {
-    "line": bool(ACCESS_TOKEN and CHANNEL_SECRET),
-    "gemini": bool((GEMINI_API_KEY_V3 or GEMINI_API_KEY_V25) and (gemini_model_v3 or gemini_model_v25)),
-    "firebase": bool(db),
-    "broadcast": bool(line_config)
-    }   
+        "line": bool(ACCESS_TOKEN and CHANNEL_SECRET),
+        # Check whether at least one API key AND a created client exist
+        "gemini": bool((GEMINI_API_KEY_V3 or GEMINI_API_KEY_V25) and (gemini_client_v3 or gemini_client_v25)),
+        "firebase": bool(db),
+        "broadcast": bool(line_config),
+    }
+
     # Test Firebase connectivity
     if db:
         try:
@@ -223,13 +224,13 @@ def healthz():
         except Exception as e:
             logger.warning(f"Firebase connectivity test failed: {e}")
             services_status["firebase_connectivity"] = False
-    
+
     response_time = (time.time() - start_time) * 1000  # ms
-    
-    # Determine overall health
+
+    # Determine overall health (line + firebase considered critical)
     all_critical_ok = services_status["line"] and services_status["firebase"]
     status_code = 200 if all_critical_ok else 503
-    
+
     return jsonify({
         "status": "healthy" if all_critical_ok else "degraded",
         "version": "21-optimized",
@@ -244,7 +245,7 @@ def metrics():
     uptime = time.time() - _metrics["start_time"]
     avg_response_time = _metrics['total_response_time'] / max(_metrics['total_requests'], 1)
     error_rate = (_metrics['total_errors'] / max(_metrics['total_requests'], 1)) * 100
-    
+
     return jsonify({
         "uptime_seconds": round(uptime, 2),
         "total_requests": _metrics["total_requests"],
@@ -263,10 +264,10 @@ def metrics():
 def stats():
     """Show bot statistics"""
     from handlers import _user_message_history
-    
+
     total_users = len(_user_message_history)
     total_messages = sum(len(msgs) for msgs in _user_message_history.values())
-    
+
     # Get broadcast stats if available
     broadcast_stats = {}
     if db:
@@ -277,7 +278,7 @@ def stats():
             }
         except:
             pass
-    
+
     return jsonify({
         "total_users": total_users,
         "total_messages": total_messages,
@@ -288,7 +289,6 @@ def stats():
 # ============================================================================
 # ERROR HANDLERS
 # ============================================================================
-
 @app.errorhandler(404)
 def not_found(error):
     """Handle 404 errors"""
@@ -325,44 +325,44 @@ def print_startup_banner():
     banner = """
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
-║           🤖 MTC Assistant v21 (Optimized)               ║
+║           MTC Assistant v21 (Optimized)                  ║
 ║                                                           ║
-║  Performance Enhanced - Production Ready                  ║
+║  Performance Enhanced - Production Ready                 ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
 """
     logger.info(banner)
 
-    # เช็กสถานะ Gemini จากสองโมเดล
-    gemini_ready = bool(gemini_model_v3 or gemini_model_v25)
+    # เช็กสถานะ Gemini โดยดูว่า client อย่างน้อยตัวหนึ่งถูกสร้างหรือไม่
+    gemini_ready = bool(gemini_client_v3 or gemini_client_v25)
 
     logger.info("Configuration:")
     logger.info(f"  • Port: {PORT}")
     logger.info(f"  • Debug Mode: {FLASK_DEBUG}")
-    logger.info(f"  • LINE Bot: {'✅ Configured' if ACCESS_TOKEN and CHANNEL_SECRET else '❌ Not configured'}")
-    logger.info(f"  • Gemini AI: {'✅ Ready' if gemini_ready else '❌ Disabled'}")
-    logger.info(f"  • Firebase: {'✅ Connected' if db else '❌ Disconnected'}")
-    logger.info(f"  • Broadcast: {'✅ Initialized' if line_config else '❌ Disabled'}")
+    logger.info(f"  • LINE Bot: {'Configured' if ACCESS_TOKEN and CHANNEL_SECRET else 'Not configured'}")
+    logger.info(f"  • Gemini AI: {'Ready' if gemini_ready else 'Disabled'}")
+    logger.info(f"  • Firebase: {'Connected' if db else 'Disconnected'}")
+    logger.info(f"  • Broadcast: {'Initialized' if line_config else 'Disabled'}")
     logger.info("")
     logger.info("Optimizations Enabled:")
-    logger.info("  ⚡ Response caching")
-    logger.info("  ⚡ Connection pooling")
-    logger.info("  ⚡ Performance monitoring")
-    logger.info("  ⚡ Enhanced error handling")
+    logger.info("  - Response caching")
+    logger.info("  - Connection pooling")
+    logger.info("  - Performance monitoring")
+    logger.info("  - Enhanced error handling")
     logger.info("")
     logger.info("Module Structure:")
-    logger.info("  📁 config.py    - Configuration & Constants")
-    logger.info("  📁 features.py  - Feature Functions")
-    logger.info("  📁 handlers.py  - LINE Handlers & Routing")
-    logger.info("  📁 broadcast.py - Broadcast System")
-    logger.info("  📁 main.py      - Flask App (this file)")
+    logger.info("  config.py    - Configuration & Constants")
+    logger.info("  features.py  - Feature Functions")
+    logger.info("  handlers.py  - LINE Handlers & Routing")
+    logger.info("  broadcast.py - Broadcast System")
+    logger.info("  main.py      - Flask App (this file)")
     logger.info("")
-    logger.info("🚀 Server starting...")
+    logger.info("Server starting...")
     logger.info("=" * 60)
 
 if __name__ == "__main__":
     print_startup_banner()
-    
+
     # Run Flask app
     app.run(
         host="0.0.0.0",
