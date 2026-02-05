@@ -29,8 +29,11 @@ from linebot.v3.exceptions import InvalidSignatureError
 # Import from our modules
 from config import (
     logger, setup_logging, validate_config,
-    PORT, FLASK_DEBUG, ACCESS_TOKEN, CHANNEL_SECRET, GEMINI_API_KEY,
-    FIREBASE_KEY_PATH, GEMINI_MODEL_NAME, LOCAL_TZ
+    PORT, FLASK_DEBUG, ACCESS_TOKEN, CHANNEL_SECRET,
+    GEMINI_API_KEY_V3, GEMINI_API_KEY_V25,
+    FIREBASE_KEY_PATH,
+    GEMINI_MODEL_V3, GEMINI_MODEL_V25,
+    LOCAL_TZ
 )
 
 from handlers import handler
@@ -104,16 +107,28 @@ except Exception as e:
 # ============================================================================
 # GEMINI AI INITIALIZATION
 # ============================================================================
-gemini_model = None
-if GEMINI_API_KEY:
-    try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        gemini_model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-        features.set_gemini_model(gemini_model)  # Set model in features module
-        logger.info(f"🤖 Gemini model '{GEMINI_MODEL_NAME}' instantiated.")
-    except Exception as e:
-        logger.error(f"❌ Gemini model init failed: {e}")
-        gemini_model = None
+# GEMINI AI INITIALIZATION (primary + secondary)
+gemini_model_v3 = None
+gemini_model_v25 = None
+
+try:
+    # primary
+    if GEMINI_API_KEY_V3:
+        genai.configure(api_key=GEMINI_API_KEY_V3)
+        gemini_model_v3 = genai.GenerativeModel(GEMINI_MODEL_V3)
+        logger.info(f"🤖 Gemini primary model '{GEMINI_MODEL_V3}' instantiated")
+
+    # secondary
+    if GEMINI_API_KEY_V25:
+        genai.configure(api_key=GEMINI_API_KEY_V25)
+        gemini_model_v25 = genai.GenerativeModel(GEMINI_MODEL_V25)
+        logger.info(f"🤖 Gemini secondary model '{GEMINI_MODEL_V25}' instantiated")
+
+    # pass to features
+    features.set_gemini_models(model_v3=gemini_model_v3, model_v25=gemini_model_v25)
+
+except Exception as e:
+    logger.error(f"❌ Gemini model init failed: {e}")
 
 # ============================================================================
 # LINE API INITIALIZATION (for Broadcast)
@@ -193,12 +208,11 @@ def healthz():
     start_time = time.time()
     
     services_status = {
-        "line": bool(ACCESS_TOKEN and CHANNEL_SECRET),
-        "gemini": bool(GEMINI_API_KEY and gemini_model),
-        "firebase": bool(db),
-        "broadcast": bool(line_config)
-    }
-    
+    "line": bool(ACCESS_TOKEN and CHANNEL_SECRET),
+    "gemini": bool((GEMINI_API_KEY_V3 or GEMINI_API_KEY_V25) and (gemini_model_v3 or gemini_model_v25)),
+    "firebase": bool(db),
+    "broadcast": bool(line_config)
+    }   
     # Test Firebase connectivity
     if db:
         try:
@@ -305,7 +319,6 @@ def service_unavailable(error):
 # ============================================================================
 # MAIN ENTRY POINT
 # ============================================================================
-
 def print_startup_banner():
     """Print startup banner with configuration info"""
     banner = """
@@ -318,11 +331,15 @@ def print_startup_banner():
 ╚═══════════════════════════════════════════════════════════╝
 """
     logger.info(banner)
+
+    # เช็กสถานะ Gemini จากสองโมเดล
+    gemini_ready = bool(gemini_model_v3 or gemini_model_v25)
+
     logger.info("Configuration:")
     logger.info(f"  • Port: {PORT}")
     logger.info(f"  • Debug Mode: {FLASK_DEBUG}")
     logger.info(f"  • LINE Bot: {'✅ Configured' if ACCESS_TOKEN and CHANNEL_SECRET else '❌ Not configured'}")
-    logger.info(f"  • Gemini AI: {'✅ Ready' if gemini_model else '❌ Disabled'}")
+    logger.info(f"  • Gemini AI: {'✅ Ready' if gemini_ready else '❌ Disabled'}")
     logger.info(f"  • Firebase: {'✅ Connected' if db else '❌ Disconnected'}")
     logger.info(f"  • Broadcast: {'✅ Initialized' if line_config else '❌ Disabled'}")
     logger.info("")

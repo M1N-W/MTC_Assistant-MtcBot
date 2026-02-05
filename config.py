@@ -42,8 +42,12 @@ except (ValueError, TypeError):
 
 FLASK_DEBUG = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
 
-# Gemini Model Configuration
-GEMINI_MODEL_NAME = "gemini-3-flash-preview"
+# Gemini Model Configuration (read from Render ENV)
+GEMINI_API_KEY_V3 = os.environ.get("GEMINI_API_KEY_PRIMARY")
+GEMINI_API_KEY_V25 = os.environ.get("GEMINI_API_KEY_SECONDARY")
+
+GEMINI_MODEL_V3 = os.environ.get("GEMINI_MODEL_PRIMARY", "gemini-3-flash-preview")
+GEMINI_MODEL_V25 = os.environ.get("GEMINI_MODEL_SECONDARY", "gemini-2.5-flash-preview")
 
 # ============================================================================
 # RATE LIMITING CONFIGURATION
@@ -170,12 +174,10 @@ SCHEDULE = {
 # CONFIGURATION VALIDATION
 # ============================================================================
 def validate_config():
-    """Validate configuration and log warnings"""
     if not ACCESS_TOKEN:
         logger.warning("CHANNEL_ACCESS_TOKEN not set; LINE API calls will fail.")
     if not CHANNEL_SECRET:
         logger.warning("CHANNEL_SECRET not set; signature verification may fail.")
-    if not GEMINI_API_KEY:
-        logger.info("GEMINI_API_KEY not set; AI features disabled.")
-    
+    if not (GEMINI_API_KEY_V3 or GEMINI_API_KEY_V25):
+        logger.info("No Gemini API keys set; AI features disabled.")
     logger.info(f"Configuration loaded: PORT={PORT}, DEBUG={FLASK_DEBUG}")

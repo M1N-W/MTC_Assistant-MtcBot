@@ -22,7 +22,9 @@ from config import (
 
 # Global variables (will be set by main.py)
 db = None  # Firebase database instance
-gemini_model = None  # Gemini AI model instance
+gemini_model = None  # Gemini AI model instance; v3 model
+gemini_fallback = None    # v2.5 model
+
 
 # ============================================================================
 # DATABASE FUNCTIONS (Firebase/Homework)
@@ -72,7 +74,7 @@ def get_homeworks_from_db() -> str:
             )
         
         if not hw_list:
-            return "🎉 เย้! ตอนนี้ไม่มีการบ้านค้างในระบบครับ"
+            return "ตอนนี้ไม่มีการบ้านค้างในระบบครับ"
         
         return "📋 *รายการการบ้านปัจจุบัน*\n\n" + "\n" + "-" * 30 + "\n".join(hw_list)
     except Exception as e:
@@ -326,10 +328,11 @@ def get_music_link_message(user_message: str) -> TextMessage:
 # AI FUNCTIONS (Gemini)
 # ============================================================================
 
-def set_gemini_model(model):
-    """Set Gemini AI model instance"""
-    global gemini_model
-    gemini_model = model
+def set_gemini_models(model_v3=None, model_v25=None):
+    """Set Gemini AI models (accept keyword args from main)"""
+    global gemini_model, gemini_fallback
+    gemini_model = model_v3
+    gemini_fallback = model_v25
 
 def _safe_parse_gemini_response(response) -> str:
     """Parse Gemini response safely"""
@@ -354,8 +357,7 @@ def _safe_parse_gemini_response(response) -> str:
         return ""
 
 def get_gemini_response(prompt: str) -> str:
-    """Get response from Gemini AI"""
-    # Identity check
+    """Get response from Gemini AI with fallback model"""
     identity_queries = ["คุณคือใคร", "เป็นใคร", "who are you", "คุณชื่ออะไร", "ชื่ออะไร", "ตัวตน"]
     if any(q in prompt.lower() for q in identity_queries):
         return MESSAGES["IDENTITY"]
@@ -364,22 +366,34 @@ def get_gemini_response(prompt: str) -> str:
         return MESSAGES["AI_DISABLED"]
     
     try:
-        # เพิ่ม context เวลาปัจจุบัน
         now = datetime.datetime.now(LOCAL_TZ)
         date_context = f"วันนี้คือ{now.strftime('%A')}ที่ {now.strftime('%d %B')} พ.ศ. {now.year + 543}"
         enhanced_prompt = f"(บริบท: {date_context})\n\nคำถาม: {prompt}"
         
-        response = gemini_model.generate_content(enhanced_prompt)
-        text = _safe_parse_gemini_response(response)
+        # ===== ลองใช้โมเดลหลักก่อน (v3) =====
+        try:
+            response = gemini_model.generate_content(enhanced_prompt)
+            text = _safe_parse_gemini_response(response)
+        except Exception as primary_error:
+            logger.warning(f"Primary model failed: {primary_error}")
+            
+            # ===== ถ้า v3 ล้ม ให้ใช้ v2.5 =====
+            if gemini_fallback:
+                try:
+                    response = gemini_fallback.generate_content(enhanced_prompt)
+                    text = _safe_parse_gemini_response(response)
+                except Exception as fallback_error:
+                    logger.error(f"Fallback model failed: {fallback_error}")
+                    return MESSAGES["AI_ERROR"]
+            else:
+                return MESSAGES["AI_ERROR"]
         
         if not text:
             return MESSAGES["AI_NO_RESPONSE"]
         
-        # แทนที่ชื่อ Google ด้วย Gemini
         text = re.sub(r'\b[Gg]oogle\b', 'Gemini', text)
         text = text.replace('กูเกิล', 'Gemini')
         
-        # ตัดข้อความถ้ายาวเกินไป
         if len(text) > LINE_SAFE_TRUNCATE:
             text = text[:LINE_SAFE_TRUNCATE] + "...\n\n(ข้อความยาวเกินไป ตัดบางส่วน)"
         
@@ -388,3 +402,4 @@ def get_gemini_response(prompt: str) -> str:
     except Exception as e:
         logger.error("Gemini Generate Error: %s", e)
         return MESSAGES["AI_ERROR"]
+# ============================================================================
