@@ -178,7 +178,7 @@ def get_help_message(user_message: str = "") -> TextMessage:
 
 def get_next_class_message(user_message: str = "") -> TextMessage:
     """แสดงคาบเรียนถัดไป"""
-    now = datetime.datetime.datetime.now(LOCAL_TZ)
+    now = datetime.datetime.now(LOCAL_TZ)
     day_idx = now.weekday()
 
     if day_idx not in SCHEDULE:
@@ -212,7 +212,7 @@ def get_next_class_message(user_message: str = "") -> TextMessage:
 
 def get_time_until_next_class_message(user_message: str = "") -> TextMessage:
     """คำนวณเวลาเหลือก่อนคาบถัดไป"""
-    now = datetime.datetime.datetime.now(LOCAL_TZ)
+    now = datetime.datetime.now(LOCAL_TZ)
     day_idx = now.weekday()
 
     if day_idx not in SCHEDULE:
