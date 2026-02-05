@@ -20,11 +20,20 @@ from config import (
     ABSENCE_LINK, Bio_LINK, Physic_LINK, LINE_SAFE_TRUNCATE
 )
 
-# Global variables (will be set by main.py)
-db = None  # Firebase database instance
-gemini_model = None  # Gemini AI model instance; v3 model
-gemini_fallback = None    # v2.5 model
+# ===== global vars for new genai client setup =====
+db = None
+gemini_client_primary = None
+gemini_model_name_primary = None
+gemini_client_fallback = None
+gemini_model_name_fallback = None
 
+def set_gemini_models(client_v3=None, model_name_v3=None, client_v25=None, model_name_v25=None):
+    """Set Gemini AI clients and model names (primary + fallback)"""
+    global gemini_client_primary, gemini_model_name_primary, gemini_client_fallback, gemini_model_name_fallback
+    gemini_client_primary = client_v3
+    gemini_model_name_primary = model_name_v3
+    gemini_client_fallback = client_v25
+    gemini_model_name_fallback = model_name_v25
 
 # ============================================================================
 # DATABASE FUNCTIONS (Firebase/Homework)
@@ -362,44 +371,52 @@ def get_gemini_response(prompt: str) -> str:
     if any(q in prompt.lower() for q in identity_queries):
         return MESSAGES["IDENTITY"]
     
-    if not gemini_model:
-        return MESSAGES["AI_DISABLED"]
-    
+# inside get_gemini_response, where we call the AI:
+if not gemini_client_primary:
+    return MESSAGES["AI_DISABLED"]
+
+try:
+    # เตรียม prompt + context
+    now = datetime.datetime.now(LOCAL_TZ)
+    date_context = f"วันนี้คือ{now.strftime('%A')}ที่ {now.strftime('%d %B')} พ.ศ. {now.year + 543}"
+    enhanced_prompt = f"(บริบท: {date_context})\n\nคำถาม: {prompt}"
+
+    # พยายามเรียก client primary ก่อน
     try:
-        now = datetime.datetime.now(LOCAL_TZ)
-        date_context = f"วันนี้คือ{now.strftime('%A')}ที่ {now.strftime('%d %B')} พ.ศ. {now.year + 543}"
-        enhanced_prompt = f"(บริบท: {date_context})\n\nคำถาม: {prompt}"
-        
-        # ===== ลองใช้โมเดลหลักก่อน (v3) =====
-        try:
-            response = gemini_model.generate_content(enhanced_prompt)
-            text = _safe_parse_gemini_response(response)
-        except Exception as primary_error:
-            logger.warning(f"Primary model failed: {primary_error}")
-            
-            # ===== ถ้า v3 ล้ม ให้ใช้ v2.5 =====
-            if gemini_fallback:
-                try:
-                    response = gemini_fallback.generate_content(enhanced_prompt)
-                    text = _safe_parse_gemini_response(response)
-                except Exception as fallback_error:
-                    logger.error(f"Fallback model failed: {fallback_error}")
-                    return MESSAGES["AI_ERROR"]
-            else:
+        resp = gemini_client_primary.models.generate_content(
+            model=gemini_model_name_primary,
+            contents=enhanced_prompt
+        )
+        text = _safe_parse_gemini_response(resp)
+    except Exception as primary_error:
+        logger.warning(f"Primary model failed: {primary_error}")
+        # ถ้า primary ล้ม ใช้ fallback ถ้ามี
+        if gemini_client_fallback:
+            try:
+                resp = gemini_client_fallback.models.generate_content(
+                    model=gemini_model_name_fallback,
+                    contents=enhanced_prompt
+                )
+                text = _safe_parse_gemini_response(resp)
+            except Exception as fallback_error:
+                logger.error(f"Fallback model failed: {fallback_error}")
                 return MESSAGES["AI_ERROR"]
-        
-        if not text:
-            return MESSAGES["AI_NO_RESPONSE"]
-        
-        text = re.sub(r'\b[Gg]oogle\b', 'Gemini', text)
-        text = text.replace('กูเกิล', 'Gemini')
-        
-        if len(text) > LINE_SAFE_TRUNCATE:
-            text = text[:LINE_SAFE_TRUNCATE] + "...\n\n(ข้อความยาวเกินไป ตัดบางส่วน)"
-        
-        return text
-        
-    except Exception as e:
-        logger.error("Gemini Generate Error: %s", e)
-        return MESSAGES["AI_ERROR"]
+        else:
+            return MESSAGES["AI_ERROR"]
+
+    if not text:
+        return MESSAGES["AI_NO_RESPONSE"]
+
+    # small post-processing
+    text = re.sub(r'\b[Gg]oogle\b', 'Gemini', text)
+    text = text.replace('กูเกิล', 'Gemini')
+
+    if len(text) > LINE_SAFE_TRUNCATE:
+        text = text[:LINE_SAFE_TRUNCATE] + "...\n\n(ข้อความยาวเกินไป ตัดบางส่วน)"
+
+    return text
+
+except Exception as e:
+    logger.error("Gemini Generate Error: %s", e)
+    return MESSAGES["AI_ERROR"]
 # ============================================================================

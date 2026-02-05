@@ -21,7 +21,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 
 # Gemini imports
-import google.generativeai as genai
+from google import genai
 
 # LINE imports
 from linebot.v3.exceptions import InvalidSignatureError
@@ -107,25 +107,26 @@ except Exception as e:
 # ============================================================================
 # GEMINI AI INITIALIZATION
 # ============================================================================
-# GEMINI AI INITIALIZATION (primary + secondary)
-gemini_model_v3 = None
-gemini_model_v25 = None
+# GEMINI AI INITIALIZATION (primary + secondary) using google-genai
+gemini_client_v3 = None
+gemini_client_v25 = None
 
 try:
-    # primary
     if GEMINI_API_KEY_V3:
-        genai.configure(api_key=GEMINI_API_KEY_V3)
-        gemini_model_v3 = genai.GenerativeModel(GEMINI_MODEL_V3)
-        logger.info(f"🤖 Gemini primary model '{GEMINI_MODEL_V3}' instantiated")
+        gemini_client_v3 = genai.Client(api_key=GEMINI_API_KEY_V3)
+        logger.info(f"🤖 Gemini primary model '{GEMINI_MODEL_V3}' instantiated (client ready)")
 
-    # secondary
     if GEMINI_API_KEY_V25:
-        genai.configure(api_key=GEMINI_API_KEY_V25)
-        gemini_model_v25 = genai.GenerativeModel(GEMINI_MODEL_V25)
-        logger.info(f"🤖 Gemini secondary model '{GEMINI_MODEL_V25}' instantiated")
+        gemini_client_v25 = genai.Client(api_key=GEMINI_API_KEY_V25)
+        logger.info(f"🤖 Gemini secondary model '{GEMINI_MODEL_V25}' instantiated (client ready)")
 
-    # pass to features
-    features.set_gemini_models(model_v3=gemini_model_v3, model_v25=gemini_model_v25)
+    # ส่งทั้ง client และชื่อโมเดลไปให้ features
+    features.set_gemini_models(
+        client_v3=gemini_client_v3,
+        model_name_v3=GEMINI_MODEL_V3,
+        client_v25=gemini_client_v25,
+        model_name_v25=GEMINI_MODEL_V25
+    )
 
 except Exception as e:
     logger.error(f"❌ Gemini model init failed: {e}")
