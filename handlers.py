@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-MTC Assistant - Handlers Module (Enhanced Flex Message)
+MTC Assistant - Handlers Module (Enhanced + Impersonate Feature)
 แก้ไข Flex Message ให้สวยงามและทุกปุ่มมีสี
-FIXED: user_id order bug
+FIXED: user_id order bug + Protected blacklist import
+NEW: Admin impersonate feature integrated
 """
 
 import time
@@ -36,8 +37,10 @@ from features import (
 
 # Import broadcast functions
 import broadcast
+
 # ============================================================================
 # FIXED: Protected blacklist import with fallback
+# ============================================================================
 try:
     from user_blacklist import (
         get_blacklist_manager,
@@ -72,6 +75,27 @@ except ImportError as e:
     
     def handle_ban_stats_command(admin_id: str, message: str = "") -> str:
         return "⚠️ ระบบ Blacklist ไม่พร้อมใช้งาน"
+
+# ============================================================================
+# NEW: Import admin impersonate feature
+# ============================================================================
+try:
+    from admin_impersonate import (
+        track_user_activity,
+        get_impersonate_help,
+        handle_list_users_command,
+        handle_send_impersonate_command,
+        handle_test_impersonate_command
+    )
+    IMPERSONATE_ENABLED = True
+    logger.info("🎭 Admin impersonate feature loaded")
+except ImportError as e:
+    logger.warning(f"⚠️ admin_impersonate.py not found: {e}")
+    IMPERSONATE_ENABLED = False
+    
+    # Define dummy functions
+    def track_user_activity(user_id: str, display_name: str = ""): pass
+    def get_impersonate_help() -> str: return ""
 
 # ============================================================================
 # LINE BOT CONFIGURATION
@@ -454,12 +478,19 @@ def handle_message(event):
     logger.info("Message from %s: %s", user_id, user_message[:100])
     # ===== End of fix =====
     
-    # Check if user is banned (NOW user_id is defined!)
+    # NEW: Track user activity for impersonate feature
+    if IMPERSONATE_ENABLED:
+        try:
+            track_user_activity(user_id, "Unknown")
+        except Exception as e:
+            logger.debug(f"Failed to track user activity: {e}")
+    
+    # Check if user is banned
     is_banned, ban_message = check_user_banned(user_id)
     if is_banned:
         logger.warning(f"🚫 Banned user {user_id} attempted to use bot")
         reply_to_line(event.reply_token, [TextMessage(text=ban_message)])
-        return  # Stop processing immediately
+        return
     
     # Track user for broadcast
     try:
@@ -484,29 +515,51 @@ def handle_message(event):
     user_message_lower = user_message.lower()
     reply_message = None
     
-    # Admin Commands
+    # ========================================================================
+    # ADMIN COMMANDS
+    # ========================================================================
     if user_id in ADMIN_USER_IDS:
-        # Ban Management
+        # Blacklist Management
         if user_message.startswith("แบน ") or user_message.startswith("ban "):
-            from user_blacklist import handle_ban_user_command
-            result = handle_ban_user_command(user_id, user_message)
-            reply_message = TextMessage(text=result)
+            if BLACKLIST_ENABLED:
+                from user_blacklist import handle_ban_user_command
+                result = handle_ban_user_command(user_id, user_message)
+                reply_message = TextMessage(text=result)
         
         elif user_message.startswith("ปลดแบน ") or user_message.startswith("unban "):
-            from user_blacklist import handle_unban_user_command
-            result = handle_unban_user_command(user_id, user_message)
-            reply_message = TextMessage(text=result)
+            if BLACKLIST_ENABLED:
+                from user_blacklist import handle_unban_user_command
+                result = handle_unban_user_command(user_id, user_message)
+                reply_message = TextMessage(text=result)
         
         elif user_message in ["รายชื่อแบน", "banned list", "ดูคนแบน"]:
-            from user_blacklist import handle_list_banned_command
-            result = handle_list_banned_command(user_id)
-            reply_message = TextMessage(text=result)
+            if BLACKLIST_ENABLED:
+                from user_blacklist import handle_list_banned_command
+                result = handle_list_banned_command(user_id)
+                reply_message = TextMessage(text=result)
         
         elif user_message in ["สถิติแบน", "ban stats"]:
-            from user_blacklist import handle_ban_stats_command
-            result = handle_ban_stats_command(user_id)
-            reply_message = TextMessage(text=result)
-            
+            if BLACKLIST_ENABLED:
+                from user_blacklist import handle_ban_stats_command
+                result = handle_ban_stats_command(user_id)
+                reply_message = TextMessage(text=result)
+        
+        # NEW: Impersonate Commands
+        elif user_message in ["ดูผู้ใช้", "users", "รายชื่อผู้ใช้"]:
+            if IMPERSONATE_ENABLED:
+                result = handle_list_users_command(user_id)
+                reply_message = TextMessage(text=result)
+        
+        elif user_message.startswith("ส่งถึง ") or user_message.startswith("send to "):
+            if IMPERSONATE_ENABLED:
+                result = handle_send_impersonate_command(user_id, user_message)
+                reply_message = TextMessage(text=result)
+        
+        elif user_message.startswith("ทดสอบส่ง "):
+            if IMPERSONATE_ENABLED:
+                result = handle_test_impersonate_command(user_id, user_message)
+                reply_message = TextMessage(text=result)
+        
         # Broadcast Management
         elif user_message.startswith("ประกาศ "):
             message_to_broadcast = user_message.replace("ประกาศ ", "", 1).strip()
@@ -545,6 +598,7 @@ def handle_message(event):
             count = broadcast.get_user_count()
             reply_message = TextMessage(text=f"👥 จำนวนผู้ใช้ทั้งหมด: {count} คน")
         
+        # Admin Help
         elif user_message in ["admin", "คำสั่งแอดมิน"]:
             admin_help = (
                 "👨‍💼 *คำสั่งแอดมิน*\n\n"
@@ -557,8 +611,13 @@ def handle_message(event):
                 "• จำนวนผู้ใช้\n"
             )
             
-            # เพิ่ม ban help
-            admin_help += "\n" + get_admin_ban_help()
+            # Add blacklist help
+            if BLACKLIST_ENABLED:
+                admin_help += "\n" + get_admin_ban_help()
+            
+            # Add impersonate help
+            if IMPERSONATE_ENABLED:
+                admin_help += "\n" + get_impersonate_help()
             
             reply_message = TextMessage(text=admin_help)
 

@@ -5,6 +5,7 @@ Main entry point with Flask routes and initialization
 
 Improvements:
 - Added broadcast system initialization
+- Added impersonate feature initialization
 - Connection pooling
 - Response caching
 - Enhanced error handling
@@ -98,11 +99,11 @@ try:
         db = firestore.client()
         features.set_database(db)  # Set database in features module
         broadcast.set_database(db)  # Set database in broadcast module
-        logger.info("Firebase Connected Successfully!")
+        logger.info("🔥 Firebase Connected Successfully!")
     else:
-        logger.warning(f"Missing {FIREBASE_KEY_PATH}. Homework DB features will be disabled.")
+        logger.warning(f"⚠️ Missing {FIREBASE_KEY_PATH}. Homework DB features will be disabled.")
 except Exception as e:
-    logger.exception(f"Firebase Init Error: {e}")
+    logger.exception(f"❌ Firebase Init Error: {e}")
 
 # ============================================================================
 # GEMINI AI INITIALIZATION (google-genai client)
@@ -113,13 +114,13 @@ gemini_client_v25 = None
 try:
     if GEMINI_API_KEY_V3:
         gemini_client_v3 = genai.Client(api_key=GEMINI_API_KEY_V3)
-        logger.info(f"Gemini primary client created for model '{GEMINI_MODEL_V3}'")
+        logger.info(f"🤖 Gemini primary client created for model '{GEMINI_MODEL_V3}'")
 
     if GEMINI_API_KEY_V25:
         gemini_client_v25 = genai.Client(api_key=GEMINI_API_KEY_V25)
-        logger.info(f"Gemini secondary client created for model '{GEMINI_MODEL_V25}'")
+        logger.info(f"🤖 Gemini secondary client created for model '{GEMINI_MODEL_V25}'")
 
-    # ส่งทั้ง client และชื่อโมเดลไปให้ features (พารามิเตอร์ต้องตรงกับ features.set_gemini_models)
+    # ส่งทั้ง client และชื่อโมเดลไปให้ features
     features.set_gemini_models(
         client_primary=gemini_client_v3,
         model_primary=GEMINI_MODEL_V3,
@@ -128,16 +129,26 @@ try:
     )
 
 except Exception as e:
-    logger.error(f"Gemini model init failed: {e}")
+    logger.error(f"❌ Gemini model init failed: {e}")
 
 # ============================================================================
-# LINE API INITIALIZATION (for Broadcast)
+# LINE API INITIALIZATION (for Broadcast + Impersonate)
 # ============================================================================
 from linebot.v3.messaging import Configuration as LineConfig
 line_config = LineConfig(access_token=ACCESS_TOKEN) if ACCESS_TOKEN else None
+
 if line_config:
+    # Initialize broadcast
     broadcast.set_line_api(line_config)
-    logger.info("Broadcast system initialized")
+    logger.info("📢 Broadcast system initialized")
+    
+    # Initialize impersonate (NEW!)
+    try:
+        from admin_impersonate import set_line_api as set_impersonate_line_api
+        set_impersonate_line_api(line_config)
+        logger.info("🎭 Impersonate feature initialized")
+    except ImportError:
+        logger.warning("⚠️ admin_impersonate.py not found - impersonate feature disabled")
 
 # ============================================================================
 # FLASK ROUTES
@@ -184,7 +195,7 @@ def home():
     uptime = int(time.time() - _metrics["start_time"])
 
     return (
-        f"MTC Assistant v21 (Optimized Edition)\n\n"
+        f"🤖 MTC Assistant v21 (Optimized + Impersonate Edition)\n\n"
         f"Status:\n"
         f"  LINE: {cfg_ok}\n"
         f"  Gemini AI: {gemini_status}\n"
@@ -209,7 +220,6 @@ def healthz():
 
     services_status = {
         "line": bool(ACCESS_TOKEN and CHANNEL_SECRET),
-        # Check whether at least one API key AND a created client exist
         "gemini": bool((GEMINI_API_KEY_V3 or GEMINI_API_KEY_V25) and (gemini_client_v3 or gemini_client_v25)),
         "firebase": bool(db),
         "broadcast": bool(line_config),
@@ -218,7 +228,6 @@ def healthz():
     # Test Firebase connectivity
     if db:
         try:
-            # Quick connectivity test
             list(db.collection('health_check').limit(1).stream())
             services_status["firebase_connectivity"] = True
         except Exception as e:
@@ -227,13 +236,13 @@ def healthz():
 
     response_time = (time.time() - start_time) * 1000  # ms
 
-    # Determine overall health (line + firebase considered critical)
+    # Determine overall health
     all_critical_ok = services_status["line"] and services_status["firebase"]
     status_code = 200 if all_critical_ok else 503
 
     return jsonify({
         "status": "healthy" if all_critical_ok else "degraded",
-        "version": "21-optimized",
+        "version": "21-optimized-impersonate",
         "response_time_ms": round(response_time, 2),
         "timestamp": datetime.datetime.now(tz=LOCAL_TZ).isoformat(),
         "services": services_status
@@ -325,39 +334,42 @@ def print_startup_banner():
     banner = """
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
-║           MTC Assistant v21 (Optimized)                  ║
+║      🤖 MTC Assistant v21 (Optimized + Impersonate)      ║
 ║                                                           ║
 ║  Performance Enhanced - Production Ready                 ║
+║  NEW: Admin Impersonate Feature 🎭                       ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
 """
     logger.info(banner)
 
-    # เช็กสถานะ Gemini โดยดูว่า client อย่างน้อยตัวหนึ่งถูกสร้างหรือไม่
+    # เช็กสถานะ Gemini
     gemini_ready = bool(gemini_client_v3 or gemini_client_v25)
 
     logger.info("Configuration:")
     logger.info(f"  • Port: {PORT}")
     logger.info(f"  • Debug Mode: {FLASK_DEBUG}")
-    logger.info(f"  • LINE Bot: {'Configured' if ACCESS_TOKEN and CHANNEL_SECRET else 'Not configured'}")
-    logger.info(f"  • Gemini AI: {'Ready' if gemini_ready else 'Disabled'}")
-    logger.info(f"  • Firebase: {'Connected' if db else 'Disconnected'}")
-    logger.info(f"  • Broadcast: {'Initialized' if line_config else 'Disabled'}")
+    logger.info(f"  • LINE Bot: {'✅ Configured' if ACCESS_TOKEN and CHANNEL_SECRET else '❌ Not configured'}")
+    logger.info(f"  • Gemini AI: {'✅ Ready' if gemini_ready else '❌ Disabled'}")
+    logger.info(f"  • Firebase: {'✅ Connected' if db else '❌ Disconnected'}")
+    logger.info(f"  • Broadcast: {'✅ Initialized' if line_config else '❌ Disabled'}")
     logger.info("")
-    logger.info("Optimizations Enabled:")
-    logger.info("  - Response caching")
-    logger.info("  - Connection pooling")
-    logger.info("  - Performance monitoring")
-    logger.info("  - Enhanced error handling")
+    logger.info("Features:")
+    logger.info("  ⚡ Response caching")
+    logger.info("  ⚡ Connection pooling")
+    logger.info("  ⚡ Performance monitoring")
+    logger.info("  ⚡ Enhanced error handling")
+    logger.info("  🎭 Admin impersonate feature (NEW!)")
     logger.info("")
     logger.info("Module Structure:")
-    logger.info("  config.py    - Configuration & Constants")
-    logger.info("  features.py  - Feature Functions")
-    logger.info("  handlers.py  - LINE Handlers & Routing")
-    logger.info("  broadcast.py - Broadcast System")
-    logger.info("  main.py      - Flask App (this file)")
+    logger.info("  📁 config.py             - Configuration & Constants")
+    logger.info("  📁 features.py           - Feature Functions")
+    logger.info("  📁 handlers.py           - LINE Handlers & Routing")
+    logger.info("  📁 broadcast.py          - Broadcast System")
+    logger.info("  📁 admin_impersonate.py  - Impersonate Feature (NEW!)")
+    logger.info("  📁 main.py               - Flask App (this file)")
     logger.info("")
-    logger.info("Server starting...")
+    logger.info("🚀 Server starting...")
     logger.info("=" * 60)
 
 if __name__ == "__main__":
