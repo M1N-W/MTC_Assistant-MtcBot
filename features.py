@@ -2,6 +2,7 @@
 """
 MTC Assistant - Features Module
 Contains all feature functions: schedule, homework, music, AI, etc.
+FIXED: Improved datetime parsing for better timezone handling
 """
 
 import datetime
@@ -252,10 +253,10 @@ def get_time_until_next_class_message(user_message: str = "") -> TextMessage:
         if target is None:
             return TextMessage(text="วันนี้ไม่มีคาบเรียนที่ต่างจากคาบปัจจุบันอีกแล้วครับ")
 
-    # คำนวณเวลาเหลือ
+    # FIXED: Better timezone-aware datetime creation
     target_start_time = datetime.datetime.strptime(target["start"], "%H:%M").time()
-    # combine with today's date in LOCAL_TZ
-    target_dt = datetime.datetime.combine(datetime.datetime.now(LOCAL_TZ).date(), target_start_time).replace(tzinfo=LOCAL_TZ)
+    today = datetime.datetime.now(LOCAL_TZ).date()
+    target_dt = datetime.datetime.combine(today, target_start_time, tzinfo=LOCAL_TZ)
     now_dt = datetime.datetime.now(LOCAL_TZ)
     delta_seconds = (target_dt - now_dt).total_seconds()
     minutes_left = max(0, math.ceil(delta_seconds / 60))

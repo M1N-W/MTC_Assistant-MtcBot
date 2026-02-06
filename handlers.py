@@ -36,14 +36,42 @@ from features import (
 
 # Import broadcast functions
 import broadcast
-
-# Import user blacklist functions
-from user_blacklist import (
-    get_blacklist_manager,
-    check_user_banned,
-    get_admin_ban_commands,
-    get_admin_ban_help
-)
+# ============================================================================
+# FIXED: Protected blacklist import with fallback
+try:
+    from user_blacklist import (
+        get_blacklist_manager,
+        check_user_banned,
+        get_admin_ban_commands,
+        get_admin_ban_help
+    )
+    BLACKLIST_ENABLED = True
+    logger.info("✅ User blacklist system loaded")
+except ImportError as e:
+    logger.warning(f"⚠️ user_blacklist.py not found: {e}")
+    logger.warning("Blacklist features will be disabled")
+    BLACKLIST_ENABLED = False
+    
+    # Define dummy functions for graceful degradation
+    def check_user_banned(user_id: str) -> tuple:
+        """Dummy function when blacklist is disabled"""
+        return False, ""
+    
+    def get_admin_ban_help() -> str:
+        """Dummy function when blacklist is disabled"""
+        return "\n⚠️ *ระบบ Blacklist:* ไม่พร้อมใช้งาน"
+    
+    def handle_ban_user_command(admin_id: str, message: str) -> str:
+        return "⚠️ ระบบ Blacklist ไม่พร้อมใช้งาน"
+    
+    def handle_unban_user_command(admin_id: str, message: str) -> str:
+        return "⚠️ ระบบ Blacklist ไม่พร้อมใช้งาน"
+    
+    def handle_list_banned_command(admin_id: str, message: str = "") -> str:
+        return "⚠️ ระบบ Blacklist ไม่พร้อมใช้งาน"
+    
+    def handle_ban_stats_command(admin_id: str, message: str = "") -> str:
+        return "⚠️ ระบบ Blacklist ไม่พร้อมใช้งาน"
 
 # ============================================================================
 # LINE BOT CONFIGURATION
