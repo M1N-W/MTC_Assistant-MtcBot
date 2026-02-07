@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """
 MTC Assistant - Features Module
-Contains all feature functions: schedule, homework, music, AI, etc.
+Contains all feature functions: schedule, homework, music, AI, calculator, etc.
 FIXED: Improved datetime parsing for better timezone handling
+NEW: Smart calculator with variables
 """
 
 import datetime
@@ -44,7 +45,6 @@ def add_homework_to_db(subject: str, detail: str, due_date: str = "ไม่ร�
         return "⚠️ ระบบฐานข้อมูลยังไม่พร้อม กรุณาติดต่อผู้ดูแลระบบ"
 
     try:
-        # import locally to avoid hard dependency at module import time
         from firebase_admin import firestore
         doc_ref = db.collection('homeworks').document()
         doc_ref.set({
@@ -61,7 +61,7 @@ def add_homework_to_db(subject: str, detail: str, due_date: str = "ไม่ร�
 
 
 def get_homeworks_from_db() -> str:
-    """ดึงรายการการบ้านจาก Firebase (คืนเป็นข้อความ)"""
+    """ดึงรายการการบ้านจาก Firebase"""
     if not db:
         return "⚠️ ระบบฐานข้อมูลยังไม่พร้อมครับ"
 
@@ -79,7 +79,7 @@ def get_homeworks_from_db() -> str:
             )
 
         if not hw_list:
-            return "ตอนนี้ไม่มีการบ้านค้างในระบบครับ"
+            return "🎉 ตอนนี้ไม่มีการบ้านค้างในระบบครับ"
 
         return "📋 *รายการการบ้านปัจจุบัน*\n\n" + "\n" + "-" * 30 + "\n".join(hw_list)
     except Exception as e:
@@ -104,7 +104,6 @@ def clear_homework_db() -> str:
         logger.error(f"DB Clear Error: {e}")
         return "❌ เกิดข้อผิดพลาดในการลบข้อมูล"
 
-
 # ============================================================================
 # BASIC COMMAND FUNCTIONS
 # ============================================================================
@@ -113,36 +112,29 @@ def get_worksheet_message(user_message: str = "") -> TextMessage:
     """ส่งลิงก์ใบงาน"""
     return TextMessage(text=f"📝 ตารางงานอยู่นี่ครับ {WORKSHEET_LINK}")
 
-
 def get_school_link_message(user_message: str = "") -> TextMessage:
     """ส่งลิงก์เว็บโรงเรียน"""
     return TextMessage(text=f"🏫 เว็บไซต์โรงเรียนครับ {SCHOOL_LINK}")
-
 
 def get_timetable_image_message(user_message: str = "") -> ImageMessage:
     """ส่งรูปตารางเรียน"""
     return ImageMessage(original_content_url=TIMETABLE_IMG, preview_image_url=TIMETABLE_IMG)
 
-
 def get_grade_link_message(user_message: str = "") -> TextMessage:
     """ส่งลิงก์เช็คเกรด"""
     return TextMessage(text=f"📊 เช็คเกรดได้ที่นี่ครับ {GRADE_LINK}")
-
 
 def get_absence_form_message(user_message: str = "") -> TextMessage:
     """ส่งลิงก์แบบฟอร์มลา"""
     return TextMessage(text=f"📝 ลิงก์แจ้งลาครับ {ABSENCE_LINK}")
 
-
 def get_bio_link_message(user_message: str = "") -> TextMessage:
     """ส่งลิงก์เฉลยชีวะ"""
     return TextMessage(text=f"🧬 เฉลยชีววิทยาครับ {Bio_LINK}")
 
-
 def get_physic_link_message(user_message: str = "") -> TextMessage:
     """ส่งลิงก์เฉลยฟิสิกส์"""
     return TextMessage(text=f"⚛️ เฉลยฟิสิกส์ครับ {Physic_LINK}")
-
 
 def get_help_message(user_message: str = "") -> TextMessage:
     """แสดงคำสั่งทั้งหมด"""
@@ -160,6 +152,12 @@ def get_help_message(user_message: str = "") -> TextMessage:
         '🧪 คำสั่งเฉลย\n'
         '- ชีวะ = เฉลยชีววิทยา\n'
         '- ฟิสิกส์ = เฉลยฟิสิกส์\n\n'
+        '🧮 เครื่องคิดเลข (NEW!)\n'
+        '- คำนวณ [สมการ]\n'
+        '  ตัวอย่าง: คำนวณ 12*(5+3)^2\n'
+        '- ส่งสมการโดยตรง: 5+3*2\n'
+        '- ใช้ตัวแปร: x = 5, x*2\n'
+        '- ฟังก์ชัน: sqrt(16), sin(pi/2)\n\n'
         '🎵 ความบันเทิง\n'
         '- เปิดเพลง [ชื่อเพลง] = หาเพลงจาก YouTube\n\n'
         '💾 คำสั่งการบ้าน\n'
@@ -172,7 +170,6 @@ def get_help_message(user_message: str = "") -> TextMessage:
     )
     return TextMessage(text=help_text)
 
-
 # ============================================================================
 # SCHEDULE FUNCTIONS
 # ============================================================================
@@ -181,17 +178,17 @@ def get_next_class_message(user_message: str = "") -> TextMessage:
     """แสดงคาบเรียนถัดไป"""
     now = datetime.datetime.now(LOCAL_TZ)
     day_idx = now.weekday()
-
+    
     if day_idx not in SCHEDULE:
         return TextMessage(text=MESSAGES["NO_CLASS_TODAY"])
-
+    
     current_time = now.time()
     periods = SCHEDULE[day_idx]
-
+    
     for period in periods:
         start_time = datetime.datetime.strptime(period["start"], "%H:%M").time()
         end_time = datetime.datetime.strptime(period["end"], "%H:%M").time()
-
+        
         # ถ้ายังไม่ถึงเวลาเริ่มคาบนี้
         if current_time < start_time:
             return TextMessage(
@@ -199,7 +196,7 @@ def get_next_class_message(user_message: str = "") -> TextMessage:
                      f"📍 ห้อง : {period['room']}\n"
                      f"⏰ เวลา : {period['start']} - {period['end']}"
             )
-
+        
         # ถ้ากำลังอยู่ในคาบนี้
         if start_time <= current_time < end_time:
             return TextMessage(
@@ -207,21 +204,20 @@ def get_next_class_message(user_message: str = "") -> TextMessage:
                      f"📍 ห้อง : {period['room']}\n"
                      f"⏰ จนถึง : {period['end']}"
             )
-
+    
     return TextMessage(text=MESSAGES["NO_CLASS_LEFT"])
 
-
 def get_time_until_next_class_message(user_message: str = "") -> TextMessage:
-    """คำนวณเวลาเหลือก่อนคาบถัดไป"""
+    """คำนวณเวลาเหลือก่อนคาบถัดไป - FIXED version"""
     now = datetime.datetime.now(LOCAL_TZ)
     day_idx = now.weekday()
-
+    
     if day_idx not in SCHEDULE:
         return TextMessage(text=MESSAGES["NO_CLASS_TODAY"])
-
+    
     current_time = now.time()
     periods = SCHEDULE[day_idx]
-
+    
     # หาว่าตอนนี้อยู่ในคาบไหน
     current_index = None
     for idx, period in enumerate(periods):
@@ -230,7 +226,7 @@ def get_time_until_next_class_message(user_message: str = "") -> TextMessage:
         if start_t <= current_time < end_t:
             current_index = idx
             break
-
+    
     target = None
     if current_index is None:
         # ไม่ได้อยู่ในคาบเรียน หาคาบถัดไป
@@ -239,7 +235,7 @@ def get_time_until_next_class_message(user_message: str = "") -> TextMessage:
             if current_time < start_t:
                 target = period
                 break
-
+        
         if target is None:
             return TextMessage(text=MESSAGES["NO_CLASS_LEFT"])
     else:
@@ -249,26 +245,25 @@ def get_time_until_next_class_message(user_message: str = "") -> TextMessage:
             if periods[idx]["subject"] != current_subject:
                 target = periods[idx]
                 break
-
+        
         if target is None:
             return TextMessage(text="วันนี้ไม่มีคาบเรียนที่ต่างจากคาบปัจจุบันอีกแล้วครับ")
-
-    # FIXED: Better timezone-aware datetime creation
+    
+    # FIXED: คำนวณเวลาเหลือ - ใช้ combine พร้อม tzinfo
     target_start_time = datetime.datetime.strptime(target["start"], "%H:%M").time()
     today = datetime.datetime.now(LOCAL_TZ).date()
     target_dt = datetime.datetime.combine(today, target_start_time, tzinfo=LOCAL_TZ)
-    now_dt = datetime.datetime.now(LOCAL_TZ)
-    delta_seconds = (target_dt - now_dt).total_seconds()
+    
+    delta_seconds = (target_dt - now).total_seconds()
     minutes_left = max(0, math.ceil(delta_seconds / 60))
-
+    
     minutes_text = "น้อยกว่า 1 นาที" if minutes_left == 0 else f"{minutes_left} นาที"
-
+    
     return TextMessage(
         text=f"⏰ เหลือเวลาอีก {minutes_text}\n"
              f"🔜 คาบถัดไป : {target['subject']}\n"
              f"📍 ห้อง : {target['room']}"
     )
-
 
 # ============================================================================
 # EXAM COUNTDOWN
@@ -279,7 +274,7 @@ def get_exam_countdown_message(user_message: str = "") -> TextMessage:
     now = datetime.datetime.now(LOCAL_TZ).date()
     msg_list = ["⏳ *นับถอยหลังสอบ*\n"]
     found = False
-
+    
     for exam_name, dates in EXAM_DATES.items():
         # Handle list of dates
         future_dates = [d for d in dates if d >= now]
@@ -288,7 +283,7 @@ def get_exam_countdown_message(user_message: str = "") -> TextMessage:
             next_exam = min(future_dates)
             days_left = (next_exam - now).days
             all_dates_str = ", ".join([d.strftime("%d/%m") for d in dates])
-
+            
             if days_left == 0:
                 msg_list.append(f"🔥 วันนี้สอบ{exam_name}! สู้ๆ!")
             else:
@@ -297,12 +292,11 @@ def get_exam_countdown_message(user_message: str = "") -> TextMessage:
                     f"   เหลือ {days_left} วัน\n"
                     f"   (สอบวันที่ {all_dates_str})"
                 )
-
+    
     if not found:
         return TextMessage(text="🎉 ยังไม่มีสอบเร็วๆ นี้ พักผ่อนได้!")
-
+    
     return TextMessage(text="\n\n".join(msg_list))
-
 
 # ============================================================================
 # MUSIC SEARCH
@@ -310,139 +304,229 @@ def get_exam_countdown_message(user_message: str = "") -> TextMessage:
 
 def extract_youtube_id(url_or_text: str) -> Optional[str]:
     """แยก YouTube Video ID จาก URL"""
-    if not url_or_text:
-        return None
-
     m = re.search(r'(?:v=|\/v\/|youtu\.be\/|\/embed\/)([A-Za-z0-9_\-]{11})', url_or_text)
     if m:
         return m.group(1)
-
+    
     m2 = re.match(r'^[A-Za-z0-9_\-]{11}$', url_or_text.strip())
     if m2:
         return url_or_text.strip()
-
+    
     return None
-
 
 def get_music_link_message(user_message: str) -> TextMessage:
     """หาเพลงจาก YouTube (สร้างลิงก์ค้นหา)"""
     music_keywords = ["เปิดเพลง", "หาเพลง", "ขอเพลง"]
-    song_title = (user_message or "").lower()
-
+    song_title = user_message.lower()
+    
     # ตัดคำสั่งออก
     for keyword in music_keywords:
         if keyword in song_title:
             song_title = song_title.replace(keyword, "").strip()
             break
-
+    
     if not song_title:
         return TextMessage(text="กรุณาระบุชื่อเพลงด้วยครับ เช่น 'เปิดเพลง never gonna give you up'")
-
+    
     # สร้าง URL ค้นหา YouTube
     encoded_query = urllib.parse.quote(song_title)
     search_url = f"https://www.youtube.com/results?search_query={encoded_query}"
-
+    
     return TextMessage(
         text=f"🎵 ค้นหาเพลง: {song_title}\n"
              f"👉 {search_url}\n\n"
              f"💡 กดลิงก์เพื่อดูผลการค้นหาใน YouTube"
     )
 
-
 # ============================================================================
-# AI FUNCTIONS (Gemini)
+# AI FUNCTIONS (Gemini) - NEW google-genai client
 # ============================================================================
 
-def set_gemini_models(client_primary=None, model_primary=None,
-                      client_fallback=None, model_fallback=None) -> None:
-    """Set Gemini AI clients and model names (primary + fallback)"""
+def set_gemini_models(
+    client_primary=None,
+    model_primary: str = None,
+    client_fallback=None,
+    model_fallback: str = None
+) -> None:
+    """
+    Set both Gemini clients and model names
+    client_primary: genai.Client instance (e.g., gemini-3-flash-preview)
+    model_primary: string model name
+    client_fallback: fallback genai.Client instance (e.g., gemini-2.5-flash-preview)
+    model_fallback: fallback model name
+    """
     global gemini_client_primary, gemini_model_name_primary
     global gemini_client_fallback, gemini_model_name_fallback
-
+    
     gemini_client_primary = client_primary
     gemini_model_name_primary = model_primary
     gemini_client_fallback = client_fallback
     gemini_model_name_fallback = model_fallback
+    
+    if client_primary and model_primary:
+        logger.info(f"✅ Primary Gemini model set: {model_primary}")
+    if client_fallback and model_fallback:
+        logger.info(f"✅ Fallback Gemini model set: {model_fallback}")
 
 
-def _safe_parse_gemini_response(response) -> str:
-    """Parse Gemini response safely"""
+def _safe_parse_gemini_response(response_obj) -> str:
+    """
+    Parse a response from the new google.genai.Client.
+    The response might contain .text or .candidates[0].content.parts[0].text
+    """
     try:
-        if response is None:
+        if response_obj is None:
             return ""
-
-        # google genai responses sometimes have .parts with .text fields
-        if hasattr(response, "parts") and getattr(response, "parts"):
-            parts = [getattr(part, "text", "") for part in response.parts if getattr(part, "text", None)]
-            return "".join(parts).strip()
-
-        if hasattr(response, "text") and getattr(response, "text"):
-            return str(getattr(response, "text")).strip()
-
-        if isinstance(response, dict):
-            if "text" in response and response["text"]:
-                return str(response["text"]).strip()
-
-        return str(response)
+        
+        # Try direct .text attribute
+        if hasattr(response_obj, "text") and response_obj.text:
+            return str(response_obj.text).strip()
+        
+        # Try .candidates structure
+        if hasattr(response_obj, "candidates") and response_obj.candidates:
+            first_candidate = response_obj.candidates[0]
+            if hasattr(first_candidate, "content") and first_candidate.content:
+                content = first_candidate.content
+                if hasattr(content, "parts") and content.parts:
+                    for part in content.parts:
+                        if hasattr(part, "text") and part.text:
+                            return str(part.text).strip()
+        
+        return str(response_obj)
     except Exception as e:
         logger.error("Error parsing Gemini response: %s", e)
         return ""
 
 
 def get_gemini_response(prompt: str) -> str:
-    """Get response from Gemini AI with fallback model"""
-    if not prompt:
-        return ""
-
+    """Get response from Gemini AI using new google-genai client"""
+    # Identity check
     identity_queries = ["คุณคือใคร", "เป็นใคร", "who are you", "คุณชื่ออะไร", "ชื่ออะไร", "ตัวตน"]
     if any(q in prompt.lower() for q in identity_queries):
         return MESSAGES["IDENTITY"]
-
-    if not gemini_client_primary:
+    
+    if not gemini_client_primary and not gemini_client_fallback:
         return MESSAGES["AI_DISABLED"]
-
-    try:
-        # เตรียม prompt + context
-        now = datetime.datetime.now(LOCAL_TZ)
-        date_context = f"วันนี้คือ {now.strftime('%A')} ที่ {now.strftime('%d %B')} พ.ศ. {now.year + 543}"
-        enhanced_prompt = f"(บริบท: {date_context})\n\nคำถาม: {prompt}"
-
-        # พยายามเรียก client primary ก่อน
+    
+    # เพิ่ม context เวลาปัจจุบัน
+    now = datetime.datetime.now(LOCAL_TZ)
+    date_context = f"วันนี้คือ{now.strftime('%A')}ที่ {now.strftime('%d %B')} พ.ศ. {now.year + 543}"
+    enhanced_prompt = f"(บริบท: {date_context})\n\nคำถาม: {prompt}"
+    
+    # Try primary first
+    if gemini_client_primary and gemini_model_name_primary:
         try:
-            resp = gemini_client_primary.models.generate_content(
+            response = gemini_client_primary.models.generate_content(
                 model=gemini_model_name_primary,
                 contents=enhanced_prompt
             )
-            text = _safe_parse_gemini_response(resp)
-        except Exception as primary_error:
-            logger.warning(f"Primary model failed: {primary_error}")
-            # ถ้า primary ล้ม ใช้ fallback ถ้ามี
-            if gemini_client_fallback:
-                try:
-                    resp = gemini_client_fallback.models.generate_content(
-                        model=gemini_model_name_fallback,
-                        contents=enhanced_prompt
-                    )
-                    text = _safe_parse_gemini_response(resp)
-                except Exception as fallback_error:
-                    logger.error(f"Fallback model failed: {fallback_error}")
-                    return MESSAGES["AI_ERROR"]
-            else:
-                return MESSAGES["AI_ERROR"]
+            text = _safe_parse_gemini_response(response)
+            
+            if text:
+                # แทนที่ชื่อ Google ด้วย Gemini
+                text = re.sub(r'\b[Gg]oogle\b', 'Gemini', text)
+                text = text.replace('กูเกิล', 'Gemini')
+                
+                # ตัดข้อความถ้ายาวเกินไป
+                if len(text) > LINE_SAFE_TRUNCATE:
+                    text = text[:LINE_SAFE_TRUNCATE] + "...\n\n(ข้อความยาวเกินไป ตัดบางส่วน)"
+                
+                return text
+        except Exception as e:
+            logger.warning(f"Primary Gemini model failed: {e}, trying fallback...")
+    
+    # Fallback
+    if gemini_client_fallback and gemini_model_name_fallback:
+        try:
+            response = gemini_client_fallback.models.generate_content(
+                model=gemini_model_name_fallback,
+                contents=enhanced_prompt
+            )
+            text = _safe_parse_gemini_response(response)
+            
+            if text:
+                text = re.sub(r'\b[Gg]oogle\b', 'Gemini', text)
+                text = text.replace('กูเกิล', 'Gemini')
+                
+                if len(text) > LINE_SAFE_TRUNCATE:
+                    text = text[:LINE_SAFE_TRUNCATE] + "...\n\n(ข้อความยาวเกินไป ตัดบางส่วน)"
+                
+                return text
+        except Exception as e:
+            logger.error(f"Fallback Gemini model also failed: {e}")
+            return MESSAGES["AI_ERROR"]
+    
+    return MESSAGES["AI_NO_RESPONSE"]
 
-        if not text:
-            return MESSAGES["AI_NO_RESPONSE"]
-
-        # small post-processing
-        text = re.sub(r'\b[Gg]oogle\b', 'Gemini', text)
-        text = text.replace('กูเกิล', 'Gemini')
-
-        if LINE_SAFE_TRUNCATE and len(text) > LINE_SAFE_TRUNCATE:
-            text = text[:LINE_SAFE_TRUNCATE] + "...\n\n(ข้อความยาวเกินไป ตัดบางส่วน)"
-
-        return text
-
-    except Exception as e:
-        logger.error("Gemini Generate Error: %s", e)
-        return MESSAGES["AI_ERROR"]
 # ============================================================================
+# SMART CALCULATOR (NEW!)
+# ============================================================================
+
+def get_calculator_response(user_message: str) -> str:
+    """
+    Handle calculator requests
+    Imports smart_calc dynamically to avoid dependency issues
+    """
+    try:
+        from smart_calc import calculate
+        
+        # Remove common prefixes
+        expression = user_message
+        prefixes = ["คำนวณ", "คิด", "calc", "calculate", "="]
+        for prefix in prefixes:
+            if expression.lower().startswith(prefix):
+                expression = expression[len(prefix):].strip()
+                break
+        
+        if not expression:
+            return (
+                "🧮 *เครื่องคิดเลข*\n\n"
+                "💡 วิธีใช้:\n"
+                "• 12*(5+3)^2\n"
+                "• sqrt(144) + sin(pi/2)\n"
+                "• x = 5\n"
+                "• x * 2 + 10\n"
+                "• 50% (= 0.5)\n"
+                "• 5! (= 120)\n\n"
+                "🔢 ฟังก์ชันที่รองรับ:\n"
+                "sin, cos, tan, sqrt, log, exp, abs, round, floor, ceil, factorial\n\n"
+                "📝 คำสั่งพิเศษ:\n"
+                "• vars - ดูตัวแปรทั้งหมด\n"
+                "• clearvars - ลบตัวแปรทั้งหมด"
+            )
+        
+        result = calculate(expression)
+        return f"🧮 {result}"
+        
+    except ImportError:
+        logger.error("smart_calc.py not found")
+        return "❌ ระบบคิดเลขไม่พร้อมใช้งาน"
+    except Exception as e:
+        logger.error(f"Calculator error: {e}")
+        return f"❌ เกิดข้อผิดพลาด: {str(e)[:100]}"
+
+# ============================================================================
+# EXPORTS
+# ============================================================================
+
+__all__ = [
+    'set_database',
+    'set_gemini_models',
+    'add_homework_to_db',
+    'get_homeworks_from_db',
+    'clear_homework_db',
+    'get_worksheet_message',
+    'get_school_link_message',
+    'get_timetable_image_message',
+    'get_grade_link_message',
+    'get_absence_form_message',
+    'get_bio_link_message',
+    'get_physic_link_message',
+    'get_help_message',
+    'get_next_class_message',
+    'get_time_until_next_class_message',
+    'get_exam_countdown_message',
+    'get_music_link_message',
+    'get_gemini_response',
+    'get_calculator_response',  # NEW!
+]

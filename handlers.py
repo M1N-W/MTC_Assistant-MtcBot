@@ -48,7 +48,15 @@ try:
         get_admin_ban_commands,
         get_admin_ban_help
     )
-    BLACKLIST_ENABLED = True
+from features import (
+    get_worksheet_message, get_school_link_message, get_timetable_image_message,
+    get_grade_link_message, get_absence_form_message, get_bio_link_message,
+    get_physic_link_message, get_help_message, get_next_class_message,
+    get_time_until_next_class_message, get_exam_countdown_message,
+    get_music_link_message, get_gemini_response,
+    add_homework_to_db, get_homeworks_from_db, clear_homework_db,
+    get_calculator_response  # NEW!
+)
     logger.info("✅ User blacklist system loaded")
 except ImportError as e:
     logger.warning(f"⚠️ user_blacklist.py not found: {e}")
@@ -406,6 +414,9 @@ COMMANDS = [
     (("อีกกี่นาที", "เหลือเวลา"), get_time_until_next_class_message),
     (("สอบ", "วันสอบ", "นับถอยหลังสอบ"), get_exam_countdown_message),
     (("เปิดเพลง", "หาเพลง", "ขอเพลง"), get_music_link_message),
+    
+    # NEW: Calculator commands
+    (("คำนวณ", "คิด", "calc", "="), lambda msg: TextMessage(text=get_calculator_response(msg))),
 ]
 
 # ============================================================================
