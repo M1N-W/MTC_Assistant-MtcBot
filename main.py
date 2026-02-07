@@ -13,6 +13,10 @@ Improvements:
 """
 
 import os
+
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning, module='pydantic')
+
 import datetime
 import time
 from flask import Flask, request, abort, jsonify, g

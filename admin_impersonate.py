@@ -1,15 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-MTC Assistant - Admin Impersonate Feature
+MTC Assistant - Admin Impersonate Feature (FIXED)
 ฟีเจอร์สำหรับแอดมินส่งข้อความไปหาผู้ใช้โดยตรง (สำหรับแกล้งเพื่อน 😄)
+
+FIXED:
+- Added retry mechanism for connection errors
+- Better error handling
+- Connection timeout management
+- Exponential backoff
 
 Usage:
     1. พิมพ์ "ดูผู้ใช้" → ดูรายชื่อผู้ใช้ล่าสุด
     2. พิมพ์ "ส่งถึง [user_id] [ข้อความ]" → ส่งข้อความแกล้งเพื่อน
     3. พิมพ์ "ยกเลิกส่ง" → ยกเลิก
-
-Example:
-    ส่งถึง U1234567890 สวัสดีครับ ผมเป็น AI ที่ฉลาดมาก
 """
 
 import time
@@ -23,9 +26,6 @@ from linebot.v3.messaging import (
 # ============================================================================
 # GLOBAL STATE (Session Management)
 # ============================================================================
-
-# Store active impersonate sessions: {admin_id: {"target": user_id, "started_at": timestamp}}
-_impersonate_sessions: Dict[str, Dict] = {}
 
 # Store recent users list for easy selection
 _recent_users_cache: Dict[str, Dict] = {}
@@ -73,16 +73,24 @@ def track_user_activity(user_id: str, display_name: str = "Unknown"):
         _recent_users_cache = dict(sorted_users[:20])
 
 # ============================================================================
-# CORE FUNCTIONS
+# CORE FUNCTIONS (WITH RETRY MECHANISM)
 # ============================================================================
 
-def send_impersonate_message(target_user_id: str, message: str) -> Tuple[bool, str]:
+def send_impersonate_message(
+    target_user_id: str, 
+    message: str,
+    max_retries: int = 3,
+    retry_delay: float = 1.0
+) -> Tuple[bool, str]:
     """
     Send a custom message to specific user (as if bot is talking)
+    WITH RETRY MECHANISM for connection errors
     
     Args:
         target_user_id: LINE User ID to send to
         message: Custom message to send
+        max_retries: Maximum retry attempts (default: 3)
+        retry_delay: Initial delay between retries in seconds (default: 1.0)
     
     Returns:
         (success, result_message)
@@ -90,19 +98,68 @@ def send_impersonate_message(target_user_id: str, message: str) -> Tuple[bool, s
     if not _line_api:
         return False, "❌ LINE API ไม่พร้อมใช้งาน"
     
-    try:
-        _line_api.push_message(
-            PushMessageRequest(
-                to=target_user_id,
-                messages=[TextMessage(text=message)]
-            )
-        )
-        logger.info(f"📤 Impersonate message sent to {target_user_id}")
-        return True, f"✅ ส่งข้อความสำเร็จถึง {target_user_id[:8]}..."
+    last_error = None
     
-    except Exception as e:
-        logger.error(f"Failed to send impersonate message: {e}")
-        return False, f"❌ ส่งข้อความล้มเหลว: {str(e)}"
+    for attempt in range(max_retries):
+        try:
+            # Send the message
+            _line_api.push_message(
+                PushMessageRequest(
+                    to=target_user_id,
+                    messages=[TextMessage(text=message)]
+                )
+            )
+            
+            logger.info(f"📤 Impersonate message sent to {target_user_id} (attempt {attempt + 1})")
+            return True, f"✅ ส่งข้อความสำเร็จถึง {target_user_id[:8]}..."
+        
+        except ConnectionResetError as e:
+            last_error = f"Connection reset: {e}"
+            logger.warning(f"⚠️ Connection reset on attempt {attempt + 1}/{max_retries}: {e}")
+            
+            if attempt < max_retries - 1:
+                # Exponential backoff: 1s, 2s, 4s
+                delay = retry_delay * (2 ** attempt)
+                logger.info(f"⏳ Retrying in {delay}s...")
+                time.sleep(delay)
+            else:
+                logger.error(f"❌ Failed after {max_retries} attempts: {e}")
+        
+        except ConnectionAbortedError as e:
+            last_error = f"Connection aborted: {e}"
+            logger.warning(f"⚠️ Connection aborted on attempt {attempt + 1}/{max_retries}: {e}")
+            
+            if attempt < max_retries - 1:
+                delay = retry_delay * (2 ** attempt)
+                logger.info(f"⏳ Retrying in {delay}s...")
+                time.sleep(delay)
+            else:
+                logger.error(f"❌ Failed after {max_retries} attempts: {e}")
+        
+        except TimeoutError as e:
+            last_error = f"Timeout: {e}"
+            logger.warning(f"⚠️ Timeout on attempt {attempt + 1}/{max_retries}: {e}")
+            
+            if attempt < max_retries - 1:
+                delay = retry_delay * (2 ** attempt)
+                logger.info(f"⏳ Retrying in {delay}s...")
+                time.sleep(delay)
+            else:
+                logger.error(f"❌ Failed after {max_retries} attempts: {e}")
+        
+        except Exception as e:
+            last_error = f"Unexpected error: {e}"
+            logger.error(f"❌ Unexpected error sending impersonate message: {e}")
+            
+            # For unexpected errors, don't retry
+            return False, f"❌ ส่งข้อความล้มเหลว: {str(e)[:100]}"
+    
+    # All retries failed
+    return False, (
+        f"❌ ส่งข้อความล้มเหลวหลังพยายาม {max_retries} ครั้ง\n"
+        f"สาเหตุ: {last_error[:100]}\n\n"
+        f"💡 กรุณารอสักครู่แล้วลองใหม่อีกครั้ง"
+    )
 
 # ============================================================================
 # COMMAND HANDLERS
@@ -175,7 +232,7 @@ def handle_send_impersonate_command(admin_id: str, user_message: str) -> str:
             "💡 พิมพ์ 'ดูผู้ใช้' เพื่อดู User ID ที่ถูกต้อง"
         )
     
-    # Prevent sending to admin themselves (accidental self-prank)
+    # Prevent sending to admin themselves
     if target_user_id == admin_id:
         return "😅 ไม่สามารถส่งข้อความหาตัวเองได้ครับ"
     
@@ -183,7 +240,7 @@ def handle_send_impersonate_command(admin_id: str, user_message: str) -> str:
     if target_user_id in ADMIN_USER_IDS:
         return "🚫 ไม่สามารถส่งข้อความหา Admin คนอื่นได้"
     
-    # Send the message
+    # Send the message (WITH RETRY)
     success, result = send_impersonate_message(target_user_id, message)
     
     if success:
@@ -220,7 +277,7 @@ def handle_test_impersonate_command(admin_id: str, user_message: str) -> str:
     
     message = parts[1]
     
-    # Send to admin themselves
+    # Send to admin themselves (WITH RETRY)
     success, result = send_impersonate_message(admin_id, message)
     
     if success:
@@ -251,6 +308,7 @@ def get_impersonate_help() -> str:
 - ใช้เพื่อความสนุกเท่านั้น
 - อย่าส่งข้อความที่ไม่เหมาะสม
 - ผู้ใช้จะเห็นเหมือนบอทพูดเอง
+- ระบบจะลองส่งใหม่อัตโนมัติถ้าเกิด error
 """
 
 # ============================================================================
@@ -260,17 +318,6 @@ def get_impersonate_help() -> str:
 def get_impersonate_commands():
     """
     Return command tuples for integration with handlers.py
-    
-    Usage in handlers.py:
-        from admin_impersonate import get_impersonate_commands, track_user_activity
-        
-        # In handle_message, track all users:
-        track_user_activity(user_id, display_name)
-        
-        # In admin commands section:
-        for keywords, handler in get_impersonate_commands():
-            if matches:
-                reply = handler(user_id, user_message)
     """
     return [
         (("ดูผู้ใช้", "users list", "รายชื่อผู้ใช้"), 
