@@ -1,3 +1,4 @@
+
 # smart_calc.py
 # -*- coding: utf-8 -*-
 """
@@ -250,6 +251,22 @@ def calculate(expression: str) -> str:
         if "math domain error" in msg:
             return "ข้อผิดพลาด: ค่าอยู่นอกโดเมนทางคณิตศาสตร์"
         return f"ไม่สามารถคำนวณได้: {msg}"
+
+# ---------- smart_calculate wrapper (added) ----------
+def smart_calculate(expression: str) -> str:
+    """
+    Backwards-compatible wrapper expected by handlers.py.
+    If the result is a plain number, prefix with 'Result: '. Otherwise return calculate() output unchanged.
+    """
+    res = calculate(expression)
+    # try to parse as float/int; if so, return with prefix
+    try:
+        float_res = float(res)
+        # integer-looking strings like "4" or "4.0" parse fine
+        return f"Result: {res}"
+    except Exception:
+        # not a plain number -> return original output (e.g., variable list, errors, assignments)
+        return res
 
 # ---------- CLI ----------
 def _cli_main():
