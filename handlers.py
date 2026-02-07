@@ -1,9 +1,8 @@
+
 # -*- coding: utf-8 -*-
 """
 MTC Assistant - Handlers Module (Enhanced + Impersonate Feature)
-แก้ไข Flex Message ให้สวยงามและทุกปุ่มมีสี
-FIXED: user_id order bug + Protected blacklist import
-NEW: Admin impersonate feature integrated
+ปรับแก้ข้อผิดพลาดในการ import และแก้โครงสร้าง try/except สำหรับ user_blacklist
 """
 
 import time
@@ -25,29 +24,7 @@ from config import (
     SCHOOL_LINK, GRADE_LINK, ABSENCE_LINK, Bio_LINK, Physic_LINK
 )
 
-# Import from features
-from features import (
-    get_worksheet_message, get_school_link_message, get_timetable_image_message,
-    get_grade_link_message, get_absence_form_message, get_bio_link_message,
-    get_physic_link_message, get_help_message, get_next_class_message,
-    get_time_until_next_class_message, get_exam_countdown_message,
-    get_music_link_message, get_gemini_response,
-    add_homework_to_db, get_homeworks_from_db, clear_homework_db
-)
-
-# Import broadcast functions
-import broadcast
-
-# ============================================================================
-# FIXED: Protected blacklist import with fallback
-# ============================================================================
-try:
-    from user_blacklist import (
-        get_blacklist_manager,
-        check_user_banned,
-        get_admin_ban_commands,
-        get_admin_ban_help
-    )
+# Import from features (include calculator)
 from features import (
     get_worksheet_message, get_school_link_message, get_timetable_image_message,
     get_grade_link_message, get_absence_form_message, get_bio_link_message,
@@ -57,30 +34,45 @@ from features import (
     add_homework_to_db, get_homeworks_from_db, clear_homework_db,
     get_calculator_response  # NEW!
 )
+
+# Import broadcast functions
+import broadcast
+
+# ============================================================================
+# PROTECTED BLACKLIST IMPORT (fixed structure)
+# ============================================================================
+try:
+    from user_blacklist import (
+        get_blacklist_manager,
+        check_user_banned,
+        get_admin_ban_commands,
+        get_admin_ban_help
+    )
+    BLACKLIST_ENABLED = True
     logger.info("✅ User blacklist system loaded")
 except ImportError as e:
     logger.warning(f"⚠️ user_blacklist.py not found: {e}")
     logger.warning("Blacklist features will be disabled")
     BLACKLIST_ENABLED = False
-    
+
     # Define dummy functions for graceful degradation
     def check_user_banned(user_id: str) -> tuple:
         """Dummy function when blacklist is disabled"""
         return False, ""
-    
+
     def get_admin_ban_help() -> str:
         """Dummy function when blacklist is disabled"""
         return "\n⚠️ *ระบบ Blacklist:* ไม่พร้อมใช้งาน"
-    
+
     def handle_ban_user_command(admin_id: str, message: str) -> str:
         return "⚠️ ระบบ Blacklist ไม่พร้อมใช้งาน"
-    
+
     def handle_unban_user_command(admin_id: str, message: str) -> str:
         return "⚠️ ระบบ Blacklist ไม่พร้อมใช้งาน"
-    
+
     def handle_list_banned_command(admin_id: str, message: str = "") -> str:
         return "⚠️ ระบบ Blacklist ไม่พร้อมใช้งาน"
-    
+
     def handle_ban_stats_command(admin_id: str, message: str = "") -> str:
         return "⚠️ ระบบ Blacklist ไม่พร้อมใช้งาน"
 
@@ -100,10 +92,13 @@ try:
 except ImportError as e:
     logger.warning(f"⚠️ admin_impersonate.py not found: {e}")
     IMPERSONATE_ENABLED = False
-    
+
     # Define dummy functions
     def track_user_activity(user_id: str, display_name: str = ""): pass
     def get_impersonate_help() -> str: return ""
+    def handle_list_users_command(admin_id: str): return "Impersonate disabled"
+    def handle_send_impersonate_command(admin_id: str, message: str): return "Impersonate disabled"
+    def handle_test_impersonate_command(admin_id: str, message: str): return "Impersonate disabled"
 
 # ============================================================================
 # LINE BOT CONFIGURATION
@@ -120,7 +115,7 @@ _api_client_lock = threading.Lock()
 def get_line_api() -> Optional[MessagingApi]:
     """Get or create LINE API client (singleton pattern)"""
     global _line_api_client
-    
+
     if _line_api_client is None and configuration:
         with _api_client_lock:
             if _line_api_client is None:
@@ -129,7 +124,7 @@ def get_line_api() -> Optional[MessagingApi]:
                     logger.debug("LINE API client initialized")
                 except Exception as e:
                     logger.error(f"Failed to initialize LINE API client: {e}")
-    
+
     return _line_api_client
 
 # ============================================================================
@@ -142,7 +137,7 @@ _banned_users: Dict[str, float] = {}
 def is_rate_limited(user_id: str) -> bool:
     """Check if user is rate limited"""
     now_ts = time.time()
-    
+
     with _rate_limit_lock:
         if user_id in _banned_users:
             ban_until = _banned_users[user_id]
@@ -152,32 +147,32 @@ def is_rate_limited(user_id: str) -> bool:
                 return True
             else:
                 del _banned_users[user_id]
-        
+
         history = _user_message_history.get(user_id, [])
         recent = [t for t in history if now_ts - t < RATE_LIMIT_WINDOW]
-        
+
         if len(recent) > RATE_LIMIT_MAX * 3:
             _banned_users[user_id] = now_ts + 300
             logger.error(f"User {user_id} BANNED for severe abuse")
             return True
-        
+
         if len(recent) > RATE_LIMIT_MAX * 2:
             logger.warning(f"User {user_id} in extended cooldown")
             return True
-        
+
         recent.append(now_ts)
         _user_message_history[user_id] = recent
-        
+
         if len(recent) > RATE_LIMIT_MAX:
             logger.info(f"User {user_id} rate limited")
             return True
-    
+
     return False
 
 def get_rate_limit_status(user_id: str) -> dict:
     """Get rate limit status"""
     now_ts = time.time()
-    
+
     with _rate_limit_lock:
         if user_id in _banned_users:
             return {
@@ -185,10 +180,10 @@ def get_rate_limit_status(user_id: str) -> dict:
                 "ban_until": _banned_users[user_id],
                 "remaining_seconds": int(_banned_users[user_id] - now_ts)
             }
-        
+
         history = _user_message_history.get(user_id, [])
         recent = [t for t in history if now_ts - t < RATE_LIMIT_WINDOW]
-        
+
         return {
             "status": "rate_limited" if len(recent) > RATE_LIMIT_MAX else "ok",
             "messages_count": len(recent),
@@ -199,10 +194,9 @@ def get_rate_limit_status(user_id: str) -> dict:
 # ============================================================================
 # FLEX MESSAGE - ENHANCED LINKS MENU
 # ============================================================================
-
 def get_links_menu_message(user_message: str = "") -> FlexMessage:
     """แสดงเมนูลิงก์ทั้งหมดด้วย Flex Message (Enhanced Design)"""
-    
+
     flex_content = {
         "type": "bubble",
         "size": "kilo",
@@ -365,7 +359,7 @@ def get_links_menu_message(user_message: str = "") -> FlexMessage:
             "paddingAll": "12px"
         }
     }
-    
+
     return FlexMessage(
         alt_text="🔗 ลิงก์สำคัญทั้งหมด - MTC Assistant",
         contents=FlexContainer.from_dict(flex_content)
@@ -374,7 +368,6 @@ def get_links_menu_message(user_message: str = "") -> FlexMessage:
 # ============================================================================
 # COMMAND MATCHING
 # ============================================================================
-
 def _keyword_matches(message_lower: str, keyword_lower: str) -> bool:
     """Check if keyword matches"""
     return keyword_lower in message_lower
@@ -393,7 +386,6 @@ def call_action(action: Callable, user_message: str) -> Union[TextMessage, Image
 # ============================================================================
 # COMMANDS LIST - รองรับ Rich Menu
 # ============================================================================
-
 COMMANDS = [
     # Rich Menu Commands
     (("ตารางเรียน", "ตารางสอน"), get_timetable_image_message),
@@ -402,7 +394,7 @@ COMMANDS = [
     (("ลิงก์ที่สำคัญ", "ลิงค์สำคัญ", "ลิงก์", "links"), get_links_menu_message),
     (("ปฏิทินกิจกรรม", "ปฏิทิน", "กิจกรรม", "ดูกิจกรรม"), get_exam_countdown_message),
     (("ช่วยเหลือ", "คำสั่ง", "help"), get_help_message),
-    
+
     # Other Commands
     (("งาน", "การบ้าน", "เช็คงาน", "ใบงาน"), get_worksheet_message),
     (("เว็บโรงเรียน", "เว็บ"), get_school_link_message),
@@ -414,7 +406,7 @@ COMMANDS = [
     (("อีกกี่นาที", "เหลือเวลา"), get_time_until_next_class_message),
     (("สอบ", "วันสอบ", "นับถอยหลังสอบ"), get_exam_countdown_message),
     (("เปิดเพลง", "หาเพลง", "ขอเพลง"), get_music_link_message),
-    
+
     # NEW: Calculator commands
     (("คำนวณ", "คิด", "calc", "="), lambda msg: TextMessage(text=get_calculator_response(msg))),
 ]
@@ -422,18 +414,17 @@ COMMANDS = [
 # ============================================================================
 # LINE REPLY HELPER
 # ============================================================================
-
 def reply_to_line(reply_token: str, messages: List[Union[TextMessage, ImageMessage, FlexMessage]]) -> bool:
     """Send reply to LINE"""
     if not messages:
         logger.warning("No messages to send")
         return False
-    
+
     line_bot_api = get_line_api()
     if not line_bot_api:
         logger.error("LINE API client not available")
         return False
-    
+
     try:
         line_bot_api.reply_message(
             ReplyMessageRequest(
@@ -450,7 +441,6 @@ def reply_to_line(reply_token: str, messages: List[Union[TextMessage, ImageMessa
 # ============================================================================
 # EVENT HANDLERS
 # ============================================================================
-
 @handler.add(FollowEvent) if handler else (lambda f: f)
 def handle_follow(event):
     """Handle user following"""
@@ -470,11 +460,11 @@ def handle_message(event):
     """Handle incoming text messages"""
     user_text = getattr(event.message, "text", "")
     user_message = user_text.strip()
-    
+
     if not user_message:
         reply_to_line(event.reply_token, [TextMessage(text=MESSAGES["INVALID_MESSAGE"])])
         return
-    
+
     # ===== FIXED: Get user_id FIRST! =====
     # Get user ID
     user_id = None
@@ -482,33 +472,33 @@ def handle_message(event):
         user_id = event.source.user_id if hasattr(event, "source") else None
     except Exception:
         user_id = None
-    
+
     if not user_id:
         user_id = f"anon-{request.remote_addr or 'unknown'}"
-    
+
     logger.info("Message from %s: %s", user_id, user_message[:100])
     # ===== End of fix =====
-    
+
     # NEW: Track user activity for impersonate feature
     if IMPERSONATE_ENABLED:
         try:
             track_user_activity(user_id, "Unknown")
         except Exception as e:
             logger.debug(f"Failed to track user activity: {e}")
-    
+
     # Check if user is banned
     is_banned, ban_message = check_user_banned(user_id)
     if is_banned:
         logger.warning(f"🚫 Banned user {user_id} attempted to use bot")
         reply_to_line(event.reply_token, [TextMessage(text=ban_message)])
         return
-    
+
     # Track user for broadcast
     try:
         broadcast.track_user(user_id)
     except Exception as e:
         logger.error(f"Failed to track user: {e}")
-    
+
     # Check rate limit
     if is_rate_limited(user_id):
         rate_status = get_rate_limit_status(user_id)
@@ -519,13 +509,13 @@ def handle_message(event):
             )
         else:
             reply_message = TextMessage(text=MESSAGES["RATE_LIMITED"])
-        
+
         reply_to_line(event.reply_token, [reply_message])
         return
-    
+
     user_message_lower = user_message.lower()
     reply_message = None
-    
+
     # ========================================================================
     # ADMIN COMMANDS
     # ========================================================================
@@ -536,41 +526,41 @@ def handle_message(event):
                 from user_blacklist import handle_ban_user_command
                 result = handle_ban_user_command(user_id, user_message)
                 reply_message = TextMessage(text=result)
-        
+
         elif user_message.startswith("ปลดแบน ") or user_message.startswith("unban "):
             if BLACKLIST_ENABLED:
                 from user_blacklist import handle_unban_user_command
                 result = handle_unban_user_command(user_id, user_message)
                 reply_message = TextMessage(text=result)
-        
+
         elif user_message in ["รายชื่อแบน", "banned list", "ดูคนแบน"]:
             if BLACKLIST_ENABLED:
                 from user_blacklist import handle_list_banned_command
                 result = handle_list_banned_command(user_id)
                 reply_message = TextMessage(text=result)
-        
+
         elif user_message in ["สถิติแบน", "ban stats"]:
             if BLACKLIST_ENABLED:
                 from user_blacklist import handle_ban_stats_command
                 result = handle_ban_stats_command(user_id)
                 reply_message = TextMessage(text=result)
-        
+
         # NEW: Impersonate Commands
         elif user_message in ["ดูผู้ใช้", "users", "รายชื่อผู้ใช้"]:
             if IMPERSONATE_ENABLED:
                 result = handle_list_users_command(user_id)
                 reply_message = TextMessage(text=result)
-        
+
         elif user_message.startswith("ส่งถึง ") or user_message.startswith("send to "):
             if IMPERSONATE_ENABLED:
                 result = handle_send_impersonate_command(user_id, user_message)
                 reply_message = TextMessage(text=result)
-        
+
         elif user_message.startswith("ทดสอบส่ง "):
             if IMPERSONATE_ENABLED:
                 result = handle_test_impersonate_command(user_id, user_message)
                 reply_message = TextMessage(text=result)
-        
+
         # Broadcast Management
         elif user_message.startswith("ประกาศ "):
             message_to_broadcast = user_message.replace("ประกาศ ", "", 1).strip()
@@ -581,7 +571,7 @@ def handle_message(event):
                 reply_message = TextMessage(text=result['message'])
             else:
                 reply_message = TextMessage(text="⚠️ รูปแบบ: ประกาศ [ข้อความ]")
-        
+
         elif user_message.startswith("ประกาศด่วน "):
             urgent_msg = user_message.replace("ประกาศด่วน ", "", 1).strip()
             if urgent_msg:
@@ -591,7 +581,7 @@ def handle_message(event):
                 reply_message = TextMessage(text=result['message'])
             else:
                 reply_message = TextMessage(text="⚠️ รูปแบบ: ประกาศด่วน [ข้อความ]")
-        
+
         elif user_message.startswith("เตือนการบ้าน "):
             reminder_msg = user_message.replace("เตือนการบ้าน ", "", 1).strip()
             if reminder_msg:
@@ -601,14 +591,14 @@ def handle_message(event):
                 reply_message = TextMessage(text=result['message'])
             else:
                 reply_message = TextMessage(text="⚠️ รูปแบบ: เตือนการบ้าน [รายละเอียด]")
-        
+
         elif user_message in ["สถิติประกาศ", "broadcast stats"]:
             reply_message = TextMessage(text=broadcast.get_broadcast_stats())
-        
+
         elif user_message in ["จำนวนผู้ใช้", "user count", "ผู้ใช้"]:
             count = broadcast.get_user_count()
             reply_message = TextMessage(text=f"👥 จำนวนผู้ใช้ทั้งหมด: {count} คน")
-        
+
         # Admin Help
         elif user_message in ["admin", "คำสั่งแอดมิน"]:
             admin_help = (
@@ -621,15 +611,15 @@ def handle_message(event):
                 "• สถิติประกาศ\n"
                 "• จำนวนผู้ใช้\n"
             )
-            
+
             # Add blacklist help
             if BLACKLIST_ENABLED:
                 admin_help += "\n" + get_admin_ban_help()
-            
+
             # Add impersonate help
             if IMPERSONATE_ENABLED:
                 admin_help += "\n" + get_impersonate_help()
-            
+
             reply_message = TextMessage(text=admin_help)
 
     # วิธีสั่งการบ้าน
@@ -642,17 +632,17 @@ def handle_message(event):
         )
         reply_to_line(event.reply_token, [TextMessage(text=instruction_msg)])
         return
-    
+
     # Firebase Commands
     if not reply_message and user_message.startswith("สั่งการบ้าน"):
         reply_message = _handle_add_homework(user_message)
-    
+
     elif not reply_message and user_message in ["การบ้าน", "ดูการบ้าน", "homework"]:
         reply_message = TextMessage(text=get_homeworks_from_db())
-    
+
     elif not reply_message and user_message in ["ลบการบ้านทั้งหมด", "clear hw", "ลบงาน"]:
         reply_message = TextMessage(text=clear_homework_db())
-    
+
     # Try Standard Commands
     if not reply_message:
         for keywords, action in COMMANDS:
@@ -667,10 +657,10 @@ def handle_message(event):
                         reply_message = TextMessage(text=MESSAGES["ACTION_ERROR"])
                     matched = True
                     break
-            
+
             if matched:
                 break
-    
+
     # Fallback to Gemini AI
     if not reply_message:
         logger.debug("No command matched, using Gemini API")
@@ -680,7 +670,7 @@ def handle_message(event):
         except Exception as e:
             logger.exception(f"Gemini API error: {e}")
             reply_message = TextMessage(text=MESSAGES["AI_ERROR"])
-    
+
     # Send Reply
     try:
         if reply_message:
@@ -695,7 +685,6 @@ def handle_message(event):
 # ============================================================================
 # HOMEWORK HANDLER
 # ============================================================================
-
 def _handle_add_homework(user_message: str) -> TextMessage:
     """Handle add homework command"""
     if "|" in user_message:
@@ -704,12 +693,12 @@ def _handle_add_homework(user_message: str) -> TextMessage:
             subject = parts[1][:100]
             detail = parts[2][:500]
             due = parts[3][:50] if len(parts) > 3 else "ไม่ระบุ"
-            
+
             if not subject:
                 return TextMessage(text="⚠️ กรุณาระบุชื่อวิชา")
             if not detail:
                 return TextMessage(text="⚠️ กรุณาระบุรายละเอียด")
-            
+
             result = add_homework_to_db(subject, detail, due)
             return TextMessage(text=result)
         else:
@@ -725,7 +714,6 @@ def _handle_add_homework(user_message: str) -> TextMessage:
 # ============================================================================
 # EXPORTS
 # ============================================================================
-
 __all__ = [
     'handler',
     'configuration',
