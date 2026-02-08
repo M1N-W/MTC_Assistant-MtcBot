@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 MTC Assistant - Features Module  
-Contains all feature functions: schedule, homework, music, AI, calculator, grade calculator
-NEW: Grade calculator with GPA support
+FIXED: Correct calculator import
 """
 
 import datetime
@@ -317,37 +316,44 @@ def get_gemini_response(prompt: str) -> str:
             return MESSAGES["AI_ERROR"]
     return MESSAGES["AI_NO_RESPONSE"]
 
-def get_calculator_response(user_message: str) -> str:
+# FIXED: Use smart_calculate instead of calculate
+def get_calculator_response(user_message: str) -> TextMessage:
+    """Handle calculator command - FIXED"""
     try:
-        from smart_calc import calculate
+        from smart_calc import smart_calculate  # ✅ FIXED: Correct import
+        
         expression = user_message
         prefixes = ["คำนวณ", "คิด", "calc", "calculate", "="]
         for prefix in prefixes:
             if expression.lower().startswith(prefix):
                 expression = expression[len(prefix):].strip()
                 break
+        
         if not expression:
-            return (
+            help_text = (
                 "🧮 *เครื่องคิดเลข*\n\n"
                 "💡 วิธีใช้:\n"
-                "• 12*(5+3)^2\n"
-                "• sqrt(144) + sin(pi/2)\n"
-                "• x = 5, x * 2\n"
-                "• 50%, 5!\n\n"
+                "• คำนวณ 12*(5+3)^2\n"
+                "• คำนวณ sqrt(144) + sin(pi/2)\n"
+                "• คำนวณ x = 5, x * 2\n"
+                "• คำนวณ 50%, 5!\n\n"
                 "🔢 ฟังก์ชัน: sin, cos, tan, sqrt, log, exp, abs, round, factorial\n"
                 "📝 คำสั่ง: vars, clearvars"
             )
-        result = calculate(expression)
-        return f"🧮 {result}"
+            return TextMessage(text=help_text)
+        
+        result = smart_calculate(expression)  # ✅ FIXED: Use smart_calculate
+        return TextMessage(text=f"🧮 {result}")
+        
     except ImportError:
         logger.error("smart_calc.py not found")
-        return "❌ ระบบคิดเลขไม่พร้อม"
+        return TextMessage(text="❌ ระบบคิดเลขไม่พร้อม")
     except Exception as e:
         logger.error(f"Calc error: {e}")
-        return f"❌ ข้อผิดพลาด: {str(e)[:100]}"
+        return TextMessage(text=f"❌ ข้อผิดพลาด: {str(e)[:100]}")
 
-def get_grade_calculator_response(user_message: str) -> str:
-    """NEW: Handle grade calculator"""
+def get_grade_calculator_response(user_message: str) -> TextMessage:
+    """Handle grade calculator - returns TextMessage"""
     try:
         from grade_calculator import (
             handle_score_to_grade_command,
@@ -355,15 +361,18 @@ def get_grade_calculator_response(user_message: str) -> str:
         )
         msg_lower = user_message.lower()
         if "gpa" in msg_lower or "เกรดเฉลี่ย" in msg_lower:
-            return handle_gpa_calculation_command(user_message)
+            result = handle_gpa_calculation_command(user_message)
         else:
-            return handle_score_to_grade_command(user_message)
+            result = handle_score_to_grade_command(user_message)
+        
+        return TextMessage(text=result)  # ✅ FIXED: Return TextMessage
+        
     except ImportError:
         logger.error("grade_calculator.py not found")
-        return "❌ ระบบคำนวณเกรดไม่พร้อม"
+        return TextMessage(text="❌ ระบบคำนวณเกรดไม่พร้อม")
     except Exception as e:
         logger.error(f"Grade calc error: {e}")
-        return f"❌ ข้อผิดพลาด: {str(e)[:100]}"
+        return TextMessage(text=f"❌ ข้อผิดพลาด: {str(e)[:100]}")
 
 __all__ = [
     'set_database',
@@ -384,6 +393,6 @@ __all__ = [
     'get_exam_countdown_message',
     'get_music_link_message',
     'get_gemini_response',
-    'get_calculator_response',
-    'get_grade_calculator_response',
+    'get_calculator_response',  # ✅ Export
+    'get_grade_calculator_response',  # ✅ Export
 ]

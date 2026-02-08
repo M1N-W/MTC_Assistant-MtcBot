@@ -1,16 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-MTC Assistant - Handlers Module (Enhanced + Impersonate Feature)
-แก้ไข Flex Message ให้สวยงามและทุกปุ่มมีสี
-FIXED: user_id order bug + Protected blacklist import
-NEW: Admin impersonate feature integrated
+MTC Assistant - Handlers Module (COMPLETE FIX)
+FIXED: 
+1. Removed unnecessary smart_calc import
+2. Added calculator commands to COMMANDS list
+3. Added grade calculator commands to COMMANDS list
+4. Fixed user_id order bug
+5. Protected blacklist import
 """
 
 import time
 import threading
 from typing import Dict, List, Optional, Union, Callable
 from flask import request
-from smart_calc import smart_calculate
 
 from linebot.v3 import WebhookHandler
 from linebot.v3.messaging import (
@@ -33,7 +35,9 @@ from features import (
     get_physic_link_message, get_help_message, get_next_class_message,
     get_time_until_next_class_message, get_exam_countdown_message,
     get_music_link_message, get_gemini_response,
-    add_homework_to_db, get_homeworks_from_db, clear_homework_db
+    add_homework_to_db, get_homeworks_from_db, clear_homework_db,
+    get_calculator_response,  # ✅ FIXED: Added calculator
+    get_grade_calculator_response  # ✅ FIXED: Added grade calculator
 )
 
 # Import broadcast functions
@@ -64,18 +68,6 @@ except ImportError as e:
     def get_admin_ban_help() -> str:
         """Dummy function when blacklist is disabled"""
         return "\n⚠️ *ระบบ Blacklist:* ไม่พร้อมใช้งาน"
-    
-    def handle_ban_user_command(admin_id: str, message: str) -> str:
-        return "⚠️ ระบบ Blacklist ไม่พร้อมใช้งาน"
-    
-    def handle_unban_user_command(admin_id: str, message: str) -> str:
-        return "⚠️ ระบบ Blacklist ไม่พร้อมใช้งาน"
-    
-    def handle_list_banned_command(admin_id: str, message: str = "") -> str:
-        return "⚠️ ระบบ Blacklist ไม่พร้อมใช้งาน"
-    
-    def handle_ban_stats_command(admin_id: str, message: str = "") -> str:
-        return "⚠️ ระบบ Blacklist ไม่พร้อมใช้งาน"
 
 # ============================================================================
 # NEW: Import admin impersonate feature
@@ -384,7 +376,7 @@ def call_action(action: Callable, user_message: str) -> Union[TextMessage, Image
         return TextMessage(text=MESSAGES.get("ACTION_ERROR", "เกิดข้อผิดพลาด"))
 
 # ============================================================================
-# COMMANDS LIST - รองรับ Rich Menu
+# COMMANDS LIST - รองรับ Rich Menu + ✅ FIXED: Added Calculator & Grade Calc
 # ============================================================================
 
 COMMANDS = [
@@ -395,6 +387,13 @@ COMMANDS = [
     (("ลิงก์ที่สำคัญ", "ลิงค์สำคัญ", "ลิงก์", "links"), get_links_menu_message),
     (("ปฏิทินกิจกรรม", "ปฏิทิน", "กิจกรรม", "ดูกิจกรรม"), get_exam_countdown_message),
     (("ช่วยเหลือ", "คำสั่ง", "help"), get_help_message),
+    
+    # ✅ FIXED: Calculator Commands (NEW!)
+    (("คำนวณ", "คิด", "calc", "calculate"), get_calculator_response),
+    
+    # ✅ FIXED: Grade Calculator Commands (NEW!)
+    (("คำนวณเกรด", "เกรดคะแนน"), get_grade_calculator_response),
+    (("คำนวณ gpa", "คำนวณเกรดเฉลี่ย", "gpa"), get_grade_calculator_response),
     
     # Other Commands
     (("งาน", "การบ้าน", "เช็คงาน", "ใบงาน"), get_worksheet_message),
@@ -466,7 +465,6 @@ def handle_message(event):
         return
     
     # ===== FIXED: Get user_id FIRST! =====
-    # Get user ID
     user_id = None
     try:
         user_id = event.source.user_id if hasattr(event, "source") else None
@@ -643,7 +641,7 @@ def handle_message(event):
     elif not reply_message and user_message in ["ลบการบ้านทั้งหมด", "clear hw", "ลบงาน"]:
         reply_message = TextMessage(text=clear_homework_db())
     
-    # Try Standard Commands
+    # Try Standard Commands (✅ Now includes calculator & grade calculator!)
     if not reply_message:
         for keywords, action in COMMANDS:
             matched = False
