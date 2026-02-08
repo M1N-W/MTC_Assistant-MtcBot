@@ -1,12 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-MTC Assistant - Handlers Module (COMPLETE FIX)
-FIXED: 
-1. Removed unnecessary smart_calc import
-2. Added calculator commands to COMMANDS list
-3. Added grade calculator commands to COMMANDS list
-4. Fixed user_id order bug
-5. Protected blacklist import
+MTC Assistant - Handlers Module (Enhanced with Exam Simulator)
+แก้ไข Flex Message ให้สวยงามและทุกปุ่มมีสี + เพิ่มฟีเจอร์ข้อสอบจำลอง
 """
 
 import time
@@ -36,59 +31,50 @@ from features import (
     get_time_until_next_class_message, get_exam_countdown_message,
     get_music_link_message, get_gemini_response,
     add_homework_to_db, get_homeworks_from_db, clear_homework_db,
-    get_calculator_response,  # ✅ FIXED: Added calculator
-    get_grade_calculator_response  # ✅ FIXED: Added grade calculator
+    get_calculator_response, get_grade_calculator_response
 )
 
 # Import broadcast functions
 import broadcast
 
-# ============================================================================
-# FIXED: Protected blacklist import with fallback
-# ============================================================================
+# Import exam simulator (NEW!)
 try:
-    from user_blacklist import (
-        get_blacklist_manager,
-        check_user_banned,
-        get_admin_ban_commands,
-        get_admin_ban_help
+    from exam_simulator import (
+        get_session_manager,
+        handle_start_exam_command,
+        handle_answer_command,
+        handle_show_current_question,
+        handle_cancel_exam,
+        handle_show_explanation,
+        handle_exam_stats,
+        get_exam_help
     )
-    BLACKLIST_ENABLED = True
-    logger.info("✅ User blacklist system loaded")
+    EXAM_SIMULATOR_ENABLED = True
+    logger.info("✅ Exam simulator feature loaded")
 except ImportError as e:
-    logger.warning(f"⚠️ user_blacklist.py not found: {e}")
-    logger.warning("Blacklist features will be disabled")
-    BLACKLIST_ENABLED = False
-    
-    # Define dummy functions for graceful degradation
-    def check_user_banned(user_id: str) -> tuple:
-        """Dummy function when blacklist is disabled"""
-        return False, ""
-    
-    def get_admin_ban_help() -> str:
-        """Dummy function when blacklist is disabled"""
-        return "\n⚠️ *ระบบ Blacklist:* ไม่พร้อมใช้งาน"
+    logger.warning(f"⚠️ exam_simulator.py not found: {e}")
+    EXAM_SIMULATOR_ENABLED = False
+    def get_exam_help(): return ""
 
-# ============================================================================
-# NEW: Import admin impersonate feature
-# ============================================================================
+# Import user blacklist system
 try:
-    from admin_impersonate import (
-        track_user_activity,
-        get_impersonate_help,
-        handle_list_users_command,
-        handle_send_impersonate_command,
-        handle_test_impersonate_command
-    )
+    from user_blacklist import check_user_banned
+    BLACKLIST_ENABLED = True
+    logger.info("✅ Blacklist system loaded")
+except ImportError:
+    logger.warning("⚠️ user_blacklist.py not found")
+    BLACKLIST_ENABLED = False
+    def check_user_banned(user_id): return False, ""
+
+# Import admin impersonate system
+try:
+    from admin_impersonate import track_user_activity
     IMPERSONATE_ENABLED = True
-    logger.info("🎭 Admin impersonate feature loaded")
-except ImportError as e:
-    logger.warning(f"⚠️ admin_impersonate.py not found: {e}")
+    logger.info("✅ Admin impersonate system loaded")
+except ImportError:
+    logger.warning("⚠️ admin_impersonate.py not found")
     IMPERSONATE_ENABLED = False
-    
-    # Define dummy functions
-    def track_user_activity(user_id: str, display_name: str = ""): pass
-    def get_impersonate_help() -> str: return ""
+    def track_user_activity(user_id, display_name): pass
 
 # ============================================================================
 # LINE BOT CONFIGURATION
@@ -376,7 +362,7 @@ def call_action(action: Callable, user_message: str) -> Union[TextMessage, Image
         return TextMessage(text=MESSAGES.get("ACTION_ERROR", "เกิดข้อผิดพลาด"))
 
 # ============================================================================
-# COMMANDS LIST - รองรับ Rich Menu + ✅ FIXED: Added Calculator & Grade Calc
+# COMMANDS LIST - รองรับ Rich Menu
 # ============================================================================
 
 COMMANDS = [
@@ -388,10 +374,10 @@ COMMANDS = [
     (("ปฏิทินกิจกรรม", "ปฏิทิน", "กิจกรรม", "ดูกิจกรรม"), get_exam_countdown_message),
     (("ช่วยเหลือ", "คำสั่ง", "help"), get_help_message),
     
-    # ✅ FIXED: Calculator Commands (NEW!)
+    # Calculator Commands
     (("คำนวณ", "คิด", "calc", "calculate"), get_calculator_response),
     
-    # ✅ FIXED: Grade Calculator Commands (NEW!)
+    # Grade Calculator Commands
     (("คำนวณเกรด", "เกรดคะแนน"), get_grade_calculator_response),
     (("คำนวณ gpa", "คำนวณเกรดเฉลี่ย", "gpa"), get_grade_calculator_response),
     
@@ -464,7 +450,7 @@ def handle_message(event):
         reply_to_line(event.reply_token, [TextMessage(text=MESSAGES["INVALID_MESSAGE"])])
         return
     
-    # ===== FIXED: Get user_id FIRST! =====
+    # Get user ID
     user_id = None
     try:
         user_id = event.source.user_id if hasattr(event, "source") else None
@@ -475,9 +461,8 @@ def handle_message(event):
         user_id = f"anon-{request.remote_addr or 'unknown'}"
     
     logger.info("Message from %s: %s", user_id, user_message[:100])
-    # ===== End of fix =====
     
-    # NEW: Track user activity for impersonate feature
+    # Track user activity (for impersonate)
     if IMPERSONATE_ENABLED:
         try:
             track_user_activity(user_id, "Unknown")
@@ -485,17 +470,74 @@ def handle_message(event):
             logger.debug(f"Failed to track user activity: {e}")
     
     # Check if user is banned
-    is_banned, ban_message = check_user_banned(user_id)
-    if is_banned:
-        logger.warning(f"🚫 Banned user {user_id} attempted to use bot")
-        reply_to_line(event.reply_token, [TextMessage(text=ban_message)])
-        return
+    if BLACKLIST_ENABLED:
+        is_banned, ban_message = check_user_banned(user_id)
+        if is_banned:
+            logger.warning(f"🚫 Banned user {user_id} attempted to use bot")
+            reply_to_line(event.reply_token, [TextMessage(text=ban_message)])
+            return
     
     # Track user for broadcast
     try:
         broadcast.track_user(user_id)
     except Exception as e:
         logger.error(f"Failed to track user: {e}")
+    
+    # ============================================================
+    # 🆕 CHECK EXAM SESSION (ใหม่!)
+    # ============================================================
+    if EXAM_SIMULATOR_ENABLED:
+        from exam_simulator import get_session_manager
+        exam_manager = get_session_manager(None)  # Will be set in main.py
+        
+        # Import db from main module if available
+        try:
+            from main import db
+            exam_manager.db = db
+        except:
+            pass
+        
+        # Check if user has active exam session
+        if exam_manager.has_active_session(user_id):
+            message_lower = user_message.lower().strip()
+            
+            # Check for cancel command
+            if message_lower in ['ยกเลิกสอบ', 'cancel', 'cancel exam']:
+                result = handle_cancel_exam(user_id, exam_manager.db)
+                reply_to_line(event.reply_token, [TextMessage(text=result)])
+                return
+            
+            # Check if this is an answer (1-4)
+            if message_lower in ['1', '2', '3', '4']:
+                # Handle answer
+                result_msg, send_next = handle_answer_command(user_id, user_message, exam_manager.db)
+                
+                messages_to_send = []
+                
+                # Add result message if exists (exam finished)
+                if result_msg:
+                    messages_to_send.append(TextMessage(text=result_msg))
+                
+                # Send next question if exam continues
+                if send_next:
+                    next_question = handle_show_current_question(user_id, exam_manager.db)
+                    messages_to_send.append(TextMessage(text=next_question))
+                
+                if messages_to_send:
+                    reply_to_line(event.reply_token, messages_to_send)
+                else:
+                    # Fallback
+                    reply_to_line(event.reply_token, [TextMessage(text="❓")])
+                
+                return
+            
+            # Not an answer - show current question again
+            current_q = handle_show_current_question(user_id, exam_manager.db)
+            reply_to_line(event.reply_token, [TextMessage(text=current_q)])
+            return
+    # ============================================================
+    # END OF EXAM SESSION CHECK
+    # ============================================================
     
     # Check rate limit
     if is_rate_limited(user_id):
@@ -514,53 +556,10 @@ def handle_message(event):
     user_message_lower = user_message.lower()
     reply_message = None
     
-    # ========================================================================
-    # ADMIN COMMANDS
-    # ========================================================================
+    # Admin Commands
     if user_id in ADMIN_USER_IDS:
-        # Blacklist Management
-        if user_message.startswith("แบน ") or user_message.startswith("ban "):
-            if BLACKLIST_ENABLED:
-                from user_blacklist import handle_ban_user_command
-                result = handle_ban_user_command(user_id, user_message)
-                reply_message = TextMessage(text=result)
-        
-        elif user_message.startswith("ปลดแบน ") or user_message.startswith("unban "):
-            if BLACKLIST_ENABLED:
-                from user_blacklist import handle_unban_user_command
-                result = handle_unban_user_command(user_id, user_message)
-                reply_message = TextMessage(text=result)
-        
-        elif user_message in ["รายชื่อแบน", "banned list", "ดูคนแบน"]:
-            if BLACKLIST_ENABLED:
-                from user_blacklist import handle_list_banned_command
-                result = handle_list_banned_command(user_id)
-                reply_message = TextMessage(text=result)
-        
-        elif user_message in ["สถิติแบน", "ban stats"]:
-            if BLACKLIST_ENABLED:
-                from user_blacklist import handle_ban_stats_command
-                result = handle_ban_stats_command(user_id)
-                reply_message = TextMessage(text=result)
-        
-        # NEW: Impersonate Commands
-        elif user_message in ["ดูผู้ใช้", "users", "รายชื่อผู้ใช้"]:
-            if IMPERSONATE_ENABLED:
-                result = handle_list_users_command(user_id)
-                reply_message = TextMessage(text=result)
-        
-        elif user_message.startswith("ส่งถึง ") or user_message.startswith("send to "):
-            if IMPERSONATE_ENABLED:
-                result = handle_send_impersonate_command(user_id, user_message)
-                reply_message = TextMessage(text=result)
-        
-        elif user_message.startswith("ทดสอบส่ง "):
-            if IMPERSONATE_ENABLED:
-                result = handle_test_impersonate_command(user_id, user_message)
-                reply_message = TextMessage(text=result)
-        
-        # Broadcast Management
-        elif user_message.startswith("ประกาศ "):
+        # Broadcast commands
+        if user_message.startswith("ประกาศ "):
             message_to_broadcast = user_message.replace("ประกาศ ", "", 1).strip()
             if message_to_broadcast:
                 announcement = broadcast.create_announcement("ประกาศจากผู้ดูแล", message_to_broadcast)
@@ -597,7 +596,6 @@ def handle_message(event):
             count = broadcast.get_user_count()
             reply_message = TextMessage(text=f"👥 จำนวนผู้ใช้ทั้งหมด: {count} คน")
         
-        # Admin Help
         elif user_message in ["admin", "คำสั่งแอดมิน"]:
             admin_help = (
                 "👨‍💼 *คำสั่งแอดมิน*\n\n"
@@ -607,19 +605,127 @@ def handle_message(event):
                 "• เตือนการบ้าน [รายละเอียด]\n\n"
                 "📊 *สถิติ:*\n"
                 "• สถิติประกาศ\n"
-                "• จำนวนผู้ใช้\n"
+                "• จำนวนผู้ใช้"
             )
             
-            # Add blacklist help
+            # Add blacklist help if enabled
             if BLACKLIST_ENABLED:
-                admin_help += "\n" + get_admin_ban_help()
+                try:
+                    from user_blacklist import get_admin_ban_help
+                    admin_help += "\n" + get_admin_ban_help()
+                except:
+                    pass
             
-            # Add impersonate help
+            # Add impersonate help if enabled
             if IMPERSONATE_ENABLED:
-                admin_help += "\n" + get_impersonate_help()
+                try:
+                    from admin_impersonate import get_impersonate_help
+                    admin_help += "\n" + get_impersonate_help()
+                except:
+                    pass
+            
+            # Add exam help if enabled
+            if EXAM_SIMULATOR_ENABLED:
+                admin_help += "\n" + get_exam_help()
             
             reply_message = TextMessage(text=admin_help)
-
+        
+        # Blacklist commands (admin only)
+        if BLACKLIST_ENABLED and not reply_message:
+            try:
+                from user_blacklist import handle_admin_ban_commands
+                ban_result = handle_admin_ban_commands(user_message, user_id)
+                if ban_result:
+                    reply_message = TextMessage(text=ban_result)
+            except Exception as e:
+                logger.error(f"Blacklist command error: {e}")
+        
+        # Impersonate commands (admin only)
+        if IMPERSONATE_ENABLED and not reply_message:
+            try:
+                from admin_impersonate import handle_impersonate_command
+                imp_result = handle_impersonate_command(user_message, user_id)
+                if imp_result:
+                    reply_message = TextMessage(text=imp_result)
+            except Exception as e:
+                logger.error(f"Impersonate command error: {e}")
+    
+    # ============================================================
+    # 🆕 EXAM SIMULATOR COMMANDS (ใหม่! - สำหรับทุกคน)
+    # ============================================================
+    if not reply_message and EXAM_SIMULATOR_ENABLED:
+        message_lower = user_message.lower()
+        
+        # Start exam command
+        if any(kw in message_lower for kw in ['สอบจำลอง', 'ข้อสอบจำลอง']) or (
+            'สอบ' in message_lower and any(subj in message_lower for subj in ['คณิต', 'ฟิสิกส์', 'เคมี', 'ชีวะ'])
+        ):
+            # Need gemini client
+            try:
+                from main import gemini_model
+                
+                if not gemini_model:
+                    reply_message = TextMessage(text="❌ ระบบ AI ยังไม่พร้อม")
+                else:
+                    # Import db
+                    try:
+                        from main import db
+                    except:
+                        db = None
+                    
+                    # Get model name from config
+                    from config import GEMINI_MODEL_NAME
+                    
+                    result = handle_start_exam_command(
+                        user_id,
+                        user_message,
+                        gemini_model,
+                        GEMINI_MODEL_NAME,
+                        db
+                    )
+                    reply_message = TextMessage(text=result)
+                    
+                    # If exam created successfully, send first question
+                    if "✅ สร้างข้อสอบสำเร็จ" in result:
+                        # Wait a bit for better UX
+                        time.sleep(0.5)
+                        
+                        # Send first question
+                        first_q = handle_show_current_question(user_id, db)
+                        reply_to_line(event.reply_token, [
+                            reply_message,
+                            TextMessage(text=first_q)
+                        ])
+                        return  # Exit early
+                        
+            except ImportError as e:
+                logger.error(f"Cannot import gemini_model: {e}")
+                reply_message = TextMessage(text="❌ ระบบ AI ยังไม่พร้อม")
+            except Exception as e:
+                logger.error(f"Exam start error: {e}")
+                reply_message = TextMessage(text=f"❌ เกิดข้อผิดพลาด: {str(e)}")
+        
+        # Show explanation command
+        elif message_lower in ['เฉลยข้อสอบ', 'ดูเฉลย', 'เฉลย']:
+            try:
+                from main import db
+            except:
+                db = None
+            result = handle_show_explanation(user_id, db)
+            reply_message = TextMessage(text=result)
+        
+        # Exam stats command
+        elif message_lower in ['สถิติสอบ', 'ประวัติสอบ', 'exam stats']:
+            try:
+                from main import db
+            except:
+                db = None
+            result = handle_exam_stats(user_id, db)
+            reply_message = TextMessage(text=result)
+    # ============================================================
+    # END OF EXAM SIMULATOR COMMANDS
+    # ============================================================
+    
     # วิธีสั่งการบ้าน
     if not reply_message and "วิธีสั่งการบ้าน" in user_message:
         instruction_msg = (
@@ -641,7 +747,7 @@ def handle_message(event):
     elif not reply_message and user_message in ["ลบการบ้านทั้งหมด", "clear hw", "ลบงาน"]:
         reply_message = TextMessage(text=clear_homework_db())
     
-    # Try Standard Commands (✅ Now includes calculator & grade calculator!)
+    # Try Standard Commands
     if not reply_message:
         for keywords, action in COMMANDS:
             matched = False
