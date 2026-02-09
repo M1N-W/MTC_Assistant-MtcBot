@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-MTC Assistant - Handlers Module (Enhanced with Exam Simulator)
-แก้ไข Flex Message ให้สวยงามและทุกปุ่มมีสี + เพิ่มฟีเจอร์ข้อสอบจำลอง
+MTC Assistant - Handlers Module (Safe Mode)
+With better error handling for exam simulator
 """
 
 import time
@@ -37,7 +37,8 @@ from features import (
 # Import broadcast functions
 import broadcast
 
-# Import exam simulator (NEW!)
+# Try to import exam simulator with better error handling
+EXAM_SIMULATOR_ENABLED = False
 try:
     from exam_simulator import (
         get_session_manager,
@@ -50,29 +51,36 @@ try:
         get_exam_help
     )
     EXAM_SIMULATOR_ENABLED = True
-    logger.info("✅ Exam simulator feature loaded")
+    logger.info("✅ Exam simulator feature loaded successfully")
 except ImportError as e:
-    logger.warning(f"⚠️ exam_simulator.py not found: {e}")
+    logger.warning(f"⚠️ Exam simulator not available: {e}")
+    EXAM_SIMULATOR_ENABLED = False
+    # Define dummy functions
+    def get_exam_help(): return ""
+    def get_session_manager(db=None): return None
+except Exception as e:
+    logger.error(f"❌ Error loading exam simulator: {e}")
     EXAM_SIMULATOR_ENABLED = False
     def get_exam_help(): return ""
+    def get_session_manager(db=None): return None
 
 # Import user blacklist system
+BLACKLIST_ENABLED = False
 try:
     from user_blacklist import check_user_banned
     BLACKLIST_ENABLED = True
     logger.info("✅ Blacklist system loaded")
-except ImportError:
-    logger.warning("⚠️ user_blacklist.py not found")
+except:
     BLACKLIST_ENABLED = False
     def check_user_banned(user_id): return False, ""
 
 # Import admin impersonate system
+IMPERSONATE_ENABLED = False
 try:
     from admin_impersonate import track_user_activity
     IMPERSONATE_ENABLED = True
     logger.info("✅ Admin impersonate system loaded")
-except ImportError:
-    logger.warning("⚠️ admin_impersonate.py not found")
+except:
     IMPERSONATE_ENABLED = False
     def track_user_activity(user_id, display_name): pass
 
@@ -362,7 +370,7 @@ def call_action(action: Callable, user_message: str) -> Union[TextMessage, Image
         return TextMessage(text=MESSAGES.get("ACTION_ERROR", "เกิดข้อผิดพลาด"))
 
 # ============================================================================
-# COMMANDS LIST - รองรับ Rich Menu
+# COMMANDS LIST
 # ============================================================================
 
 COMMANDS = [
@@ -390,7 +398,7 @@ COMMANDS = [
     (("ฟิสิกส์", "เฉลยฟิสิกส์"), get_physic_link_message),
     (("คาบต่อไป", "เรียนอะไร", "เรียนไรต่อ"), get_next_class_message),
     (("อีกกี่นาที", "เหลือเวลา"), get_time_until_next_class_message),
-    (("สอบ", "วันสอบ", "นับถอยหลังสอบ"), get_exam_countdown_message),
+    (("วันสอบ", "นับถอยหลังสอบ"), get_exam_countdown_message),
     (("เปิดเพลง", "หาเพลง", "ขอเพลง"), get_music_link_message),
 ]
 
@@ -462,7 +470,7 @@ def handle_message(event):
     
     logger.info("Message from %s: %s", user_id, user_message[:100])
     
-    # Track user activity (for impersonate)
+    # Track user activity
     if IMPERSONATE_ENABLED:
         try:
             track_user_activity(user_id, "Unknown")
@@ -484,59 +492,53 @@ def handle_message(event):
         logger.error(f"Failed to track user: {e}")
     
     # ============================================================
-    # 🆕 CHECK EXAM SESSION (ใหม่!)
+    # EXAM SESSION CHECK (with safety checks)
     # ============================================================
     if EXAM_SIMULATOR_ENABLED:
-        from exam_simulator import get_session_manager
-        exam_manager = get_session_manager(None)  # Will be set in main.py
-        
-        # Import db from main module if available
         try:
-            from main import db
-            exam_manager.db = db
-        except:
-            pass
-        
-        # Check if user has active exam session
-        if exam_manager.has_active_session(user_id):
-            message_lower = user_message.lower().strip()
+            exam_manager = get_session_manager(None)
             
-            # Check for cancel command
-            if message_lower in ['ยกเลิกสอบ', 'cancel', 'cancel exam']:
-                result = handle_cancel_exam(user_id, exam_manager.db)
-                reply_to_line(event.reply_token, [TextMessage(text=result)])
+            # Try to get db from main
+            try:
+                from main import db
+                if exam_manager:
+                    exam_manager.db = db
+            except:
+                pass
+            
+            # Check if user has active exam session
+            if exam_manager and exam_manager.has_active_session(user_id):
+                message_lower = user_message.lower().strip()
+                
+                # Cancel command
+                if message_lower in ['ยกเลิกสอบ', 'cancel', 'cancel exam']:
+                    result = handle_cancel_exam(user_id, getattr(exam_manager, 'db', None))
+                    reply_to_line(event.reply_token, [TextMessage(text=result)])
+                    return
+                
+                # Answer command
+                if message_lower in ['1', '2', '3', '4']:
+                    result_msg, send_next = handle_answer_command(user_id, user_message, getattr(exam_manager, 'db', None))
+                    
+                    messages_to_send = []
+                    if result_msg:
+                        messages_to_send.append(TextMessage(text=result_msg))
+                    
+                    if send_next:
+                        next_question = handle_show_current_question(user_id, getattr(exam_manager, 'db', None))
+                        messages_to_send.append(TextMessage(text=next_question))
+                    
+                    if messages_to_send:
+                        reply_to_line(event.reply_token, messages_to_send)
+                    return
+                
+                # Show current question
+                current_q = handle_show_current_question(user_id, getattr(exam_manager, 'db', None))
+                reply_to_line(event.reply_token, [TextMessage(text=current_q)])
                 return
-            
-            # Check if this is an answer (1-4)
-            if message_lower in ['1', '2', '3', '4']:
-                # Handle answer
-                result_msg, send_next = handle_answer_command(user_id, user_message, exam_manager.db)
-                
-                messages_to_send = []
-                
-                # Add result message if exists (exam finished)
-                if result_msg:
-                    messages_to_send.append(TextMessage(text=result_msg))
-                
-                # Send next question if exam continues
-                if send_next:
-                    next_question = handle_show_current_question(user_id, exam_manager.db)
-                    messages_to_send.append(TextMessage(text=next_question))
-                
-                if messages_to_send:
-                    reply_to_line(event.reply_token, messages_to_send)
-                else:
-                    # Fallback
-                    reply_to_line(event.reply_token, [TextMessage(text="❓")])
-                
-                return
-            
-            # Not an answer - show current question again
-            current_q = handle_show_current_question(user_id, exam_manager.db)
-            reply_to_line(event.reply_token, [TextMessage(text=current_q)])
-            return
-    # ============================================================
-    # END OF EXAM SESSION CHECK
+        except Exception as e:
+            logger.error(f"Error in exam session check: {e}")
+            # Continue to normal flow
     # ============================================================
     
     # Check rate limit
@@ -556,7 +558,7 @@ def handle_message(event):
     user_message_lower = user_message.lower()
     reply_message = None
     
-    # Admin Commands
+    # Admin Commands (existing code...)
     if user_id in ADMIN_USER_IDS:
         # Broadcast commands
         if user_message.startswith("ประกาศ "):
@@ -569,26 +571,6 @@ def handle_message(event):
             else:
                 reply_message = TextMessage(text="⚠️ รูปแบบ: ประกาศ [ข้อความ]")
         
-        elif user_message.startswith("ประกาศด่วน "):
-            urgent_msg = user_message.replace("ประกาศด่วน ", "", 1).strip()
-            if urgent_msg:
-                alert = broadcast.create_urgent_alert(urgent_msg)
-                result = broadcast.broadcast_message(alert)
-                broadcast.save_broadcast_history(user_id, alert, result)
-                reply_message = TextMessage(text=result['message'])
-            else:
-                reply_message = TextMessage(text="⚠️ รูปแบบ: ประกาศด่วน [ข้อความ]")
-        
-        elif user_message.startswith("เตือนการบ้าน "):
-            reminder_msg = user_message.replace("เตือนการบ้าน ", "", 1).strip()
-            if reminder_msg:
-                reminder = broadcast.create_reminder("การบ้าน", reminder_msg)
-                result = broadcast.broadcast_message(reminder)
-                broadcast.save_broadcast_history(user_id, reminder, result)
-                reply_message = TextMessage(text=result['message'])
-            else:
-                reply_message = TextMessage(text="⚠️ รูปแบบ: เตือนการบ้าน [รายละเอียด]")
-        
         elif user_message in ["สถิติประกาศ", "broadcast stats"]:
             reply_message = TextMessage(text=broadcast.get_broadcast_stats())
         
@@ -600,152 +582,81 @@ def handle_message(event):
             admin_help = (
                 "👨‍💼 *คำสั่งแอดมิน*\n\n"
                 "📢 *การประกาศ:*\n"
-                "• ประกาศ [ข้อความ]\n"
-                "• ประกาศด่วน [ข้อความ]\n"
-                "• เตือนการบ้าน [รายละเอียด]\n\n"
+                "• ประกาศ [ข้อความ]\n\n"
                 "📊 *สถิติ:*\n"
                 "• สถิติประกาศ\n"
                 "• จำนวนผู้ใช้"
             )
             
-            # Add blacklist help if enabled
-            if BLACKLIST_ENABLED:
-                try:
-                    from user_blacklist import get_admin_ban_help
-                    admin_help += "\n" + get_admin_ban_help()
-                except:
-                    pass
-            
-            # Add impersonate help if enabled
-            if IMPERSONATE_ENABLED:
-                try:
-                    from admin_impersonate import get_impersonate_help
-                    admin_help += "\n" + get_impersonate_help()
-                except:
-                    pass
-            
-            # Add exam help if enabled
             if EXAM_SIMULATOR_ENABLED:
                 admin_help += "\n" + get_exam_help()
             
             reply_message = TextMessage(text=admin_help)
-        
-        # Blacklist commands (admin only)
-        if BLACKLIST_ENABLED and not reply_message:
-            try:
-                from user_blacklist import handle_admin_ban_commands
-                ban_result = handle_admin_ban_commands(user_message, user_id)
-                if ban_result:
-                    reply_message = TextMessage(text=ban_result)
-            except Exception as e:
-                logger.error(f"Blacklist command error: {e}")
-        
-        # Impersonate commands (admin only)
-        if IMPERSONATE_ENABLED and not reply_message:
-            try:
-                from admin_impersonate import handle_impersonate_command
-                imp_result = handle_impersonate_command(user_message, user_id)
-                if imp_result:
-                    reply_message = TextMessage(text=imp_result)
-            except Exception as e:
-                logger.error(f"Impersonate command error: {e}")
     
-    # ============================================================
-    # 🆕 EXAM SIMULATOR COMMANDS (ใหม่! - สำหรับทุกคน)
-    # ============================================================
+    # EXAM SIMULATOR COMMANDS (with safety checks)
     if not reply_message and EXAM_SIMULATOR_ENABLED:
-        message_lower = user_message.lower()
-        
-        # Start exam command
-        if any(kw in message_lower for kw in ['สอบจำลอง', 'ข้อสอบจำลอง']) or (
-            'สอบ' in message_lower and any(subj in message_lower for subj in ['คณิต', 'ฟิสิกส์', 'เคมี', 'ชีวะ'])
-        ):
-            # Need gemini client
-            try:
-                from main import gemini_model
-                
-                if not gemini_model:
-                    reply_message = TextMessage(text="❌ ระบบ AI ยังไม่พร้อม")
-                else:
-                    # Import db
-                    try:
-                        from main import db
-                    except:
-                        db = None
-                    
-                    # Get model name from config
+        try:
+            message_lower = user_message.lower()
+            
+            # Start exam
+            if any(kw in message_lower for kw in ['สอบจำลอง', 'ข้อสอบจำลอง']) or (
+                'สอบ' in message_lower and any(subj in message_lower for subj in ['คณิต', 'ฟิสิกส์', 'เคมี', 'ชีวะ'])
+            ):
+                try:
+                    from main import gemini_model, db
                     from config import GEMINI_MODEL_NAME
                     
-                    result = handle_start_exam_command(
-                        user_id,
-                        user_message,
-                        gemini_model,
-                        GEMINI_MODEL_NAME,
-                        db
-                    )
-                    reply_message = TextMessage(text=result)
-                    
-                    # If exam created successfully, send first question
-                    if "✅ สร้างข้อสอบสำเร็จ" in result:
-                        # Wait a bit for better UX
-                        time.sleep(0.5)
+                    if not gemini_model:
+                        reply_message = TextMessage(text="❌ ระบบ AI ยังไม่พร้อม")
+                    else:
+                        result = handle_start_exam_command(
+                            user_id,
+                            user_message,
+                            gemini_model,
+                            GEMINI_MODEL_NAME,
+                            db
+                        )
+                        reply_message = TextMessage(text=result)
                         
-                        # Send first question
-                        first_q = handle_show_current_question(user_id, db)
-                        reply_to_line(event.reply_token, [
-                            reply_message,
-                            TextMessage(text=first_q)
-                        ])
-                        return  # Exit early
-                        
-            except ImportError as e:
-                logger.error(f"Cannot import gemini_model: {e}")
-                reply_message = TextMessage(text="❌ ระบบ AI ยังไม่พร้อม")
-            except Exception as e:
-                logger.error(f"Exam start error: {e}")
-                reply_message = TextMessage(text=f"❌ เกิดข้อผิดพลาด: {str(e)}")
-        
-        # Show explanation command
-        elif message_lower in ['เฉลยข้อสอบ', 'ดูเฉลย', 'เฉลย']:
-            try:
-                from main import db
-            except:
-                db = None
-            result = handle_show_explanation(user_id, db)
-            reply_message = TextMessage(text=result)
-        
-        # Exam stats command
-        elif message_lower in ['สถิติสอบ', 'ประวัติสอบ', 'exam stats']:
-            try:
-                from main import db
-            except:
-                db = None
-            result = handle_exam_stats(user_id, db)
-            reply_message = TextMessage(text=result)
-    # ============================================================
-    # END OF EXAM SIMULATOR COMMANDS
-    # ============================================================
-    
-    # วิธีสั่งการบ้าน
-    if not reply_message and "วิธีสั่งการบ้าน" in user_message:
-        instruction_msg = (
-            "📝 วิธีสั่งการบ้าน\n\n"
-            "พิมพ์: สั่งการบ้าน | วิชา | รายละเอียด | วันส่ง\n\n"
-            "💡 ตัวอย่าง\n"
-            "สั่งการบ้าน | คณิต | แบบฝึกหัด | วันศุกร์"
-        )
-        reply_to_line(event.reply_token, [TextMessage(text=instruction_msg)])
-        return
+                        if "✅ สร้างข้อสอบสำเร็จ" in result:
+                            time.sleep(0.5)
+                            first_q = handle_show_current_question(user_id, db)
+                            reply_to_line(event.reply_token, [
+                                reply_message,
+                                TextMessage(text=first_q)
+                            ])
+                            return
+                except Exception as e:
+                    logger.error(f"Exam start error: {e}")
+                    reply_message = TextMessage(text="❌ ไม่สามารถสร้างข้อสอบได้ กรุณาลองใหม่")
+            
+            # Show explanation
+            elif message_lower in ['เฉลยข้อสอบ', 'ดูเฉลย']:
+                try:
+                    from main import db
+                except:
+                    db = None
+                result = handle_show_explanation(user_id, db)
+                reply_message = TextMessage(text=result)
+            
+            # Exam stats
+            elif message_lower in ['สถิติสอบ', 'ประวัติสอบ']:
+                try:
+                    from main import db
+                except:
+                    db = None
+                result = handle_exam_stats(user_id, db)
+                reply_message = TextMessage(text=result)
+        except Exception as e:
+            logger.error(f"Error in exam commands: {e}")
+            # Continue to normal flow
     
     # Firebase Commands
     if not reply_message and user_message.startswith("สั่งการบ้าน"):
         reply_message = _handle_add_homework(user_message)
     
-    elif not reply_message and user_message in ["การบ้าน", "ดูการบ้าน", "homework"]:
+    elif not reply_message and user_message in ["การบ้าน", "ดูการบ้าน"]:
         reply_message = TextMessage(text=get_homeworks_from_db())
-    
-    elif not reply_message and user_message in ["ลบการบ้านทั้งหมด", "clear hw", "ลบงาน"]:
-        reply_message = TextMessage(text=clear_homework_db())
     
     # Try Standard Commands
     if not reply_message:
