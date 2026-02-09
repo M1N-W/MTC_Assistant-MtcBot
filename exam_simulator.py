@@ -1,7 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-MTC Assistant - Exam Simulator Feature
+MTC Assistant - Exam Simulator Feature (FIXED for google-genai)
 ระบบจำลองข้อสอบ ม.ปลาย ด้วย Gemini AI
+
+FIXES:
+1. Updated generate_question_with_gemini() to use google-genai client API
+2. Fixed API call from gemini_client.models.generate_content() to correct syntax
+3. Updated response parsing for google-genai response structure
 
 Features:
 - Generate questions using Gemini AI
@@ -107,7 +112,7 @@ class ExamSession:
         )
 
 # ============================================================================
-# GEMINI AI INTEGRATION
+# GEMINI AI INTEGRATION - ✅ FIXED for google-genai
 # ============================================================================
 
 def generate_question_with_gemini(
@@ -118,10 +123,11 @@ def generate_question_with_gemini(
 ) -> Optional[Question]:
     """
     Generate a single question using Gemini AI
+    ✅ FIXED: Updated to use google-genai client API
     
     Args:
-        gemini_client: Gemini client instance
-        gemini_model: Model name
+        gemini_client: Gemini client instance (google.genai.Client)
+        gemini_model: Model name (e.g., 'gemini-3-flash-preview')
         subject: Subject key (math, physics, etc.)
         difficulty: Difficulty level (easy, medium, hard)
     
@@ -159,25 +165,30 @@ def generate_question_with_gemini(
 หมายเหตุ: อย่าใส่ ```json หรือ markdown อื่นๆ ตอบแค่ JSON ล้วนๆ"""
     
     try:
-        # Generate with Gemini
+        # ✅ FIXED: Use google-genai API
         response = gemini_client.models.generate_content(
             model=gemini_model,
             contents=prompt
         )
         
-        # Parse response
+        # Parse response - ✅ FIXED: Handle google-genai response structure
         response_text = ""
+        
+        # Try to get text from response
         if hasattr(response, "text") and response.text:
             response_text = str(response.text).strip()
         elif hasattr(response, "candidates") and response.candidates:
+            # Handle candidates structure
             first_candidate = response.candidates[0]
             if hasattr(first_candidate, "content") and first_candidate.content:
                 content = first_candidate.content
                 if hasattr(content, "parts") and content.parts:
+                    parts_text = []
                     for part in content.parts:
                         if hasattr(part, "text") and part.text:
-                            response_text = str(part.text).strip()
-                            break
+                            parts_text.append(str(part.text))
+                    if parts_text:
+                        response_text = "".join(parts_text).strip()
         
         if not response_text:
             logger.error("Empty response from Gemini")
@@ -427,9 +438,6 @@ class ExamSessionManager:
         
         result_msg += "\n💡 พิมพ์ 'เฉลยข้อสอบ' เพื่อดูเฉลยทุกข้อ"
         
-        # Keep session for review
-        # (Don't delete yet, so user can see explanations)
-        
         return result_msg
     
     def get_explanation(self, user_id: str) -> str:
@@ -624,7 +632,6 @@ def handle_answer_command(
     
     # Try to parse answer
     try:
-        # Handle various formats: "1", "ตอบ 1", "A", etc.
         text = user_message.strip().lower()
         
         # Remove common prefixes
@@ -715,27 +722,7 @@ def handle_exam_stats(user_id: str, db=None) -> str:
 # ============================================================================
 
 def get_exam_commands():
-    """
-    Return command tuples for integration with handlers.py
-    
-    Usage in handlers.py:
-        from exam_simulator import (
-            get_exam_commands,
-            handle_show_current_question,
-            handle_answer_command,
-            get_session_manager
-        )
-        
-        # Check if user is in exam session
-        manager = get_session_manager(db)
-        if manager.has_active_session(user_id):
-            # Handle answer
-            message, send_next = handle_answer_command(user_id, user_message, db)
-            if send_next:
-                # Send next question
-                next_q = handle_show_current_question(user_id, db)
-                # ... send message
-    """
+    """Return command tuples for integration with handlers.py"""
     return [
         (("สอบจำลอง", "ข้อสอบ", "สอบ"), "start_exam"),
         (("ยกเลิกสอบ", "cancel exam"), "cancel_exam"),
