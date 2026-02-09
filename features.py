@@ -486,8 +486,11 @@ def get_calculator_response(user_message: str) -> TextMessage:
         logger.error(f"Calculator error: {e}")
         return TextMessage(text=f"❌ เกิดข้อผิดพลาด: {str(e)}")
 
-def get_grade_calculator_response(user_message: str) -> TextMessage:
-    """Handle grade calculator commands"""
+def get_grade_calculator_response(user_message: str, user_id: str = None) -> TextMessage:
+    """
+    Handle grade calculator commands
+    ✅ UPDATED: Now supports user_id for session-based GPA
+    """
     try:
         from grade_calculator import (
             handle_score_to_grade_command,
@@ -496,10 +499,12 @@ def get_grade_calculator_response(user_message: str) -> TextMessage:
         
         message_lower = user_message.lower()
         
-        if 'gpa' in message_lower or 'เกรดเฉลี่ย' in message_lower:
-            result = handle_gpa_calculation_command(user_message)
-        else:
+        # Check if it's score to grade (no user_id needed)
+        if 'คำนวณเกรด' in message_lower and 'gpa' not in message_lower:
             result = handle_score_to_grade_command(user_message)
+        else:
+            # GPA calculation - pass user_id for session support
+            result = handle_gpa_calculation_command(user_message, user_id)
         
         return TextMessage(text=result)
         
