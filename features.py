@@ -457,8 +457,7 @@ def get_gemini_response(prompt: str) -> str:
 # CALCULATOR & GRADE CALCULATOR
 # ============================================================================
 
-def get_calculator_response(user_message: str) -> TextMessage:
-    """Handle calculator commands"""
+def get_calculator_response(user_message: str):
     try:
         from smart_calc import smart_calculate
         
