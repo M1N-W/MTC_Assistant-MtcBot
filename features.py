@@ -98,7 +98,7 @@ def add_homework_to_db(subject: str, detail: str, due_date: str = "ไม่ร�
             'timestamp': firestore.SERVER_TIMESTAMP,
             'created_at': datetime.datetime.now(tz=LOCAL_TZ).strftime("%Y-%m-%d %H:%M:%S")
         })
-        return f"✅ เพิ่มการบ้านวิชา '{subject}' สำเร็จแล้วครับ!"
+        return f"✅ เพิ่มการบ้านวิชา '{subject}' สำเร็จแล้ว"
     except Exception as e:
         logger.error(f"DB Add Error: {e}")
         return "❌ เกิดข้อผิดพลาดในการเพิ่มการบ้าน"
@@ -122,7 +122,7 @@ def get_homeworks_from_db() -> str:
             )
         
         if not hw_list:
-            return "🎉 เย้! ตอนนี้ไม่มีการบ้านค้างในระบบครับ"
+            return "ตอนนี้ไม่มีการบ้านค้างในระบบครับ"
         
         return "📋 *รายการการบ้านปัจจุบัน*\n\n" + "\n" + "-" * 30 + "\n".join(hw_list)
     except Exception as e:
@@ -164,60 +164,60 @@ def get_timetable_image_message(user_message: str = "") -> ImageMessage:
 
 def get_grade_link_message(user_message: str = "") -> TextMessage:
     """ส่งลิงก์เช็คเกรด"""
-    return TextMessage(text=f"📊 เช็คเกรดได้ที่นี่ครับ {GRADE_LINK}")
+    return TextMessage(text=f"📊 เช็คเกรดที่นี่นะครับ {GRADE_LINK}")
 
 def get_absence_form_message(user_message: str = "") -> TextMessage:
     """ส่งลิงก์แบบฟอร์มลา"""
-    return TextMessage(text=f"📝 ลิงก์แจ้งลาครับ {ABSENCE_LINK}")
+    return TextMessage(text=f"📝 แบบฟอร์มแจ้งลาครับ {ABSENCE_LINK}")
 
 def get_bio_link_message(user_message: str = "") -> TextMessage:
     """ส่งลิงก์เฉลยชีวะ"""
-    return TextMessage(text=f"🧬 เฉลยชีววิทยาครับ {Bio_LINK}")
+    return TextMessage(text=f"🧬 เฉลยชีววิทยา {Bio_LINK}")
 
 def get_physic_link_message(user_message: str = "") -> TextMessage:
     """ส่งลิงก์เฉลยฟิสิกส์"""
-    return TextMessage(text=f"⚛️ เฉลยฟิสิกส์ครับ {Physic_LINK}")
+    return TextMessage(text=f"⚛️ เฉลยฟิสิกส์ {Physic_LINK}")
 
 def get_help_message(user_message: str = "") -> TextMessage:
     """แสดงคำสั่งทั้งหมด"""
     help_text = (
-        '📖 รายการคำสั่งทั้งหมด\n\n'
+        'รายการคำสั่งทั้งหมด\n\n'
         '📋 คำสั่งพื้นฐาน\n'
         '- งาน / การบ้าน = ดูใบงาน\n'
         '- เว็บโรงเรียน = ลิงก์เว็บโรงเรียน\n'
         '- ตารางเรียน = ดูตารางเรียน\n'
         '- เกรด = เช็คเกรด\n'
         '- คาบต่อไป = ดูว่าเรียนอะไรต่อ\n'
-        '- อีกกี่นาที = เช็คเวลาเหลือก่อนคาบถัดไป\n'
+        '- อีกกี่นาที = เช็คเวลาก่อนคาบถัดไป\n'
         '- ลา = แบบฟอร์มลา\n'
-        '- สอบ = นับถอยหลังวันสอบ\n\n'
+        '- สอบ = นับถอยหลังวันสอบ(กลาง-ปลายภาค)\n\n'
         '🧪 คำสั่งเฉลย\n'
         '- ชีวะ = เฉลยชีววิทยา\n'
         '- ฟิสิกส์ = เฉลยฟิสิกส์\n\n'
         '🧮 คิดเลข\n'
         '- คำนวณ [สมการ]\n'
-        '  ตัวอย่าง: คำนวณ 12*(5+3)^2\n\n'
+        '  ตัวอย่าง : คำนวณ 12*(5+3)^2\n\n'
         '🎓 คำนวณเกรด\n'
         '- คำนวณเกรด [คะแนน]\n'
-        '  ตัวอย่าง: คำนวณเกรด 85\n'
+        '  ตัวอย่าง : คำนวณเกรด 85\n'
         '- คำนวณ GPA [วิชา] [หน่วยกิต] [เกรด]\n'
-        '  ตัวอย่าง: คำนวณ GPA คณิต 3 4 ฟิสิกส์ 3 3.5\n\n'
-        '📚 ข้อสอบจำลอง (🆕)\n'
+        '  ตัวอย่าง : คำนวณ GPA คณิต 2 4\n\n'
+        '📚 ข้อสอบจำลอง\n'
         '- สอบ [วิชา] [ระดับ] [จำนวน]\n'
-        '  ตัวอย่าง: สอบ คณิต ง่าย 5\n'
-        '  วิชา: คณิต, ฟิสิกส์, เคมี, ชีวะ\n'
-        '  ระดับ: ง่าย, กลาง, ยาก\n'
+        '  ตัวอย่าง : สอบ คณิต ง่าย 5\n'
+        '  วิชา : คณิต, ฟิสิกส์, เคมี, ชีวะ\n'
+        '  ระดับ : ง่าย, กลาง, ยาก\n'
         '- เฉลยข้อสอบ = ดูเฉลยทั้งหมด\n'
         '- สถิติสอบ = ดูประวัติการสอบ\n\n'
         '🎵 ความบันเทิง\n'
         '- เปิดเพลง [ชื่อเพลง] = หาเพลงจาก YouTube\n\n'
         '💾 คำสั่งการบ้าน\n'
         '- สั่งการบ้าน | วิชา | รายละเอียด | วันส่ง\n'
-        '  ตัวอย่าง: สั่งการบ้าน | ฟิสิกส์ | ทำแบบฝึกหัด 4.1 | วันศุกร์\n'
+        '  ตัวอย่าง : สั่งการบ้าน | ฟิสิกส์ | ทำแบบฝึกหัด 4.1 | วันศุกร์\n'
         '- การบ้าน / ดูการบ้าน = ดูการบ้านทั้งหมด\n'
         '- ลบการบ้านทั้งหมด = ล้างข้อมูล\n\n'
         '🤖 AI\n'
-        '- พิมพ์ข้อความอื่นๆ = ตอบด้วย AI'
+        '- พิมพ์ข้อความอื่นๆ = ตอบด้วย AI (Gemini Model)\n'
     )
     return TextMessage(text=help_text)
 
@@ -293,7 +293,7 @@ def get_time_until_next_class_message(user_message: str = "") -> TextMessage:
                 break
         
         if target is None:
-            return TextMessage(text="วันนี้ไม่มีคาบเรียนที่ต่างจากคาบปัจจุบันอีกแล้วครับ")
+            return TextMessage(text="ตอนนี้ไม่มีเรียนต่อแล้วครับ")
     
     target_start_time = datetime.datetime.strptime(target["start"], "%H:%M").time()
     target_dt = datetime.datetime.combine(now.date(), target_start_time).replace(tzinfo=LOCAL_TZ)
@@ -327,7 +327,7 @@ def get_exam_countdown_message(user_message: str = "") -> TextMessage:
             all_dates_str = ", ".join([d.strftime("%d/%m") for d in dates])
             
             if days_left == 0:
-                msg_list.append(f"🔥 วันนี้สอบ{exam_name}! สู้ๆ!")
+                msg_list.append(f"วันนี้สอบ{exam_name} สู้ๆ!")
             else:
                 msg_list.append(
                     f"📌 {exam_name}\n"
@@ -336,7 +336,7 @@ def get_exam_countdown_message(user_message: str = "") -> TextMessage:
                 )
     
     if not found:
-        return TextMessage(text="🎉 ยังไม่มีสอบเร็วๆ นี้ พักผ่อนได้!")
+        return TextMessage(text="ยังไม่มีสอบในเร็วๆนี้ครับ")
     
     return TextMessage(text="\n\n".join(msg_list))
 
@@ -361,9 +361,9 @@ def get_music_link_message(user_message: str) -> TextMessage:
     search_url = f"https://www.youtube.com/results?search_query={encoded_query}"
     
     return TextMessage(
-        text=f"🎵 ค้นหาเพลง: {song_title}\n"
+        text=f"🎵 ค้นหาเพลง : {song_title}\n"
              f"👉 {search_url}\n\n"
-             f"💡 กดลิงก์เพื่อดูผลการค้นหาใน YouTube"
+             f"กดลิงก์เพื่อดูผลการค้นหาใน YouTube"
     )
 
 # ============================================================================
@@ -470,7 +470,7 @@ def get_calculator_response(user_message: str):
         if not expression:
             return TextMessage(
                 text="⚠️ กรุณาระบุสมการ\n"
-                     "ตัวอย่าง: คำนวณ 2+2\n"
+                     "ตัวอย่าง : คำนวณ 2+2\n"
                      "         คำนวณ sqrt(16)\n"
                      "         คำนวณ x=5, x*2"
             )

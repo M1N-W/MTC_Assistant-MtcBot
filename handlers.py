@@ -220,7 +220,7 @@ def reply_to_line(reply_token: str, messages: List[Union[TextMessage, ImageMessa
 @handler.add(FollowEvent) if handler else (lambda f: f)
 def handle_follow(event):
     """Handle user following"""
-    welcome_message = TextMessage(text='👋 สวัสดีครับ! ผมคือ MTC Assistant\nพิมพ์ "คำสั่ง" เพื่อดูรายการคำสั่งทั้งหมด')
+    welcome_message = TextMessage(text='👋 สวัสดีครับ! ผมคือ MTC Assistant\nบอทช่วยงานห้อง MTC โดยนักเรียน MTC12\n\nลองกดคำสั่งด้านล่างเพื่อใช้ฟีเจอร์ต่างๆได้เลยครับ')
     try:
         reply_to_line(event.reply_token, [welcome_message])
     except Exception as e:
@@ -302,7 +302,7 @@ def handle_message(event):
         
         elif user_message in ["จำนวนผู้ใช้", "user count"]:
             count = broadcast.get_user_count()
-            reply_message = TextMessage(text=f"👥 จำนวนผู้ใช้: {count} คน")
+            reply_message = TextMessage(text=f"👥 จำนวนผู้ใช้ {count} คน")
         
         # Impersonate commands
         try:
@@ -353,17 +353,17 @@ def handle_message(event):
         # Admin help
         if user_message in ["admin", "คำสั่งแอดมิน"]:
             admin_help = (
-                "👨‍💼 *คำสั่งแอดมิน*\n\n"
-                "📢 ประกาศ [ข้อความ]\n"
-                "📊 สถิติประกาศ\n"
-                "👥 จำนวนผู้ใช้\n\n"
-                "🎭 *Impersonate:*\n"
-                "👀 ดูผู้ใช้\n"
-                "✉️ ส่งถึง [user_id] [ข้อความ]\n\n"
-                "🚫 *Blacklist:*\n"
-                "⛔ แบน [user_id] [เหตุผล]\n"
-                "✅ ปลดแบน [user_id]\n"
-                "📋 รายชื่อแบน"
+                "👨‍💼 *คำสั่งเฉพาะแอดมิน*\n\n"
+                "   📢 ประกาศ [ข้อความ]\n"
+                "   📊 สถิติประกาศ\n"
+                "   👥 จำนวนผู้ใช้\n\n"
+                "🎭 *ราชาแฮกเกอร์*\n"
+                "   👀 ดูผู้ใช้\n"
+                "   ✉️ ส่งถึง [user_id] [ข้อความ]\n\n"
+                "   🚫 *Blacklist*\n"
+                "   ⛔ แบน [user_id] [เหตุผล]\n"
+                "   ✅ ปลดแบน [user_id]\n"
+                "   📋 รายชื่อแบน"
             )
             reply_message = TextMessage(text=admin_help)
     
