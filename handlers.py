@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-MTC Assistant - Handlers Module (FIXED)
-แก้ไข: ลบ duplicate get_grade_calculator_response และ import จาก features แทน
+MTC Assistant - Handlers Module (FULLY INTEGRATED)
+✅ All features integrated: exam, blacklist, impersonate, food, calculator, grade
 """
 
 import time
@@ -23,7 +23,7 @@ from config import (
     SCHOOL_LINK, GRADE_LINK, ABSENCE_LINK, Bio_LINK, Physic_LINK
 )
 
-# Import from features (INCLUDING get_grade_calculator_response)
+# Import from features
 from features import (
     get_worksheet_message, get_school_link_message, get_timetable_image_message,
     get_grade_link_message, get_absence_form_message, get_bio_link_message,
@@ -31,7 +31,7 @@ from features import (
     get_time_until_next_class_message, get_exam_countdown_message,
     get_music_link_message, get_gemini_response,
     add_homework_to_db, get_homeworks_from_db, clear_homework_db,
-    get_calculator_response, get_grade_calculator_response  # ← FIXED: Import from features
+    get_calculator_response, get_grade_calculator_response
 )
 
 # Import broadcast functions
@@ -106,28 +106,6 @@ def is_rate_limited(user_id: str) -> bool:
     
     return False
 
-def get_rate_limit_status(user_id: str) -> dict:
-    """Get rate limit status"""
-    now_ts = time.time()
-    
-    with _rate_limit_lock:
-        if user_id in _banned_users:
-            return {
-                "status": "banned",
-                "ban_until": _banned_users[user_id],
-                "remaining_seconds": int(_banned_users[user_id] - now_ts)
-            }
-        
-        history = _user_message_history.get(user_id, [])
-        recent = [t for t in history if now_ts - t < RATE_LIMIT_WINDOW]
-        
-        return {
-            "status": "rate_limited" if len(recent) > RATE_LIMIT_MAX else "ok",
-            "messages_count": len(recent),
-            "limit": RATE_LIMIT_MAX,
-            "window_seconds": RATE_LIMIT_WINDOW
-        }
-
 # ============================================================================
 # FLEX MESSAGE - LINKS MENU
 # ============================================================================
@@ -165,117 +143,18 @@ def get_links_menu_message(user_message: str = "") -> FlexMessage:
             "type": "box",
             "layout": "vertical",
             "contents": [
-                # Section 1: การเรียน
-                {
-                    "type": "text",
-                    "text": "📚 การเรียน",
-                    "weight": "bold",
-                    "size": "md",
-                    "color": "#666666",
-                    "margin": "none"
-                },
-                {
-                    "type": "separator",
-                    "margin": "sm"
-                },
-                {
-                    "type": "button",
-                    "action": {
-                        "type": "uri",
-                        "label": "🏫 เว็บโรงเรียน",
-                        "uri": SCHOOL_LINK
-                    },
-                    "style": "primary",
-                    "color": "#00C300",
-                    "height": "sm",
-                    "margin": "md"
-                },
-                {
-                    "type": "button",
-                    "action": {
-                        "type": "uri",
-                        "label": "📊 เช็คเกรด",
-                        "uri": GRADE_LINK
-                    },
-                    "style": "primary",
-                    "color": "#3B82F6",
-                    "height": "sm",
-                    "margin": "sm"
-                },
-                {
-                    "type": "button",
-                    "action": {
-                        "type": "uri",
-                        "label": "📝 แบบฟอร์มลา",
-                        "uri": ABSENCE_LINK
-                    },
-                    "style": "primary",
-                    "color": "#F59E0B",
-                    "height": "sm",
-                    "margin": "sm"
-                },
-                # Section 2: เฉลยวิชา
-                {
-                    "type": "text",
-                    "text": "📖 เฉลยวิชา",
-                    "weight": "bold",
-                    "size": "md",
-                    "color": "#666666",
-                    "margin": "xl"
-                },
-                {
-                    "type": "separator",
-                    "margin": "sm"
-                },
-                {
-                    "type": "button",
-                    "action": {
-                        "type": "uri",
-                        "label": "🧬 เฉลยชีววิทยา",
-                        "uri": Bio_LINK
-                    },
-                    "style": "primary",
-                    "color": "#10B981",
-                    "height": "sm",
-                    "margin": "md"
-                },
-                {
-                    "type": "button",
-                    "action": {
-                        "type": "uri",
-                        "label": "⚛️ เฉลยฟิสิกส์",
-                        "uri": Physic_LINK
-                    },
-                    "style": "primary",
-                    "color": "#8B5CF6",
-                    "height": "sm",
-                    "margin": "sm"
-                },
-                # Section 3: ความบันเทิง
-                {
-                    "type": "text",
-                    "text": "🎵 ความบันเทิง",
-                    "weight": "bold",
-                    "size": "md",
-                    "color": "#666666",
-                    "margin": "xl"
-                },
-                {
-                    "type": "separator",
-                    "margin": "sm"
-                },
-                {
-                    "type": "button",
-                    "action": {
-                        "type": "message",
-                        "label": "🎵 ค้นหาเพลง",
-                        "text": "เปิดเพลง"
-                    },
-                    "style": "primary",
-                    "color": "#EC4899",
-                    "height": "sm",
-                    "margin": "md"
-                }
+                {"type": "text", "text": "📚 การเรียน", "weight": "bold", "size": "md", "color": "#666666", "margin": "none"},
+                {"type": "separator", "margin": "sm"},
+                {"type": "button", "action": {"type": "uri", "label": "🏫 เว็บโรงเรียน", "uri": SCHOOL_LINK}, "style": "primary", "color": "#00C300", "height": "sm", "margin": "md"},
+                {"type": "button", "action": {"type": "uri", "label": "📊 เช็คเกรด", "uri": GRADE_LINK}, "style": "primary", "color": "#3B82F6", "height": "sm", "margin": "sm"},
+                {"type": "button", "action": {"type": "uri", "label": "📝 แบบฟอร์มลา", "uri": ABSENCE_LINK}, "style": "primary", "color": "#F59E0B", "height": "sm", "margin": "sm"},
+                {"type": "text", "text": "📖 เฉลยวิชา", "weight": "bold", "size": "md", "color": "#666666", "margin": "xl"},
+                {"type": "separator", "margin": "sm"},
+                {"type": "button", "action": {"type": "uri", "label": "🧬 เฉลยชีววิทยา", "uri": Bio_LINK}, "style": "primary", "color": "#10B981", "height": "sm", "margin": "md"},
+                {"type": "button", "action": {"type": "uri", "label": "⚛️ เฉลยฟิสิกส์", "uri": Physic_LINK}, "style": "primary", "color": "#8B5CF6", "height": "sm", "margin": "sm"},
+                {"type": "text", "text": "🎵 ความบันเทิง", "weight": "bold", "size": "md", "color": "#666666", "margin": "xl"},
+                {"type": "separator", "margin": "sm"},
+                {"type": "button", "action": {"type": "message", "label": "🎵 ค้นหาเพลง", "text": "เปิดเพลง"}, "style": "primary", "color": "#EC4899", "height": "sm", "margin": "md"}
             ],
             "spacing": "none",
             "paddingAll": "20px"
@@ -283,69 +162,35 @@ def get_links_menu_message(user_message: str = "") -> FlexMessage:
         "footer": {
             "type": "box",
             "layout": "vertical",
-            "contents": [
-                {
-                    "type": "text",
-                    "text": "💡 Tip: บันทึกลิงก์ที่ใช้บ่อยไว้",
-                    "size": "xxs",
-                    "color": "#999999",
-                    "align": "center",
-                    "wrap": True
-                }
-            ],
+            "contents": [{"type": "text", "text": "💡 Tip: บันทึกลิงก์ที่ใช้บ่อยไว้", "size": "xxs", "color": "#999999", "align": "center", "wrap": True}],
             "backgroundColor": "#F3F4F6",
             "paddingAll": "12px"
         }
     }
     
-    return FlexMessage(
-        alt_text="🔗 ลิงก์สำคัญทั้งหมด - MTC Assistant",
-        contents=FlexContainer.from_dict(flex_content)
-    )
-
-# ============================================================================
-# COMMAND MATCHING
-# ============================================================================
-
-def _keyword_matches(message_lower: str, keyword_lower: str) -> bool:
-    """Check if keyword matches"""
-    return keyword_lower in message_lower
-
-def call_action(action: Callable, user_message: str) -> Union[TextMessage, ImageMessage, FlexMessage]:
-    """Call action function"""
-    try:
-        if action.__code__.co_argcount > 0:
-            return action(user_message)
-        else:
-            return action()
-    except Exception as e:
-        logger.exception(f"Error calling action {action.__name__}: {e}")
-        return TextMessage(text=MESSAGES.get("ACTION_ERROR", "เกิดข้อผิดพลาด"))
+    return FlexMessage(alt_text="🔗 ลิงก์สำคัญทั้งหมด", contents=FlexContainer.from_dict(flex_content))
 
 # ============================================================================
 # COMMANDS LIST
 # ============================================================================
 
 COMMANDS = [
-    # Rich Menu Commands
     (("ตารางเรียน", "ตารางสอน"), get_timetable_image_message),
-    (("เช็คเวลาเรียน", "เช็คเวลา", "ดูเวลาเรียน"), get_time_until_next_class_message),
-    (("บันทึกการบ้าน", "บันทึกงาน", "ดูงาน"), lambda msg: TextMessage(text=get_homeworks_from_db())),
-    (("ลิงก์ที่สำคัญ", "ลิงค์สำคัญ", "ลิงก์", "links"), get_links_menu_message),
-    (("ปฏิทินกิจกรรม", "ปฏิทิน", "กิจกรรม", "ดูกิจกรรม"), get_exam_countdown_message),
+    (("เช็คเวลาเรียน", "เช็คเวลา"), get_time_until_next_class_message),
+    (("บันทึกการบ้าน", "ดูงาน"), lambda msg: TextMessage(text=get_homeworks_from_db())),
+    (("ลิงก์ที่สำคัญ", "ลิงก์", "links"), get_links_menu_message),
+    (("ปฏิทินกิจกรรม", "ปฏิทิน"), get_exam_countdown_message),
     (("ช่วยเหลือ", "คำสั่ง", "help"), get_help_message),
-    
-    # Other Commands
-    (("งาน", "การบ้าน", "เช็คงาน", "ใบงาน"), get_worksheet_message),
+    (("งาน", "การบ้าน", "ใบงาน"), get_worksheet_message),
     (("เว็บโรงเรียน", "เว็บ"), get_school_link_message),
     (("เกรด", "ดูเกรด"), get_grade_link_message),
-    (("ลาป่วย", "ลากิจ", "ลา"), get_absence_form_message),
-    (("ชีวะ", "เฉลยชีวะ"), get_bio_link_message),
-    (("ฟิสิกส์", "เฉลยฟิสิกส์"), get_physic_link_message),
-    (("คาบต่อไป", "เรียนอะไร", "เรียนไรต่อ"), get_next_class_message),
-    (("อีกกี่นาที", "เหลือเวลา"), get_time_until_next_class_message),
-    (("สอบ", "วันสอบ", "นับถอยหลังสอบ"), get_exam_countdown_message),
-    (("เปิดเพลง", "หาเพลง", "ขอเพลง"), get_music_link_message),
+    (("ลา",), get_absence_form_message),
+    (("ชีวะ",), get_bio_link_message),
+    (("ฟิสิกส์",), get_physic_link_message),
+    (("คาบต่อไป",), get_next_class_message),
+    (("อีกกี่นาที",), get_time_until_next_class_message),
+    (("สอบ", "วันสอบ"), get_exam_countdown_message),
+    (("เปิดเพลง", "หาเพลง"), get_music_link_message),
 ]
 
 # ============================================================================
@@ -355,22 +200,14 @@ COMMANDS = [
 def reply_to_line(reply_token: str, messages: List[Union[TextMessage, ImageMessage, FlexMessage]]) -> bool:
     """Send reply to LINE"""
     if not messages:
-        logger.warning("No messages to send")
         return False
     
     line_bot_api = get_line_api()
     if not line_bot_api:
-        logger.error("LINE API client not available")
         return False
     
     try:
-        line_bot_api.reply_message(
-            ReplyMessageRequest(
-                reply_token=reply_token,
-                messages=messages
-            )
-        )
-        logger.debug(f"Successfully replied with {len(messages)} message(s)")
+        line_bot_api.reply_message(ReplyMessageRequest(reply_token=reply_token, messages=messages))
         return True
     except Exception as e:
         logger.error(f"LINE Reply Error: {e}")
@@ -383,20 +220,15 @@ def reply_to_line(reply_token: str, messages: List[Union[TextMessage, ImageMessa
 @handler.add(FollowEvent) if handler else (lambda f: f)
 def handle_follow(event):
     """Handle user following"""
-    welcome_message = TextMessage(
-        text='👋 สวัสดีครับ! ผมคือ MTC Assistant\n'
-             'ผู้ช่วยอเนกประสงค์ของห้อง ม.4/2\n\n'
-             'พิมพ์ "คำสั่ง" เพื่อดูรายการคำสั่งทั้งหมดนะครับ'
-    )
+    welcome_message = TextMessage(text='👋 สวัสดีครับ! ผมคือ MTC Assistant\nพิมพ์ "คำสั่ง" เพื่อดูรายการคำสั่งทั้งหมด')
     try:
         reply_to_line(event.reply_token, [welcome_message])
-        logger.info("Sent follow welcome message")
     except Exception as e:
         logger.exception(f"Failed to send follow reply: {e}")
 
 @handler.add(MessageEvent, message=TextMessageContent) if handler else (lambda f: f)
 def handle_message(event):
-    """Handle incoming text messages"""
+    """Handle incoming text messages - FULLY INTEGRATED"""
     user_text = getattr(event.message, "text", "")
     user_message = user_text.strip()
     
@@ -416,150 +248,252 @@ def handle_message(event):
     
     logger.info("Message from %s: %s", user_id, user_message[:100])
     
-    # Track user for broadcast
+    # ========================================================================
+    # 🚫 CHECK BLACKLIST (CRITICAL - FIRST CHECK!)
+    # ========================================================================
+    try:
+        from user_blacklist import check_user_banned
+        is_banned, ban_message = check_user_banned(user_id)
+        if is_banned:
+            reply_to_line(event.reply_token, [TextMessage(text=ban_message)])
+            logger.warning(f"Banned user {user_id} attempted to use bot")
+            return
+    except ImportError:
+        pass  # Blacklist module not available
+    except Exception as e:
+        logger.error(f"Blacklist check error: {e}")
+    
+    # Track user for broadcast & impersonate
     try:
         broadcast.track_user(user_id)
+        
+        # Track for impersonate feature
+        try:
+            from admin_impersonate import track_user_activity
+            track_user_activity(user_id)
+        except ImportError:
+            pass
     except Exception as e:
         logger.error(f"Failed to track user: {e}")
     
     # Check rate limit
     if is_rate_limited(user_id):
-        rate_status = get_rate_limit_status(user_id)
-        if rate_status["status"] == "banned":
-            reply_message = TextMessage(
-                text=f"⛔ คุณถูกระงับชั่วคราวเนื่องจากส่งข้อความมากเกินไป\n"
-                     f"กรุณารออีก {rate_status['remaining_seconds']} วินาที"
-            )
-        else:
-            reply_message = TextMessage(text=MESSAGES["RATE_LIMITED"])
-        
-        reply_to_line(event.reply_token, [reply_message])
+        reply_to_line(event.reply_token, [TextMessage(text=MESSAGES["RATE_LIMITED"])])
         return
     
     user_message_lower = user_message.lower()
     reply_message = None
     
-    # Admin Commands
+    # ========================================================================
+    # 👨‍💼 ADMIN COMMANDS
+    # ========================================================================
     if user_id in ADMIN_USER_IDS:
+        # Broadcast commands
         if user_message.startswith("ประกาศ "):
-            message_to_broadcast = user_message.replace("ประกาศ ", "", 1).strip()
-            if message_to_broadcast:
-                announcement = broadcast.create_announcement("ประกาศจากผู้ดูแล", message_to_broadcast)
+            msg = user_message.replace("ประกาศ ", "", 1).strip()
+            if msg:
+                announcement = broadcast.create_announcement("ประกาศจากผู้ดูแล", msg)
                 result = broadcast.broadcast_message(announcement)
                 broadcast.save_broadcast_history(user_id, announcement, result)
                 reply_message = TextMessage(text=result['message'])
-            else:
-                reply_message = TextMessage(text="⚠️ รูปแบบ: ประกาศ [ข้อความ]")
-        
-        elif user_message.startswith("ประกาศด่วน "):
-            urgent_msg = user_message.replace("ประกาศด่วน ", "", 1).strip()
-            if urgent_msg:
-                alert = broadcast.create_urgent_alert(urgent_msg)
-                result = broadcast.broadcast_message(alert)
-                broadcast.save_broadcast_history(user_id, alert, result)
-                reply_message = TextMessage(text=result['message'])
-            else:
-                reply_message = TextMessage(text="⚠️ รูปแบบ: ประกาศด่วน [ข้อความ]")
-        
-        elif user_message.startswith("เตือนการบ้าน "):
-            reminder_msg = user_message.replace("เตือนการบ้าน ", "", 1).strip()
-            if reminder_msg:
-                reminder = broadcast.create_reminder("การบ้าน", reminder_msg)
-                result = broadcast.broadcast_message(reminder)
-                broadcast.save_broadcast_history(user_id, reminder, result)
-                reply_message = TextMessage(text=result['message'])
-            else:
-                reply_message = TextMessage(text="⚠️ รูปแบบ: เตือนการบ้าน [รายละเอียด]")
         
         elif user_message in ["สถิติประกาศ", "broadcast stats"]:
             reply_message = TextMessage(text=broadcast.get_broadcast_stats())
         
-        elif user_message in ["จำนวนผู้ใช้", "user count", "ผู้ใช้"]:
+        elif user_message in ["จำนวนผู้ใช้", "user count"]:
             count = broadcast.get_user_count()
-            reply_message = TextMessage(text=f"👥 จำนวนผู้ใช้ทั้งหมด: {count} คน")
+            reply_message = TextMessage(text=f"👥 จำนวนผู้ใช้: {count} คน")
         
-        elif user_message in ["admin", "คำสั่งแอดมิน"]:
+        # Impersonate commands
+        try:
+            from admin_impersonate import (
+                handle_list_users_command,
+                handle_send_impersonate_command,
+                handle_test_impersonate_command
+            )
+            
+            if user_message in ["ดูผู้ใช้", "users list"]:
+                reply_message = TextMessage(text=handle_list_users_command(user_id))
+            
+            elif user_message.startswith("ส่งถึง "):
+                reply_message = TextMessage(text=handle_send_impersonate_command(user_id, user_message))
+            
+            elif user_message.startswith("ทดสอบส่ง "):
+                reply_message = TextMessage(text=handle_test_impersonate_command(user_id, user_message))
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.error(f"Impersonate error: {e}")
+        
+        # Blacklist commands
+        try:
+            from user_blacklist import (
+                handle_ban_user_command,
+                handle_unban_user_command,
+                handle_list_banned_command,
+                handle_ban_stats_command
+            )
+            
+            if user_message.startswith("แบน "):
+                reply_message = TextMessage(text=handle_ban_user_command(user_id, user_message))
+            
+            elif user_message.startswith("ปลดแบน "):
+                reply_message = TextMessage(text=handle_unban_user_command(user_id, user_message))
+            
+            elif user_message in ["รายชื่อแบน", "banned list"]:
+                reply_message = TextMessage(text=handle_list_banned_command(user_id))
+            
+            elif user_message in ["สถิติแบน", "ban stats"]:
+                reply_message = TextMessage(text=handle_ban_stats_command(user_id))
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.error(f"Blacklist error: {e}")
+        
+        # Admin help
+        if user_message in ["admin", "คำสั่งแอดมิน"]:
             admin_help = (
                 "👨‍💼 *คำสั่งแอดมิน*\n\n"
-                "📢 *การประกาศ:*\n"
-                "• ประกาศ [ข้อความ]\n"
-                "• ประกาศด่วน [ข้อความ]\n"
-                "• เตือนการบ้าน [รายละเอียด]\n\n"
-                "📊 *สถิติ:*\n"
-                "• สถิติประกาศ\n"
-                "• จำนวนผู้ใช้"
+                "📢 ประกาศ [ข้อความ]\n"
+                "📊 สถิติประกาศ\n"
+                "👥 จำนวนผู้ใช้\n\n"
+                "🎭 *Impersonate:*\n"
+                "👀 ดูผู้ใช้\n"
+                "✉️ ส่งถึง [user_id] [ข้อความ]\n\n"
+                "🚫 *Blacklist:*\n"
+                "⛔ แบน [user_id] [เหตุผล]\n"
+                "✅ ปลดแบน [user_id]\n"
+                "📋 รายชื่อแบน"
             )
             reply_message = TextMessage(text=admin_help)
-
-    # วิธีสั่งการบ้าน
-    if not reply_message and "วิธีสั่งการบ้าน" in user_message:
-        instruction_msg = (
-            "📝 วิธีสั่งการบ้าน\n\n"
-            "พิมพ์: สั่งการบ้าน | วิชา | รายละเอียด | วันส่ง\n\n"
-            "💡 ตัวอย่าง\n"
-            "สั่งการบ้าน | คณิต | แบบฝึกหัด | วันศุกร์"
-        )
-        reply_to_line(event.reply_token, [TextMessage(text=instruction_msg)])
-        return
     
-    # Firebase Commands
+    # ========================================================================
+    # 📚 EXAM SIMULATOR
+    # ========================================================================
+    if not reply_message:
+        try:
+            from exam_simulator import (
+                get_session_manager,
+                handle_start_exam_command,
+                handle_answer_command,
+                handle_show_current_question,
+                handle_cancel_exam,
+                handle_show_explanation,
+                handle_exam_stats
+            )
+            from features import gemini_client_primary, gemini_model_primary
+            
+            from main import db
+            exam_mgr = get_session_manager(db)
+            
+            # Check if in exam session
+            if exam_mgr.has_active_session(user_id):
+                # Answer question
+                if user_message.strip().isdigit() or any(x in user_message_lower for x in ['ตอบ', 'คือ']):
+                    msg_text, send_next = handle_answer_command(user_id, user_message, db)
+                    
+                    if msg_text:
+                        reply_to_line(event.reply_token, [TextMessage(text=msg_text)])
+                        return
+                    
+                    if send_next:
+                        next_q = handle_show_current_question(user_id, db)
+                        reply_to_line(event.reply_token, [TextMessage(text=next_q)])
+                        return
+            
+            # Start exam
+            if any(kw in user_message_lower for kw in ['สอบจำลอง', 'ข้อสอบ']) and 'สอบ' in user_message_lower:
+                result = handle_start_exam_command(user_id, user_message, gemini_client_primary, gemini_model_primary, db)
+                
+                if "✅" in result:
+                    time.sleep(1)
+                    first_q = handle_show_current_question(user_id, db)
+                    reply_to_line(event.reply_token, [TextMessage(text=result), TextMessage(text=first_q)])
+                    return
+                else:
+                    reply_message = TextMessage(text=result)
+            
+            elif 'ยกเลิกสอบ' in user_message_lower:
+                reply_message = TextMessage(text=handle_cancel_exam(user_id, db))
+            
+            elif 'เฉลยข้อสอบ' in user_message_lower:
+                reply_message = TextMessage(text=handle_show_explanation(user_id, db))
+            
+            elif 'สถิติสอบ' in user_message_lower:
+                reply_message = TextMessage(text=handle_exam_stats(user_id, db))
+        
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.error(f"Exam simulator error: {e}")
+    
+    # ========================================================================
+    # 🍔 FOOD RANDOMIZER
+    # ========================================================================
+    if not reply_message and any(kw in user_message_lower for kw in ['กินอะไรดี', 'กินไร', 'แนะนำอาหาร']):
+        try:
+            from food_randomizer import handle_food_randomizer_command
+            reply_message = handle_food_randomizer_command(user_message)
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.error(f"Food randomizer error: {e}")
+    
+    # ========================================================================
+    # HOMEWORK COMMANDS
+    # ========================================================================
     if not reply_message and user_message.startswith("สั่งการบ้าน"):
         reply_message = _handle_add_homework(user_message)
     
-    elif not reply_message and user_message in ["การบ้าน", "ดูการบ้าน", "homework"]:
+    elif not reply_message and user_message in ["การบ้าน", "ดูการบ้าน"]:
         reply_message = TextMessage(text=get_homeworks_from_db())
     
-    elif not reply_message and user_message in ["ลบการบ้านทั้งหมด", "clear hw", "ลบงาน"]:
+    elif not reply_message and user_message in ["ลบการบ้านทั้งหมด"]:
         reply_message = TextMessage(text=clear_homework_db())
     
     # ========================================================================
-    # CALCULATOR COMMANDS
+    # CALCULATOR & GRADE CALCULATOR
     # ========================================================================
-    if not reply_message and any(kw in user_message_lower for kw in ['คำนวณ', 'คิด', 'calc']):
-        # Check if it's grade calculator
+    if not reply_message and any(kw in user_message_lower for kw in ['คำนวณ', 'คิด']):
         if 'เกรด' in user_message_lower or 'gpa' in user_message_lower:
-            # Use grade calculator (pass user_id for session support)
             reply_message = get_grade_calculator_response(user_message, user_id)
         else:
-            # Regular calculator
             reply_message = get_calculator_response(user_message)
     
-    # Try Standard Commands
+    # ========================================================================
+    # STANDARD COMMANDS
+    # ========================================================================
     if not reply_message:
         for keywords, action in COMMANDS:
             matched = False
-            for keyword in sorted(keywords, key=len, reverse=True):
-                if _keyword_matches(user_message_lower, keyword.lower()):
+            for keyword in keywords:
+                if keyword.lower() in user_message_lower:
                     try:
-                        reply_message = call_action(action, user_message)
-                        logger.debug("Matched command: %s", keyword)
+                        reply_message = action(user_message) if action.__code__.co_argcount > 0 else action()
+                        matched = True
+                        break
                     except Exception as e:
-                        logger.exception("Error executing action: %s", e)
+                        logger.exception(f"Error: {e}")
                         reply_message = TextMessage(text=MESSAGES["ACTION_ERROR"])
-                    matched = True
-                    break
-            
+                        break
             if matched:
                 break
     
-    # Fallback to Gemini AI
+    # ========================================================================
+    # FALLBACK TO AI
+    # ========================================================================
     if not reply_message:
-        logger.debug("No command matched, using Gemini API")
         try:
-            ai_response_text = get_gemini_response(user_message)
-            reply_message = TextMessage(text=ai_response_text)
+            ai_text = get_gemini_response(user_message)
+            reply_message = TextMessage(text=ai_text)
         except Exception as e:
-            logger.exception(f"Gemini API error: {e}")
+            logger.exception(f"AI error: {e}")
             reply_message = TextMessage(text=MESSAGES["AI_ERROR"])
     
-    # Send Reply
+    # Send reply
     try:
         if reply_message:
-            success = reply_to_line(event.reply_token, [reply_message])
-            if not success:
-                logger.error("Failed to send reply")
-        else:
-            logger.warning("No reply generated")
+            reply_to_line(event.reply_token, [reply_message])
     except Exception as e:
         logger.exception(f"Failed to send reply: {e}")
 
@@ -576,22 +510,13 @@ def _handle_add_homework(user_message: str) -> TextMessage:
             detail = parts[2][:500]
             due = parts[3][:50] if len(parts) > 3 else "ไม่ระบุ"
             
-            if not subject:
-                return TextMessage(text="⚠️ กรุณาระบุชื่อวิชา")
-            if not detail:
-                return TextMessage(text="⚠️ กรุณาระบุรายละเอียด")
+            if not subject or not detail:
+                return TextMessage(text="⚠️ กรุณาระบุข้อมูลให้ครบ")
             
             result = add_homework_to_db(subject, detail, due)
             return TextMessage(text=result)
-        else:
-            return TextMessage(
-                text="⚠️ รูปแบบ: สั่งการบ้าน | วิชา | รายละเอียด | วันส่ง\n"
-                     "ตัวอย่าง: สั่งการบ้าน | ฟิสิกส์ | ทำแบบฝึกหัด | วันศุกร์"
-            )
-    else:
-        return TextMessage(
-            text="⚠️ รูปแบบที่แนะนำ: สั่งการบ้าน | วิชา | รายละเอียด | วันส่ง"
-        )
+    
+    return TextMessage(text="⚠️ รูปแบบ: สั่งการบ้าน | วิชา | รายละเอียด | วันส่ง")
 
 # ============================================================================
 # EXPORTS
@@ -599,12 +524,7 @@ def _handle_add_homework(user_message: str) -> TextMessage:
 
 __all__ = [
     'handler',
-    'configuration',
     'handle_follow',
     'handle_message',
     'reply_to_line',
-    'is_rate_limited',
-    'get_rate_limit_status',
-    'get_line_api',
-    'get_links_menu_message',
 ]
