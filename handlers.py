@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-MTC Assistant - Handlers Module (FULLY INTEGRATED)
+MTC Assistant - Handlers Module (FULLY INTEGRATED - FIXED)
 ✅ All features integrated: exam, blacklist, impersonate, food, calculator, grade
+✅ FIXED: Circular import issue resolved
 """
 
 import time
@@ -33,6 +34,9 @@ from features import (
     add_homework_to_db, get_homeworks_from_db, clear_homework_db,
     get_calculator_response, get_grade_calculator_response
 )
+
+# Import features module to access db
+import features
 
 # Import broadcast functions
 import broadcast
@@ -354,16 +358,19 @@ def handle_message(event):
         if user_message in ["admin", "คำสั่งแอดมิน"]:
             admin_help = (
                 "👨‍💼 *คำสั่งเฉพาะแอดมิน*\n\n"
-                "   📢 ประกาศ [ข้อความ]\n"
-                "   📊 สถิติประกาศ\n"
-                "   👥 จำนวนผู้ใช้\n\n"
-                "🎭 *ราชาแฮกเกอร์*\n"
-                "   👀 ดูผู้ใช้\n"
-                "   ✉️ ส่งถึง [user_id] [ข้อความ]\n\n"
-                "   🚫 *Blacklist*\n"
-                "   ⛔ แบน [user_id] [เหตุผล]\n"
-                "   ✅ ปลดแบน [user_id]\n"
-                "   📋 รายชื่อแบน"
+                "📢 *Broadcast*\n"
+                "   ประกาศ [ข้อความ]\n"
+                "   สถิติประกาศ\n"
+                "   จำนวนผู้ใช้\n\n"
+                "🎭 *Impersonate*\n"
+                "   ดูผู้ใช้\n"
+                "   ส่งถึง [user_id] [ข้อความ]\n"
+                "   ทดสอบส่ง [ข้อความ]\n\n"
+                "🚫 *Blacklist*\n"
+                "   แบน [user_id] [เหตุผล]\n"
+                "   ปลดแบน [user_id]\n"
+                "   รายชื่อแบน\n"
+                "   สถิติแบน"
             )
             reply_message = TextMessage(text=admin_help)
     
@@ -381,9 +388,9 @@ def handle_message(event):
                 handle_show_explanation,
                 handle_exam_stats
             )
-            from features import gemini_client_primary, gemini_model_primary
             
-            from main import db
+            # ✅ FIXED: Get db from features module instead of circular import
+            db = features.db
             exam_mgr = get_session_manager(db)
             
             # Check if in exam session
@@ -403,7 +410,13 @@ def handle_message(event):
             
             # Start exam
             if any(kw in user_message_lower for kw in ['สอบจำลอง', 'ข้อสอบ']) and 'สอบ' in user_message_lower:
-                result = handle_start_exam_command(user_id, user_message, gemini_client_primary, gemini_model_primary, db)
+                result = handle_start_exam_command(
+                    user_id, 
+                    user_message, 
+                    features.gemini_client_primary, 
+                    features.gemini_model_primary, 
+                    db
+                )
                 
                 if "✅" in result:
                     time.sleep(1)

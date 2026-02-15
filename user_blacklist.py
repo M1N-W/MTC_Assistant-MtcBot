@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-MTC Assistant - User Blacklist System
+MTC Assistant - User Blacklist System (FIXED)
 ระบบแบนผู้ใช้และจัดการ spam
+✅ FIXED: Type hint compatibility for Python 3.7+
 """
 
 import time
 import json
-from typing import Dict, Set, Optional
+from typing import Dict, Set, Optional, Tuple  # ✅ FIXED: Added Tuple import
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from config import logger, LOCAL_TZ
@@ -175,14 +176,14 @@ class BlacklistManager:
             return "⚠️ คุณถูกจำกัดการใช้งานชั่วคราว"
         
         message = "🚫 *คุณถูกแบนจากการใช้งาน*\n\n"
-        message += f"เหตุผล {record.reason}\n"
-        message += f"วันที่แบน {record.banned_at}\n"
+        message += f"เหตุผล: {record.reason}\n"
+        message += f"วันที่แบน: {record.banned_at}\n"
         
         if record.is_permanent:
-            message += f"\nสถานะ = ถาวร\n"
+            message += f"\nสถานะ: ถาวร\n"
             message += f"หากต้องการอุทธรณ์ กรุณาติดต่อผู้ดูแลระบบ"
         else:
-            message += f"\nสถานะ = ชั่วคราว"
+            message += f"\nสถานะ: ชั่วคราว"
         
         return message
 
@@ -216,7 +217,7 @@ def handle_ban_user_command(admin_id: str, user_message: str) -> str:
     
     if len(parts) < 2:
         return (
-            "⚠️ รูปแบบคำสั่ง\n"
+            "⚠️ รูปแบบคำสั่ง:\n"
             "แบน [user_id] [เหตุผล]\n\n"
             "ตัวอย่าง:\n"
             "แบน U1234567890 Spamming"
@@ -250,7 +251,7 @@ def handle_unban_user_command(admin_id: str, user_message: str) -> str:
     
     if len(parts) < 2:
         return (
-            "⚠️ รูปแบบคำสั่ง\n"
+            "⚠️ รูปแบบคำสั่ง:\n"
             "ปลดแบน [user_id]\n\n"
             "ตัวอย่าง:\n"
             "ปลดแบน U1234567890"
@@ -294,7 +295,7 @@ def handle_ban_stats_command(admin_id: str, user_message: str = "") -> str:
 # INTEGRATION HELPER
 # ============================================================================
 
-def check_user_banned(user_id: str) -> tuple[bool, str]:
+def check_user_banned(user_id: str) -> Tuple[bool, str]:  # ✅ FIXED: Use Tuple from typing
     """
     Check if user is banned and return appropriate message
     
