@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-MTC Assistant - Handlers Module (FULLY INTEGRATED - FIXED)
-✅ All features integrated: exam, blacklist, impersonate, food, calculator, grade
-✅ FIXED: Circular import issue resolved
+MTC Assistant - Handlers Module (IMPROVED UX Edition)
+✅ Beautiful messages with emojis and formatting
+✅ Enhanced Flex Message for links
+✅ Interactive homework system (no more long typing!)
 """
 
 import time
@@ -13,7 +14,8 @@ from flask import request
 from linebot.v3 import WebhookHandler
 from linebot.v3.messaging import (
     Configuration, ApiClient, MessagingApi, ReplyMessageRequest, 
-    TextMessage, ImageMessage, FlexMessage, FlexContainer
+    TextMessage, ImageMessage, FlexMessage, FlexContainer,
+    QuickReply, QuickReplyItem, MessageAction
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent, FollowEvent
 
@@ -111,68 +113,383 @@ def is_rate_limited(user_id: str) -> bool:
     return False
 
 # ============================================================================
-# FLEX MESSAGE - LINKS MENU
+# INTERACTIVE HOMEWORK SYSTEM (NEW!)
+# ============================================================================
+
+# Store homework creation state for each user
+_homework_sessions: Dict[str, Dict] = {}
+
+# Subject list for homework
+SUBJECTS = [
+    "คณิตศาสตร์", "ฟิสิกส์", "เคมี", "ชีววิทยา",
+    "ภาษาไทย", "ภาษาอังกฤษ", "สังคมศึกษา", "ประวัติศาสตร์",
+    "คอมพิวเตอร์", "การงาน", "พละศึกษา", "นาฏศิลป์"
+]
+
+def start_homework_session(user_id: str) -> tuple:
+    """Start interactive homework creation session"""
+    _homework_sessions[user_id] = {
+        "step": "subject",
+        "subject": None,
+        "detail": None,
+        "due_date": None
+    }
+    
+    # Create quick reply buttons for subject selection
+    quick_reply_items = []
+    for i in range(0, min(len(SUBJECTS), 13)):  # Max 13 items
+        quick_reply_items.append(
+            QuickReplyItem(
+                action=MessageAction(label=SUBJECTS[i], text=SUBJECTS[i])
+            )
+        )
+    
+    quick_reply = QuickReply(items=quick_reply_items)
+    
+    message = TextMessage(
+        text="📚 *เพิ่มการบ้านใหม่*\n\n"
+             "เลือกวิชา ↓",
+        quick_reply=quick_reply
+    )
+    
+    return message, quick_reply
+
+def handle_homework_session(user_id: str, user_message: str) -> Union[TextMessage, tuple]:
+    """Handle homework creation step by step"""
+    if user_id not in _homework_sessions:
+        return None
+    
+    session = _homework_sessions[user_id]
+    step = session["step"]
+    
+    # Step 1: Subject selection
+    if step == "subject":
+        session["subject"] = user_message
+        session["step"] = "detail"
+        
+        return TextMessage(
+            text=f"✅ วิชา: {user_message}\n\n"
+                 f"📝 ระบุรายละเอียดการบ้าน:\n"
+                 f"(เช่น: ทำแบบฝึกหัด 4.1, ท่องบทอาขยาน)"
+        )
+    
+    # Step 2: Detail entry
+    elif step == "detail":
+        session["detail"] = user_message
+        session["step"] = "due_date"
+        
+        # Quick reply for due date
+        quick_reply = QuickReply(items=[
+            QuickReplyItem(action=MessageAction(label="📅 วันนี้", text="วันนี้")),
+            QuickReplyItem(action=MessageAction(label="📅 พรุ่งนี้", text="พรุ่งนี้")),
+            QuickReplyItem(action=MessageAction(label="📅 วันจันทร์", text="วันจันทร์")),
+            QuickReplyItem(action=MessageAction(label="📅 วันอังคาร", text="วันอังคาร")),
+            QuickReplyItem(action=MessageAction(label="📅 วันพุธ", text="วันพุธ")),
+            QuickReplyItem(action=MessageAction(label="📅 วันพฤหัส", text="วันพฤหัสบดี")),
+            QuickReplyItem(action=MessageAction(label="📅 วันศุกร์", text="วันศุกร์")),
+            QuickReplyItem(action=MessageAction(label="📅 สัปดาห์หน้า", text="สัปดาห์หน้า")),
+            QuickReplyItem(action=MessageAction(label="❌ ยกเลิก", text="ยกเลิกการบ้าน")),
+        ])
+        
+        return TextMessage(
+            text=f"✅ รายละเอียด: {user_message}\n\n"
+                 f"📅 กำหนดส่ง:\n"
+                 f"(เลือกด้านล่าง หรือพิมพ์เอง)",
+            quick_reply=quick_reply
+        )
+    
+    # Step 3: Due date and save
+    elif step == "due_date":
+        session["due_date"] = user_message
+        
+        # Save to database
+        subject = session["subject"]
+        detail = session["detail"]
+        due_date = session["due_date"]
+        
+        result = add_homework_to_db(subject, detail, due_date)
+        
+        # Clear session
+        del _homework_sessions[user_id]
+        
+        # Success message with summary
+        return TextMessage(
+            text=f"✅ *บันทึกการบ้านสำเร็จ!*\n\n"
+                 f"📚 วิชา: {subject}\n"
+                 f"📝 รายละเอียด: {detail}\n"
+                 f"📅 กำหนดส่ง: {due_date}\n\n"
+                 f"━━━━━━━━━━━━━━━\n"
+                 f"💡 พิมพ์ 'การบ้าน' เพื่อดูทั้งหมด"
+        )
+    
+    return None
+
+def cancel_homework_session(user_id: str) -> str:
+    """Cancel homework creation session"""
+    if user_id in _homework_sessions:
+        del _homework_sessions[user_id]
+        return "❌ ยกเลิกการเพิ่มการบ้านแล้ว"
+    return None
+
+# ============================================================================
+# ENHANCED FLEX MESSAGE - IMPORTANT LINKS (NEW DESIGN!)
 # ============================================================================
 
 def get_links_menu_message(user_message: str = "") -> FlexMessage:
-    """แสดงเมนูลิงก์ทั้งหมดด้วย Flex Message"""
+    """แสดงเมนูลิงก์ทั้งหมดด้วย Flex Message - Enhanced Design"""
     
     flex_content = {
         "type": "bubble",
-        "size": "kilo",
-        "header": {
+        "size": "mega",
+        "hero": {
             "type": "box",
             "layout": "vertical",
             "contents": [
                 {
-                    "type": "text",
-                    "text": "🔗 ลิงก์สำคัญทั้งหมด",
-                    "weight": "bold",
-                    "size": "xl",
-                    "color": "#FFFFFF"
-                },
-                {
-                    "type": "text",
-                    "text": "เลือกลิงก์ที่ต้องการเข้าถึง",
-                    "size": "xs",
-                    "color": "#FFFFFF",
-                    "margin": "sm",
-                    "wrap": True
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "🔗",
+                            "size": "xxl",
+                            "color": "#FFFFFF",
+                            "align": "center",
+                            "weight": "bold"
+                        },
+                        {
+                            "type": "text",
+                            "text": "ลิงก์สำคัญ",
+                            "size": "xl",
+                            "color": "#FFFFFF",
+                            "align": "center",
+                            "weight": "bold",
+                            "margin": "md"
+                        },
+                        {
+                            "type": "text",
+                            "text": "เข้าถึงง่าย ครบจบในที่เดียว",
+                            "size": "sm",
+                            "color": "#FFFFFF",
+                            "align": "center",
+                            "margin": "sm",
+                            "opacity": 0.8
+                        }
+                    ],
+                    "paddingAll": "30px"
                 }
             ],
             "backgroundColor": "#7C3AED",
-            "paddingAll": "20px"
+            "paddingAll": "0px"
         },
         "body": {
             "type": "box",
             "layout": "vertical",
             "contents": [
-                {"type": "text", "text": "📚 การเรียน", "weight": "bold", "size": "md", "color": "#666666", "margin": "none"},
-                {"type": "separator", "margin": "sm"},
-                {"type": "button", "action": {"type": "uri", "label": "🏫 เว็บโรงเรียน", "uri": SCHOOL_LINK}, "style": "primary", "color": "#00C300", "height": "sm", "margin": "md"},
-                {"type": "button", "action": {"type": "uri", "label": "📊 เช็คเกรด", "uri": GRADE_LINK}, "style": "primary", "color": "#3B82F6", "height": "sm", "margin": "sm"},
-                {"type": "button", "action": {"type": "uri", "label": "📝 แบบฟอร์มลา", "uri": ABSENCE_LINK}, "style": "primary", "color": "#F59E0B", "height": "sm", "margin": "sm"},
-                {"type": "text", "text": "📖 เฉลยวิชา", "weight": "bold", "size": "md", "color": "#666666", "margin": "xl"},
-                {"type": "separator", "margin": "sm"},
-                {"type": "button", "action": {"type": "uri", "label": "🧬 เฉลยชีววิทยา", "uri": Bio_LINK}, "style": "primary", "color": "#10B981", "height": "sm", "margin": "md"},
-                {"type": "button", "action": {"type": "uri", "label": "⚛️ เฉลยฟิสิกส์", "uri": Physic_LINK}, "style": "primary", "color": "#8B5CF6", "height": "sm", "margin": "sm"},
-                {"type": "text", "text": "🎵 ความบันเทิง", "weight": "bold", "size": "md", "color": "#666666", "margin": "xl"},
-                {"type": "separator", "margin": "sm"},
-                {"type": "button", "action": {"type": "message", "label": "🎵 ค้นหาเพลง", "text": "เปิดเพลง"}, "style": "primary", "color": "#EC4899", "height": "sm", "margin": "md"}
+                # การเรียน Section
+                {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "📚 การเรียน",
+                            "weight": "bold",
+                            "size": "lg",
+                            "color": "#1A1A1A"
+                        },
+                        {
+                            "type": "box",
+                            "layout": "vertical",
+                            "contents": [
+                                {
+                                    "type": "button",
+                                    "action": {
+                                        "type": "uri",
+                                        "label": "🏫 เว็บโรงเรียน",
+                                        "uri": SCHOOL_LINK
+                                    },
+                                    "style": "primary",
+                                    "color": "#00C300",
+                                    "height": "sm"
+                                },
+                                {
+                                    "type": "button",
+                                    "action": {
+                                        "type": "uri",
+                                        "label": "📊 ระบบเช็คเกรด",
+                                        "uri": GRADE_LINK
+                                    },
+                                    "style": "primary",
+                                    "color": "#3B82F6",
+                                    "height": "sm",
+                                    "margin": "sm"
+                                },
+                                {
+                                    "type": "button",
+                                    "action": {
+                                        "type": "uri",
+                                        "label": "📝 แบบฟอร์มลาออนไลน์",
+                                        "uri": ABSENCE_LINK
+                                    },
+                                    "style": "primary",
+                                    "color": "#F59E0B",
+                                    "height": "sm",
+                                    "margin": "sm"
+                                }
+                            ],
+                            "margin": "md"
+                        }
+                    ],
+                    "paddingAll": "0px"
+                },
+                # Separator
+                {
+                    "type": "separator",
+                    "margin": "xl"
+                },
+                # เฉลยวิชา Section
+                {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "📖 เฉลยวิชา",
+                            "weight": "bold",
+                            "size": "lg",
+                            "color": "#1A1A1A"
+                        },
+                        {
+                            "type": "box",
+                            "layout": "horizontal",
+                            "contents": [
+                                {
+                                    "type": "button",
+                                    "action": {
+                                        "type": "uri",
+                                        "label": "🧬 ชีววิทยา",
+                                        "uri": Bio_LINK
+                                    },
+                                    "style": "primary",
+                                    "color": "#10B981",
+                                    "height": "sm",
+                                    "flex": 1
+                                },
+                                {
+                                    "type": "button",
+                                    "action": {
+                                        "type": "uri",
+                                        "label": "⚛️ ฟิสิกส์",
+                                        "uri": Physic_LINK
+                                    },
+                                    "style": "primary",
+                                    "color": "#8B5CF6",
+                                    "height": "sm",
+                                    "flex": 1,
+                                    "margin": "sm"
+                                }
+                            ],
+                            "margin": "md"
+                        }
+                    ],
+                    "margin": "xl"
+                },
+                # Separator
+                {
+                    "type": "separator",
+                    "margin": "xl"
+                },
+                # เพิ่มเติม Section
+                {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "🎵 เพิ่มเติม",
+                            "weight": "bold",
+                            "size": "lg",
+                            "color": "#1A1A1A"
+                        },
+                        {
+                            "type": "button",
+                            "action": {
+                                "type": "message",
+                                "label": "🎵 ค้นหาเพลง YouTube",
+                                "text": "เปิดเพลง"
+                            },
+                            "style": "link",
+                            "color": "#EC4899",
+                            "height": "sm",
+                            "margin": "md"
+                        }
+                    ],
+                    "margin": "xl"
+                }
             ],
-            "spacing": "none",
             "paddingAll": "20px"
         },
         "footer": {
             "type": "box",
             "layout": "vertical",
-            "contents": [{"type": "text", "text": "💡 Tip: บันทึกลิงก์ที่ใช้บ่อยไว้", "size": "xxs", "color": "#999999", "align": "center", "wrap": True}],
-            "backgroundColor": "#F3F4F6",
-            "paddingAll": "12px"
+            "contents": [
+                {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "💡",
+                            "size": "sm",
+                            "flex": 0
+                        },
+                        {
+                            "type": "text",
+                            "text": "บันทึกลิงก์ที่ใช้บ่อยไว้เพื่อเข้าถึงได้เร็วขึ้น",
+                            "size": "xs",
+                            "color": "#999999",
+                            "wrap": True,
+                            "flex": 1,
+                            "margin": "sm"
+                        }
+                    ]
+                }
+            ],
+            "backgroundColor": "#F9FAFB",
+            "paddingAll": "16px"
         }
     }
     
-    return FlexMessage(alt_text="🔗 ลิงก์สำคัญทั้งหมด", contents=FlexContainer.from_dict(flex_content))
+    return FlexMessage(
+        alt_text="🔗 ลิงก์สำคัญทั้งหมด - คลิกเพื่อดู",
+        contents=FlexContainer.from_dict(flex_content)
+    )
+
+# ============================================================================
+# IMPROVED MESSAGE FORMATS
+# ============================================================================
+
+def format_success_message(title: str, details: List[str]) -> str:
+    """Format a beautiful success message"""
+    message = f"✅ *{title}*\n\n"
+    for detail in details:
+        message += f"  {detail}\n"
+    return message
+
+def format_info_message(title: str, items: Dict[str, str]) -> str:
+    """Format an informative message"""
+    message = f"ℹ️ *{title}*\n\n"
+    for key, value in items.items():
+        message += f"• {key}: {value}\n"
+    return message
+
+def format_error_message(error: str, suggestion: str = None) -> str:
+    """Format an error message with optional suggestion"""
+    message = f"❌ {error}\n"
+    if suggestion:
+        message += f"\n💡 {suggestion}"
+    return message
 
 # ============================================================================
 # COMMANDS LIST
@@ -223,8 +540,17 @@ def reply_to_line(reply_token: str, messages: List[Union[TextMessage, ImageMessa
 
 @handler.add(FollowEvent) if handler else (lambda f: f)
 def handle_follow(event):
-    """Handle user following"""
-    welcome_message = TextMessage(text='👋 สวัสดีครับ! ผมคือ MTC Assistant\nบอทช่วยงานห้อง MTC โดยนักเรียน MTC12\n\nลองกดคำสั่งด้านล่างเพื่อใช้ฟีเจอร์ต่างๆได้เลยครับ')
+    """Handle user following - Improved welcome message"""
+    welcome_message = TextMessage(
+        text="👋 *ยินดีต้อนรับสู่ MTC Assistant!*\n\n"
+             "ผมคือบอทช่วยงานห้อง MTC\n"
+             "สร้างโดยนักเรียน MTC12 ❤️\n\n"
+             "━━━━━━━━━━━━━━━\n"
+             "💡 *เริ่มต้นใช้งาน:*\n"
+             "• พิมพ์ 'help' ดูคำสั่งทั้งหมด\n"
+             "• กดปุ่มด้านล่างเพื่อลองใช้\n\n"
+             "มีคำถาม? ถามผมได้เลย! 🤖"
+    )
     try:
         reply_to_line(event.reply_token, [welcome_message])
     except Exception as e:
@@ -232,7 +558,7 @@ def handle_follow(event):
 
 @handler.add(MessageEvent, message=TextMessageContent) if handler else (lambda f: f)
 def handle_message(event):
-    """Handle incoming text messages - FULLY INTEGRATED"""
+    """Handle incoming text messages - IMPROVED UX"""
     user_text = getattr(event.message, "text", "")
     user_message = user_text.strip()
     
@@ -263,7 +589,7 @@ def handle_message(event):
             logger.warning(f"Banned user {user_id} attempted to use bot")
             return
     except ImportError:
-        pass  # Blacklist module not available
+        pass
     except Exception as e:
         logger.error(f"Blacklist check error: {e}")
     
@@ -271,7 +597,6 @@ def handle_message(event):
     try:
         broadcast.track_user(user_id)
         
-        # Track for impersonate feature
         try:
             from admin_impersonate import track_user_activity
             track_user_activity(user_id)
@@ -282,14 +607,48 @@ def handle_message(event):
     
     # Check rate limit
     if is_rate_limited(user_id):
-        reply_to_line(event.reply_token, [TextMessage(text=MESSAGES["RATE_LIMITED"])])
+        reply_to_line(event.reply_token, [TextMessage(
+            text="⏰ *ช้าลงหน่อยนะ*\n\n"
+                 "คุณส่งข้อความเร็วเกินไป\n"
+                 "รอสักครู่แล้วลองใหม่ 😊"
+        )])
         return
     
     user_message_lower = user_message.lower()
     reply_message = None
     
     # ========================================================================
-    # 👨‍💼 ADMIN COMMANDS
+    # 📝 INTERACTIVE HOMEWORK SYSTEM (NEW!)
+    # ========================================================================
+    
+    # Start homework session
+    if user_message in ["สั่งการบ้าน", "เพิ่มการบ้าน", "add homework"]:
+        message, quick_reply = start_homework_session(user_id)
+        reply_to_line(event.reply_token, [message])
+        return
+    
+    # Cancel homework session
+    if user_message in ["ยกเลิกการบ้าน", "cancel homework"]:
+        result = cancel_homework_session(user_id)
+        if result:
+            reply_to_line(event.reply_token, [TextMessage(text=result)])
+            return
+    
+    # Handle homework session steps
+    if user_id in _homework_sessions:
+        result = handle_homework_session(user_id, user_message)
+        if result:
+            reply_to_line(event.reply_token, [result])
+            return
+    
+    # View homework (improved format)
+    if user_message in ["การบ้าน", "ดูการบ้าน", "homework"]:
+        hw_text = get_homeworks_from_db()
+        reply_to_line(event.reply_token, [TextMessage(text=hw_text)])
+        return
+    
+    # ========================================================================
+    # 👨‍💼 ADMIN COMMANDS (Improved formatting)
     # ========================================================================
     if user_id in ADMIN_USER_IDS:
         # Broadcast commands
@@ -299,14 +658,24 @@ def handle_message(event):
                 announcement = broadcast.create_announcement("ประกาศจากผู้ดูแล", msg)
                 result = broadcast.broadcast_message(announcement)
                 broadcast.save_broadcast_history(user_id, announcement, result)
-                reply_message = TextMessage(text=result['message'])
+                
+                reply_message = TextMessage(
+                    text=f"📢 *ส่งประกาศสำเร็จ!*\n\n"
+                         f"{result['message']}\n\n"
+                         f"━━━━━━━━━━━━━━━\n"
+                         f"⏰ {time.strftime('%H:%M:%S')}"
+                )
         
         elif user_message in ["สถิติประกาศ", "broadcast stats"]:
             reply_message = TextMessage(text=broadcast.get_broadcast_stats())
         
         elif user_message in ["จำนวนผู้ใช้", "user count"]:
             count = broadcast.get_user_count()
-            reply_message = TextMessage(text=f"👥 จำนวนผู้ใช้ {count} คน")
+            reply_message = TextMessage(
+                text=f"👥 *จำนวนผู้ใช้ทั้งหมด*\n\n"
+                     f"✅ {count} คน\n\n"
+                     f"━━━━━━━━━━━━━━━"
+            )
         
         # Impersonate commands
         try:
@@ -354,23 +723,24 @@ def handle_message(event):
         except Exception as e:
             logger.error(f"Blacklist error: {e}")
         
-        # Admin help
+        # Admin help (improved format)
         if user_message in ["admin", "คำสั่งแอดมิน"]:
             admin_help = (
-                "👨‍💼 *คำสั่งเฉพาะแอดมิน*\n\n"
+                "👨‍💼 *คำสั่งแอดมิน*\n\n"
+                "━━━━━━━━━━━━━━━\n"
                 "📢 *Broadcast*\n"
-                "   ประกาศ [ข้อความ]\n"
-                "   สถิติประกาศ\n"
-                "   จำนวนผู้ใช้\n\n"
+                "  • ประกาศ [ข้อความ]\n"
+                "  • สถิติประกาศ\n"
+                "  • จำนวนผู้ใช้\n\n"
                 "🎭 *Impersonate*\n"
-                "   ดูผู้ใช้\n"
-                "   ส่งถึง [user_id] [ข้อความ]\n"
-                "   ทดสอบส่ง [ข้อความ]\n\n"
+                "  • ดูผู้ใช้\n"
+                "  • ส่งถึง [user_id] [ข้อความ]\n"
+                "  • ทดสอบส่ง [ข้อความ]\n\n"
                 "🚫 *Blacklist*\n"
-                "   แบน [user_id] [เหตุผล]\n"
-                "   ปลดแบน [user_id]\n"
-                "   รายชื่อแบน\n"
-                "   สถิติแบน"
+                "  • แบน [user_id] [เหตุผล]\n"
+                "  • ปลดแบน [user_id]\n"
+                "  • รายชื่อแบน\n"
+                "  • สถิติแบน"
             )
             reply_message = TextMessage(text=admin_help)
     
@@ -389,7 +759,6 @@ def handle_message(event):
                 handle_exam_stats
             )
             
-            # ✅ FIXED: Get db from features module instead of circular import
             db = features.db
             exam_mgr = get_session_manager(db)
             
@@ -453,18 +822,6 @@ def handle_message(event):
             logger.error(f"Food randomizer error: {e}")
     
     # ========================================================================
-    # HOMEWORK COMMANDS
-    # ========================================================================
-    if not reply_message and user_message.startswith("สั่งการบ้าน"):
-        reply_message = _handle_add_homework(user_message)
-    
-    elif not reply_message and user_message in ["การบ้าน", "ดูการบ้าน"]:
-        reply_message = TextMessage(text=get_homeworks_from_db())
-    
-    elif not reply_message and user_message in ["ลบการบ้านทั้งหมด"]:
-        reply_message = TextMessage(text=clear_homework_db())
-    
-    # ========================================================================
     # CALCULATOR & GRADE CALCULATOR
     # ========================================================================
     if not reply_message and any(kw in user_message_lower for kw in ['คำนวณ', 'คิด']):
@@ -487,21 +844,33 @@ def handle_message(event):
                         break
                     except Exception as e:
                         logger.exception(f"Error: {e}")
-                        reply_message = TextMessage(text=MESSAGES["ACTION_ERROR"])
+                        reply_message = TextMessage(
+                            text=format_error_message(
+                                "เกิดข้อผิดพลาด",
+                                "ลองใหม่อีกครั้งหรือติดต่อผู้ดูแล"
+                            )
+                        )
                         break
             if matched:
                 break
     
     # ========================================================================
-    # FALLBACK TO AI
+    # FALLBACK TO AI (Improved response format)
     # ========================================================================
     if not reply_message:
         try:
             ai_text = get_gemini_response(user_message)
+            # Add visual separator for long AI responses
+            if len(ai_text) > 500:
+                ai_text = "🤖 *คำตอบจาก AI*\n\n" + ai_text
             reply_message = TextMessage(text=ai_text)
         except Exception as e:
             logger.exception(f"AI error: {e}")
-            reply_message = TextMessage(text=MESSAGES["AI_ERROR"])
+            reply_message = TextMessage(
+                text="❌ *ขออภัย*\n\n"
+                     "ระบบ AI มีปัญหาชั่วคราว\n"
+                     "กรุณาลองใหม่อีกครั้ง 🙏"
+            )
     
     # Send reply
     try:
@@ -509,27 +878,6 @@ def handle_message(event):
             reply_to_line(event.reply_token, [reply_message])
     except Exception as e:
         logger.exception(f"Failed to send reply: {e}")
-
-# ============================================================================
-# HOMEWORK HANDLER
-# ============================================================================
-
-def _handle_add_homework(user_message: str) -> TextMessage:
-    """Handle add homework command"""
-    if "|" in user_message:
-        parts = [p.strip() for p in user_message.split("|")]
-        if len(parts) >= 3:
-            subject = parts[1][:100]
-            detail = parts[2][:500]
-            due = parts[3][:50] if len(parts) > 3 else "ไม่ระบุ"
-            
-            if not subject or not detail:
-                return TextMessage(text="⚠️ กรุณาระบุข้อมูลให้ครบ")
-            
-            result = add_homework_to_db(subject, detail, due)
-            return TextMessage(text=result)
-    
-    return TextMessage(text="⚠️ รูปแบบ: สั่งการบ้าน | วิชา | รายละเอียด | วันส่ง")
 
 # ============================================================================
 # EXPORTS

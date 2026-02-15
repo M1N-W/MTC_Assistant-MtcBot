@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-MTC Assistant - Features Module (FIXED for google-genai)
-Contains all feature functions: schedule, homework, music, AI, etc.
-
-FIXES:
-1. Changed import from google.generativeai to google.genai
-2. Added set_gemini_models() function (was set_gemini_model)
-3. Updated get_gemini_response() to use google-genai client API
+MTC Assistant - Features Module (IMPROVED UX Edition)
+Contains all feature functions with beautiful, concise messages
+✅ Better formatting
+✅ More visual
+✅ Easy to read
 """
 
 import datetime
@@ -14,7 +12,7 @@ import math
 import re
 import urllib.parse
 from typing import Optional
-from google import genai  # ✅ FIXED: Changed from google.generativeai
+from google import genai
 
 from linebot.v3.messaging import TextMessage, ImageMessage
 
@@ -30,7 +28,7 @@ from config import (
 # ============================================================================
 db = None  # Firebase database instance
 
-# Gemini AI clients and models (NEW: support dual models)
+# Gemini AI clients and models
 gemini_client_primary = None
 gemini_model_primary = None
 gemini_client_fallback = None
@@ -46,7 +44,7 @@ def set_database(database):
     db = database
 
 # ============================================================================
-# GEMINI AI CONFIGURATION (FIXED)
+# GEMINI AI CONFIGURATION
 # ============================================================================
 
 def set_gemini_models(
@@ -55,17 +53,7 @@ def set_gemini_models(
     client_fallback=None,
     model_fallback: str = None
 ):
-    """
-    Set Gemini AI clients and model names
-    
-    ✅ FIXED: New function to match main.py call
-    
-    Args:
-        client_primary: Primary Gemini client (google.genai.Client)
-        model_primary: Primary model name (e.g., 'gemini-3-flash-preview')
-        client_fallback: Fallback Gemini client
-        model_fallback: Fallback model name (e.g., 'gemini-2.5-flash-preview')
-    """
+    """Set Gemini AI clients and model names"""
     global gemini_client_primary, gemini_model_primary
     global gemini_client_fallback, gemini_model_fallback
     
@@ -80,13 +68,13 @@ def set_gemini_models(
         logger.info(f"✅ Fallback Gemini model set: {model_fallback}")
 
 # ============================================================================
-# DATABASE FUNCTIONS
+# DATABASE FUNCTIONS (IMPROVED MESSAGES)
 # ============================================================================
 
 def add_homework_to_db(subject: str, detail: str, due_date: str = "ไม่ระบุ") -> str:
-    """เพิ่มการบ้านเข้า Firebase"""
+    """เพิ่มการบ้านเข้า Firebase - Improved message"""
     if not db:
-        return "⚠️ ระบบฐานข้อมูลยังไม่พร้อม กรุณาติดต่อผู้ดูแลระบบ"
+        return "⚠️ *ระบบไม่พร้อม*\n\nกรุณาติดต่อผู้ดูแล"
     
     try:
         from firebase_admin import firestore
@@ -98,41 +86,50 @@ def add_homework_to_db(subject: str, detail: str, due_date: str = "ไม่ร�
             'timestamp': firestore.SERVER_TIMESTAMP,
             'created_at': datetime.datetime.now(tz=LOCAL_TZ).strftime("%Y-%m-%d %H:%M:%S")
         })
-        return f"✅ เพิ่มการบ้านวิชา '{subject}' สำเร็จแล้ว"
+        return f"✅ บันทึกการบ้าน '{subject}' สำเร็จ!"
     except Exception as e:
         logger.error(f"DB Add Error: {e}")
-        return "❌ เกิดข้อผิดพลาดในการเพิ่มการบ้าน"
+        return "❌ *เกิดข้อผิดพลาด*\n\nไม่สามารถบันทึกได้"
 
 def get_homeworks_from_db() -> str:
-    """ดึงรายการการบ้านจาก Firebase"""
+    """ดึงรายการการบ้านจาก Firebase - Improved format"""
     if not db:
-        return "⚠️ ระบบฐานข้อมูลยังไม่พร้อมครับ"
+        return "⚠️ *ระบบไม่พร้อม*\n\nกรุณาลองใหม่ภายหลัง"
     
     try:
         from firebase_admin import firestore
         docs = db.collection('homeworks').order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
         hw_list = []
+        
         for doc in docs:
             d = doc.to_dict()
             hw_list.append(
                 f"📚 *{d.get('subject', 'ไม่ระบุ')}*\n"
-                f"📝 {d.get('detail', 'ไม่มีรายละเอียด')}\n"
-                f"📅 ส่ง: {d.get('due_date', 'ไม่ระบุ')}\n"
-                f"(ID: {doc.id[-4:]})"
+                f"  📝 {d.get('detail', 'ไม่มีรายละเอียด')}\n"
+                f"  📅 ส่ง: {d.get('due_date', 'ไม่ระบุ')}"
             )
         
         if not hw_list:
-            return "ตอนนี้ไม่มีการบ้านค้างในระบบครับ"
+            return (
+                "📋 *การบ้าน*\n\n"
+                "✨ ไม่มีการบ้านค้างอยู่!\n\n"
+                "━━━━━━━━━━━━━━━\n"
+                "💡 พิมพ์ 'สั่งการบ้าน' เพื่อเพิ่ม"
+            )
         
-        return "📋 *รายการการบ้านปัจจุบัน*\n\n" + "\n" + "-" * 30 + "\n".join(hw_list)
+        header = f"📋 *การบ้านทั้งหมด* ({len(hw_list)} รายการ)\n\n"
+        separator = "\n━━━━━━━━━━━━━━━\n"
+        
+        return header + separator.join(hw_list) + "\n━━━━━━━━━━━━━━━"
+        
     except Exception as e:
         logger.error(f"DB Get Error: {e}")
-        return "❌ เกิดข้อผิดพลาดในการดึงข้อมูลการบ้าน"
+        return "❌ *เกิดข้อผิดพลาด*\n\nไม่สามารถดึงข้อมูลได้"
 
 def clear_homework_db() -> str:
-    """ลบการบ้านทั้งหมดใน Firebase"""
+    """ลบการบ้านทั้งหมดใน Firebase - Improved message"""
     if not db:
-        return "⚠️ ระบบฐานข้อมูลยังไม่พร้อมครับ"
+        return "⚠️ *ระบบไม่พร้อม*"
     
     try:
         docs = db.collection('homeworks').stream()
@@ -141,97 +138,125 @@ def clear_homework_db() -> str:
             doc.reference.delete()
             count += 1
         
-        return f"🗑️ ลบการบ้านทั้งหมดแล้ว ({count} รายการ)"
+        return (
+            f"🗑️ *ลบการบ้านสำเร็จ*\n\n"
+            f"ลบไปทั้งหมด {count} รายการ"
+        )
     except Exception as e:
         logger.error(f"DB Clear Error: {e}")
-        return "❌ เกิดข้อผิดพลาดในการลบข้อมูล"
+        return "❌ เกิดข้อผิดพลาด"
 
 # ============================================================================
-# BASIC COMMAND FUNCTIONS
+# BASIC COMMAND FUNCTIONS (IMPROVED MESSAGES)
 # ============================================================================
 
 def get_worksheet_message(user_message: str = "") -> TextMessage:
-    """ส่งลิงก์ใบงาน"""
-    return TextMessage(text=f"📝 ตารางงานอยู่นี่ครับ {WORKSHEET_LINK}")
+    """ส่งลิงก์ใบงาน - Improved"""
+    return TextMessage(
+        text=f"📝 *ตารางงาน*\n\n"
+             f"เข้าถึงได้ที่ ↓\n"
+             f"{WORKSHEET_LINK}"
+    )
 
 def get_school_link_message(user_message: str = "") -> TextMessage:
-    """ส่งลิงก์เว็บโรงเรียน"""
-    return TextMessage(text=f"🏫 เว็บไซต์โรงเรียนครับ {SCHOOL_LINK}")
+    """ส่งลิงก์เว็บโรงเรียน - Improved"""
+    return TextMessage(
+        text=f"🏫 *เว็บไซต์โรงเรียน*\n\n"
+             f"เข้าชมได้ที่ ↓\n"
+             f"{SCHOOL_LINK}"
+    )
 
 def get_timetable_image_message(user_message: str = "") -> ImageMessage:
     """ส่งรูปตารางเรียน"""
     return ImageMessage(original_content_url=TIMETABLE_IMG, preview_image_url=TIMETABLE_IMG)
 
 def get_grade_link_message(user_message: str = "") -> TextMessage:
-    """ส่งลิงก์เช็คเกรด"""
-    return TextMessage(text=f"📊 เช็คเกรดที่นี่นะครับ {GRADE_LINK}")
+    """ส่งลิงก์เช็คเกรด - Improved"""
+    return TextMessage(
+        text=f"📊 *ระบบเช็คเกรด*\n\n"
+             f"เข้าดูเกรดได้ที่ ↓\n"
+             f"{GRADE_LINK}\n\n"
+             f"━━━━━━━━━━━━━━━\n"
+             f"💡 เก็บลิงก์ไว้เพื่อเข้าถึงง่าย"
+    )
 
 def get_absence_form_message(user_message: str = "") -> TextMessage:
-    """ส่งลิงก์แบบฟอร์มลา"""
-    return TextMessage(text=f"📝 แบบฟอร์มแจ้งลาครับ {ABSENCE_LINK}")
+    """ส่งลิงก์แบบฟอร์มลา - Improved"""
+    return TextMessage(
+        text=f"📝 *แบบฟอร์มลาออนไลน์*\n\n"
+             f"กรอกแบบฟอร์มที่ ↓\n"
+             f"{ABSENCE_LINK}"
+    )
 
 def get_bio_link_message(user_message: str = "") -> TextMessage:
-    """ส่งลิงก์เฉลยชีวะ"""
-    return TextMessage(text=f"🧬 เฉลยชีววิทยา {Bio_LINK}")
+    """ส่งลิงก์เฉลยชีวะ - Improved"""
+    return TextMessage(
+        text=f"🧬 *เฉลยชีววิทยา*\n\n"
+             f"ดูเฉลยได้ที่ ↓\n"
+             f"{Bio_LINK}"
+    )
 
 def get_physic_link_message(user_message: str = "") -> TextMessage:
-    """ส่งลิงก์เฉลยฟิสิกส์"""
-    return TextMessage(text=f"⚛️ เฉลยฟิสิกส์ {Physic_LINK}")
+    """ส่งลิงก์เฉลยฟิสิกส์ - Improved"""
+    return TextMessage(
+        text=f"⚛️ *เฉลยฟิสิกส์*\n\n"
+             f"ดูเฉลยได้ที่ ↓\n"
+             f"{Physic_LINK}"
+    )
 
 def get_help_message(user_message: str = "") -> TextMessage:
-    """แสดงคำสั่งทั้งหมด"""
+    """แสดงคำสั่งทั้งหมด - MUCH IMPROVED!"""
     help_text = (
-        'รายการคำสั่งทั้งหมด\n\n'
-        '📋 คำสั่งพื้นฐาน\n'
-        '- งาน / การบ้าน = ดูใบงาน\n'
-        '- เว็บโรงเรียน = ลิงก์เว็บโรงเรียน\n'
-        '- ตารางเรียน = ดูตารางเรียน\n'
-        '- เกรด = เช็คเกรด\n'
-        '- คาบต่อไป = ดูว่าเรียนอะไรต่อ\n'
-        '- อีกกี่นาที = เช็คเวลาก่อนคาบถัดไป\n'
-        '- ลา = แบบฟอร์มลา\n'
-        '- สอบ = นับถอยหลังวันสอบ(กลาง-ปลายภาค)\n\n'
-        '🧪 คำสั่งเฉลย\n'
-        '- ชีวะ = เฉลยชีววิทยา\n'
-        '- ฟิสิกส์ = เฉลยฟิสิกส์\n\n'
-        '🧮 คิดเลข\n'
-        '- คำนวณ [สมการ]\n'
-        '  ตัวอย่าง : คำนวณ 12*(5+3)^2\n\n'
-        '🎓 คำนวณเกรด\n'
-        '- คำนวณเกรด [คะแนน]\n'
-        '  ตัวอย่าง : คำนวณเกรด 85\n'
-        '- คำนวณ GPA [วิชา] [หน่วยกิต] [เกรด]\n'
-        '  ตัวอย่าง : คำนวณ GPA คณิต 2 4\n\n'
-        '📚 ข้อสอบจำลอง\n'
-        '- สอบ [วิชา] [ระดับ] [จำนวน]\n'
-        '  ตัวอย่าง : สอบ คณิต ง่าย 5\n'
-        '  วิชา : คณิต, ฟิสิกส์, เคมี, ชีวะ\n'
-        '  ระดับ : ง่าย, กลาง, ยาก\n'
-        '- เฉลยข้อสอบ = ดูเฉลยทั้งหมด\n'
-        '- สถิติสอบ = ดูประวัติการสอบ\n\n'
-        '🎵 ความบันเทิง\n'
-        '- เปิดเพลง [ชื่อเพลง] = หาเพลงจาก YouTube\n\n'
-        '💾 คำสั่งการบ้าน\n'
-        '- สั่งการบ้าน | วิชา | รายละเอียด | วันส่ง\n'
-        '  ตัวอย่าง : สั่งการบ้าน | ฟิสิกส์ | ทำแบบฝึกหัด 4.1 | วันศุกร์\n'
-        '- การบ้าน / ดูการบ้าน = ดูการบ้านทั้งหมด\n'
-        '- ลบการบ้านทั้งหมด = ล้างข้อมูล\n\n'
-        '🤖 AI\n'
-        '- พิมพ์ข้อความอื่นๆ = ตอบด้วย AI (Gemini Model)\n'
+        '🤖 *คำสั่งทั้งหมด*\n\n'
+        '━━━━━━━━━━━━━━━\n'
+        '📚 *การเรียน*\n'
+        '  • ตารางเรียน\n'
+        '  • คาบต่อไป\n'
+        '  • อีกกี่นาที\n'
+        '  • สอบ (วันสอบ)\n\n'
+        '📝 *การบ้าน*\n'
+        '  • สั่งการบ้าน (แบบง่าย!)\n'
+        '  • การบ้าน (ดูทั้งหมด)\n\n'
+        '🔗 *ลิงก์สำคัญ*\n'
+        '  • ลิงก์ (ดูทั้งหมด)\n'
+        '  • งาน (ใบงาน)\n'
+        '  • เว็บโรงเรียน\n'
+        '  • เกรด\n'
+        '  • ลา\n\n'
+        '📖 *เฉลยวิชา*\n'
+        '  • ชีวะ\n'
+        '  • ฟิสิกส์\n\n'
+        '🧮 *คำนวณ*\n'
+        '  • คำนวณ [สมการ]\n'
+        '  • คำนวณเกรด [คะแนน]\n'
+        '  • คำนวณ GPA\n\n'
+        '📚 *ข้อสอบจำลอง*\n'
+        '  • สอบ [วิชา] [ระดับ] [จำนวน]\n'
+        '  • เฉลยข้อสอบ\n'
+        '  • สถิติสอบ\n\n'
+        '🎵 *ความบันเทิง*\n'
+        '  • เปิดเพลง [ชื่อเพลง]\n'
+        '  • กินอะไรดี\n\n'
+        '━━━━━━━━━━━━━━━\n'
+        '💡 พิมพ์อะไรก็ได้ = ถาม AI\n'
     )
     return TextMessage(text=help_text)
 
 # ============================================================================
-# SCHEDULE FUNCTIONS
+# SCHEDULE FUNCTIONS (IMPROVED MESSAGES)
 # ============================================================================
 
 def get_next_class_message(user_message: str = "") -> TextMessage:
-    """แสดงคาบเรียนถัดไป"""
+    """แสดงคาบเรียนถัดไป - Improved"""
     now = datetime.datetime.now(LOCAL_TZ)
     day_idx = now.weekday()
     
     if day_idx not in SCHEDULE:
-        return TextMessage(text=MESSAGES["NO_CLASS_TODAY"])
+        return TextMessage(
+            text="🎉 *วันหยุด*\n\n"
+                 "วันนี้ไม่มีเรียนนะ\n"
+                 "พักผ่อนให้เต็มที่! 😴"
+        )
     
     current_time = now.time()
     periods = SCHEDULE[day_idx]
@@ -242,27 +267,38 @@ def get_next_class_message(user_message: str = "") -> TextMessage:
         
         if current_time < start_time:
             return TextMessage(
-                text=f"🔜 คาบต่อไป : {period['subject']}\n"
-                     f"📍 ห้อง : {period['room']}\n"
-                     f"⏰ เวลา : {period['start']} - {period['end']}"
+                text=f"🔜 *คาบต่อไป*\n\n"
+                     f"📚 {period['subject']}\n"
+                     f"📍 ห้อง {period['room']}\n"
+                     f"⏰ {period['start']} - {period['end']}\n\n"
+                     f"━━━━━━━━━━━━━━━"
             )
         
         if start_time <= current_time < end_time:
             return TextMessage(
-                text=f"⏳ กำลังเรียน : {period['subject']}\n"
-                     f"📍 ห้อง : {period['room']}\n"
-                     f"⏰ จนถึง : {period['end']}"
+                text=f"⏳ *กำลังเรียน*\n\n"
+                     f"📚 {period['subject']}\n"
+                     f"📍 ห้อง {period['room']}\n"
+                     f"⏰ จนถึง {period['end']}\n\n"
+                     f"━━━━━━━━━━━━━━━"
             )
     
-    return TextMessage(text=MESSAGES["NO_CLASS_LEFT"])
+    return TextMessage(
+        text="🏠 *หมดคาบแล้ว*\n\n"
+             "วันนี้ไม่มีเรียนต่อแล้วนะ\n"
+             "กลับบ้านได้เลย! 👋"
+    )
 
 def get_time_until_next_class_message(user_message: str = "") -> TextMessage:
-    """คำนวณเวลาเหลือก่อนคาบถัดไป"""
+    """คำนวณเวลาเหลือก่อนคาบถัดไป - Improved"""
     now = datetime.datetime.now(LOCAL_TZ)
     day_idx = now.weekday()
     
     if day_idx not in SCHEDULE:
-        return TextMessage(text=MESSAGES["NO_CLASS_TODAY"])
+        return TextMessage(
+            text="🎉 *วันหยุด*\n\n"
+                 "วันนี้ไม่มีเรียน!"
+        )
     
     current_time = now.time()
     periods = SCHEDULE[day_idx]
@@ -284,7 +320,10 @@ def get_time_until_next_class_message(user_message: str = "") -> TextMessage:
                 break
         
         if target is None:
-            return TextMessage(text=MESSAGES["NO_CLASS_LEFT"])
+            return TextMessage(
+                text="🏠 *เลิกเรียนแล้ว*\n\n"
+                     "วันนี้หมดคาบแล้วนะ"
+            )
     else:
         current_subject = periods[current_index]["subject"]
         for idx in range(current_index + 1, len(periods)):
@@ -293,27 +332,44 @@ def get_time_until_next_class_message(user_message: str = "") -> TextMessage:
                 break
         
         if target is None:
-            return TextMessage(text="ตอนนี้ไม่มีเรียนต่อแล้วครับ")
+            return TextMessage(
+                text="✅ *ไม่มีเรียนต่อ*\n\n"
+                     "คาบนี้คาบสุดท้ายแล้ว"
+            )
     
     target_start_time = datetime.datetime.strptime(target["start"], "%H:%M").time()
     target_dt = datetime.datetime.combine(now.date(), target_start_time).replace(tzinfo=LOCAL_TZ)
     delta_seconds = (target_dt - now).total_seconds()
     minutes_left = max(0, math.ceil(delta_seconds / 60))
     
-    minutes_text = "น้อยกว่า 1 นาที" if minutes_left == 0 else f"{minutes_left} นาที"
+    if minutes_left == 0:
+        time_text = "น้อยกว่า 1 นาที"
+        emoji = "🔥"
+    elif minutes_left <= 5:
+        time_text = f"{minutes_left} นาที"
+        emoji = "⚡"
+    elif minutes_left <= 15:
+        time_text = f"{minutes_left} นาที"
+        emoji = "⏰"
+    else:
+        time_text = f"{minutes_left} นาที"
+        emoji = "⏳"
     
     return TextMessage(
-        text=f"⏰ เหลือเวลาอีก {minutes_text}\n"
-             f"🔜 คาบถัดไป : {target['subject']}\n"
-             f"📍 ห้อง : {target['room']}"
+        text=f"{emoji} *เหลือเวลา*\n\n"
+             f"⏱️ {time_text}\n\n"
+             f"🔜 คาบถัดไป:\n"
+             f"  📚 {target['subject']}\n"
+             f"  📍 ห้อง {target['room']}\n\n"
+             f"━━━━━━━━━━━━━━━"
     )
 
 # ============================================================================
-# EXAM COUNTDOWN
+# EXAM COUNTDOWN (IMPROVED)
 # ============================================================================
 
 def get_exam_countdown_message(user_message: str = "") -> TextMessage:
-    """นับถอยหลังวันสอบ"""
+    """นับถอยหลังวันสอบ - Improved"""
     now = datetime.datetime.now(LOCAL_TZ).date()
     msg_list = ["⏳ *นับถอยหลังสอบ*\n"]
     found = False
@@ -327,25 +383,35 @@ def get_exam_countdown_message(user_message: str = "") -> TextMessage:
             all_dates_str = ", ".join([d.strftime("%d/%m") for d in dates])
             
             if days_left == 0:
-                msg_list.append(f"วันนี้สอบ{exam_name} สู้ๆ!")
+                msg_list.append(f"🔥 *วันนี้สอบ{exam_name}!*\nสู้ๆนะ! 💪")
+            elif days_left <= 7:
+                msg_list.append(
+                    f"⚠️ *{exam_name}*\n"
+                    f"  ⏰ เหลือ {days_left} วัน\n"
+                    f"  📅 ({all_dates_str})\n"
+                    f"  💪 ใกล้แล้ว อ่านหนังสือนะ!"
+                )
             else:
                 msg_list.append(
-                    f"📌 {exam_name}\n"
-                    f"   เหลือ {days_left} วัน\n"
-                    f"   (สอบวันที่ {all_dates_str})"
+                    f"📌 *{exam_name}*\n"
+                    f"  ⏰ เหลือ {days_left} วัน\n"
+                    f"  📅 ({all_dates_str})"
                 )
     
     if not found:
-        return TextMessage(text="ยังไม่มีสอบในเร็วๆนี้ครับ")
+        return TextMessage(
+            text="✨ *ไม่มีสอบในเร็วๆนี้*\n\n"
+                 "พักผ่อนได้สบายใจ! 😊"
+        )
     
     return TextMessage(text="\n\n".join(msg_list))
 
 # ============================================================================
-# MUSIC SEARCH
+# MUSIC SEARCH (IMPROVED)
 # ============================================================================
 
 def get_music_link_message(user_message: str) -> TextMessage:
-    """หาเพลงจาก YouTube"""
+    """หาเพลงจาก YouTube - Improved"""
     music_keywords = ["เปิดเพลง", "หาเพลง", "ขอเพลง"]
     song_title = user_message.lower()
     
@@ -355,23 +421,30 @@ def get_music_link_message(user_message: str) -> TextMessage:
             break
     
     if not song_title:
-        return TextMessage(text="กรุณาระบุชื่อเพลงด้วยครับ เช่น 'เปิดเพลง never gonna give you up'")
+        return TextMessage(
+            text="🎵 *ค้นหาเพลง*\n\n"
+                 "กรุณาระบุชื่อเพลง\n\n"
+                 "ตัวอย่าง:\n"
+                 "เปิดเพลง ลืมไปก็คงดี"
+        )
     
     encoded_query = urllib.parse.quote(song_title)
     search_url = f"https://www.youtube.com/results?search_query={encoded_query}"
     
     return TextMessage(
-        text=f"🎵 ค้นหาเพลง : {song_title}\n"
-             f"👉 {search_url}\n\n"
-             f"กดลิงก์เพื่อดูผลการค้นหาใน YouTube"
+        text=f"🎵 *ค้นหาเพลง*\n\n"
+             f"🎼 {song_title}\n\n"
+             f"━━━━━━━━━━━━━━━\n"
+             f"ดูผลการค้นหาที่ ↓\n"
+             f"{search_url}"
     )
 
 # ============================================================================
-# AI FUNCTIONS (Gemini) - ✅ FIXED for google-genai
+# AI FUNCTIONS (Gemini)
 # ============================================================================
 
 def _safe_parse_gemini_response(response) -> str:
-    """Parse Gemini response - ✅ FIXED for google-genai"""
+    """Parse Gemini response"""
     try:
         if response is None:
             return ""
@@ -397,7 +470,7 @@ def _safe_parse_gemini_response(response) -> str:
         return ""
 
 def get_gemini_response(prompt: str) -> str:
-    """Get response from Gemini AI - ✅ FIXED for google-genai"""
+    """Get response from Gemini AI"""
     identity_queries = ["คุณคือใคร", "เป็นใคร", "who are you", "คุณชื่ออะไร", "ชื่ออะไร", "ตัวตน"]
     if any(q in prompt.lower() for q in identity_queries):
         return MESSAGES["IDENTITY"]
@@ -416,7 +489,6 @@ def get_gemini_response(prompt: str) -> str:
         if not client_to_use or not model_to_use:
             return MESSAGES["AI_DISABLED"]
         
-        # ✅ FIXED: Use google-genai API
         response = client_to_use.models.generate_content(
             model=model_to_use,
             contents=enhanced_prompt
@@ -469,27 +541,31 @@ def get_calculator_response(user_message: str):
         
         if not expression:
             return TextMessage(
-                text="⚠️ กรุณาระบุสมการ\n"
-                     "ตัวอย่าง : คำนวณ 2+2\n"
-                     "         คำนวณ sqrt(16)\n"
-                     "         คำนวณ x=5, x*2"
+                text="🧮 *เครื่องคิดเลข*\n\n"
+                     "กรุณาระบุสมการ\n\n"
+                     "ตัวอย่าง:\n"
+                     "  • คำนวณ 2+2\n"
+                     "  • คำนวณ sqrt(16)\n"
+                     "  • คำนวณ x=5, x*2"
             )
         
         result = smart_calculate(expression)
+        
+        # Format result nicely
+        if result.startswith("Result:"):
+            result = f"🧮 *ผลลัพธ์*\n\n{result.replace('Result:', '').strip()}"
+        
         return TextMessage(text=result)
         
     except ImportError:
         logger.error("smart_calc.py not found")
-        return TextMessage(text="❌ ระบบคำนวณยังไม่พร้อมใช้งาน")
+        return TextMessage(text="❌ ระบบคำนวณยังไม่พร้อม")
     except Exception as e:
         logger.error(f"Calculator error: {e}")
         return TextMessage(text=f"❌ เกิดข้อผิดพลาด: {str(e)}")
 
 def get_grade_calculator_response(user_message: str, user_id: str = None) -> TextMessage:
-    """
-    Handle grade calculator commands
-    ✅ UPDATED: Now supports user_id for session-based GPA
-    """
+    """Handle grade calculator commands"""
     try:
         from grade_calculator import (
             handle_score_to_grade_command,
@@ -498,18 +574,18 @@ def get_grade_calculator_response(user_message: str, user_id: str = None) -> Tex
         
         message_lower = user_message.lower()
         
-        # Check if it's score to grade (no user_id needed)
+        # Check if it's score to grade
         if 'คำนวณเกรด' in message_lower and 'gpa' not in message_lower:
             result = handle_score_to_grade_command(user_message)
         else:
-            # GPA calculation - pass user_id for session support
+            # GPA calculation
             result = handle_gpa_calculation_command(user_message, user_id)
         
         return TextMessage(text=result)
         
     except ImportError:
         logger.error("grade_calculator.py not found")
-        return TextMessage(text="❌ ระบบคำนวณเกรดยังไม่พร้อมใช้งาน")
+        return TextMessage(text="❌ ระบบคำนวณเกรดยังไม่พร้อม")
     except Exception as e:
         logger.error(f"Grade calculator error: {e}")
         return TextMessage(text=f"❌ เกิดข้อผิดพลาด: {str(e)}")
