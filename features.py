@@ -267,24 +267,24 @@ def get_next_class_message(user_message: str = "") -> TextMessage:
         
         if current_time < start_time:
             return TextMessage(
-                text=f"🔜 *คาบต่อไป*\n\n"
-                     f"📚 {period['subject']}\n"
-                     f"📍 ห้อง {period['room']}\n"
-                     f"⏰ {period['start']} - {period['end']}\n\n"
+                text=f"*คาบต่อไป*\n\n"
+                     f"{period['subject']}\n"
+                     f"ห้อง {period['room']}\n"
+                     f"{period['start']} - {period['end']}\n\n"
                      f"━━━━━━━━━━━━━━━"
             )
         
         if start_time <= current_time < end_time:
             return TextMessage(
-                text=f"⏳ *กำลังเรียน*\n\n"
-                     f"📚 {period['subject']}\n"
-                     f"📍 ห้อง {period['room']}\n"
-                     f"⏰ จนถึง {period['end']}\n\n"
+                text=f"*กำลังเรียน*\n\n"
+                     f"{period['subject']}\n"
+                     f"ห้อง {period['room']}\n"
+                     f"จนถึง {period['end']}\n\n"
                      f"━━━━━━━━━━━━━━━"
             )
     
     return TextMessage(
-        text="🏠 *หมดคาบแล้ว*\n\n"
+        text="*หมดคาบแล้ว*\n\n"
              "วันนี้ไม่มีเรียนต่อแล้วนะ\n"
              "กลับบ้านได้เลย! 👋"
     )
@@ -358,9 +358,9 @@ def get_time_until_next_class_message(user_message: str = "") -> TextMessage:
     return TextMessage(
         text=f"{emoji} *เหลือเวลา*\n\n"
              f"⏱️ {time_text}\n\n"
-             f"🔜 คาบถัดไป:\n"
-             f"  📚 {target['subject']}\n"
-             f"  📍 ห้อง {target['room']}\n\n"
+             f"คาบถัดไป คือ\n"
+             f"{target['subject']}\n"
+             f"{target['room']}\n\n"
              f"━━━━━━━━━━━━━━━"
     )
 
@@ -383,7 +383,7 @@ def get_exam_countdown_message(user_message: str = "") -> TextMessage:
             all_dates_str = ", ".join([d.strftime("%d/%m") for d in dates])
             
             if days_left == 0:
-                msg_list.append(f"🔥 *วันนี้สอบ{exam_name}!*\nสู้ๆนะ! 💪")
+                msg_list.append(f"*วันนี้สอบ{exam_name}!*\nสู้ๆนะ! 💪")
             elif days_left <= 7:
                 msg_list.append(
                     f"⚠️ *{exam_name}*\n"
@@ -424,8 +424,8 @@ def get_music_link_message(user_message: str) -> TextMessage:
         return TextMessage(
             text="🎵 *ค้นหาเพลง*\n\n"
                  "กรุณาระบุชื่อเพลง\n\n"
-                 "ตัวอย่าง:\n"
-                 "เปิดเพลง ลืมไปก็คงดี"
+                 "ตัวอย่าง เช่น\n"
+                 "เปิดเพลง Shape of You"
         )
     
     encoded_query = urllib.parse.quote(song_title)
@@ -543,7 +543,7 @@ def get_calculator_response(user_message: str):
             return TextMessage(
                 text="🧮 *เครื่องคิดเลข*\n\n"
                      "กรุณาระบุสมการ\n\n"
-                     "ตัวอย่าง:\n"
+                     "ตัวอย่าง เช่น\n"
                      "  • คำนวณ 2+2\n"
                      "  • คำนวณ sqrt(16)\n"
                      "  • คำนวณ x=5, x*2"

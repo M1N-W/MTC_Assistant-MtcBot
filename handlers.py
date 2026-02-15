@@ -121,9 +121,9 @@ _homework_sessions: Dict[str, Dict] = {}
 
 # Subject list for homework
 SUBJECTS = [
-    "คณิตศาสตร์", "ฟิสิกส์", "เคมี", "ชีววิทยา",
-    "ภาษาไทย", "ภาษาอังกฤษ", "สังคมศึกษา", "ประวัติศาสตร์",
-    "คอมพิวเตอร์", "การงาน", "พละศึกษา", "นาฏศิลป์"
+    "คณิตเพิ่มเติม", "คณิตพื้นฐาน", "คณิตเพิ่มพูน", "ฟิสิกส์", "เคมี", "ชีวะ",
+    "ไทย", "อังกฤษพื้นฐาน", "อังกฤษเพิ่มเติม", "สังคมศึกษา", "ประวัติศาสตร์",
+    "คอมพิวเตอร์", "การงาน", "พละ/สุขศึกษา", "ดนตรี"
 ]
 
 def start_homework_session(user_id: str) -> tuple:
@@ -407,7 +407,7 @@ def get_links_menu_message(user_message: str = "") -> FlexMessage:
                     "contents": [
                         {
                             "type": "text",
-                            "text": "🎵 เพิ่มเติม",
+                            "text": "🎵 ความบันเทิง",
                             "weight": "bold",
                             "size": "lg",
                             "color": "#1A1A1A"
@@ -416,10 +416,10 @@ def get_links_menu_message(user_message: str = "") -> FlexMessage:
                             "type": "button",
                             "action": {
                                 "type": "message",
-                                "label": "🎵 ค้นหาเพลง YouTube",
+                                "label": "ค้นหาเพลงใน YouTube",
                                 "text": "เปิดเพลง"
                             },
-                            "style": "link",
+                            "style": "primary",
                             "color": "#EC4899",
                             "height": "sm",
                             "margin": "md"
@@ -728,15 +728,15 @@ def handle_message(event):
             admin_help = (
                 "👨‍💼 *คำสั่งแอดมิน*\n\n"
                 "━━━━━━━━━━━━━━━\n"
-                "📢 *Broadcast*\n"
+                "   📢 *Broadcast*\n"
                 "  • ประกาศ [ข้อความ]\n"
                 "  • สถิติประกาศ\n"
                 "  • จำนวนผู้ใช้\n\n"
-                "🎭 *Impersonate*\n"
+                "   🎭 *Impersonate*\n"
                 "  • ดูผู้ใช้\n"
                 "  • ส่งถึง [user_id] [ข้อความ]\n"
                 "  • ทดสอบส่ง [ข้อความ]\n\n"
-                "🚫 *Blacklist*\n"
+                "   🚫 *Blacklist*\n"
                 "  • แบน [user_id] [เหตุผล]\n"
                 "  • ปลดแบน [user_id]\n"
                 "  • รายชื่อแบน\n"
