@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 MTC Assistant - Handlers Module (IMPROVED UX Edition)
-✅ Beautiful messages with emojis and formatting
-✅ Enhanced Flex Message for links
-✅ Interactive homework system (no more long typing!)
 """
 
 import time
@@ -113,7 +110,7 @@ def is_rate_limited(user_id: str) -> bool:
     return False
 
 # ============================================================================
-# INTERACTIVE HOMEWORK SYSTEM (NEW!)
+# INTERACTIVE HOMEWORK SYSTEM
 # ============================================================================
 
 # Store homework creation state for each user
@@ -147,8 +144,7 @@ def start_homework_session(user_id: str) -> tuple:
     quick_reply = QuickReply(items=quick_reply_items)
     
     message = TextMessage(
-        text="📚 *เพิ่มการบ้านใหม่*\n\n"
-             "เลือกวิชา ↓",
+        text="เลือกวิชาที่จะสั่งการบ้านได้เลย",
         quick_reply=quick_reply
     )
     
@@ -168,9 +164,9 @@ def handle_homework_session(user_id: str, user_message: str) -> Union[TextMessag
         session["step"] = "detail"
         
         return TextMessage(
-            text=f"✅ วิชา: {user_message}\n\n"
-                 f"📝 ระบุรายละเอียดการบ้าน:\n"
-                 f"(เช่น: ทำแบบฝึกหัด 4.1, ท่องบทอาขยาน)"
+            text=f"วิชา: {user_message}\n\n"
+                 f"พิมพ์รายละเอียดการบ้านได้เลย\n"
+                 f"เช่น ทำแบบฝึกหัด 4.1 หรือ ท่องบทอาขยาน"
         )
     
     # Step 2: Detail entry
@@ -180,21 +176,21 @@ def handle_homework_session(user_id: str, user_message: str) -> Union[TextMessag
         
         # Quick reply for due date
         quick_reply = QuickReply(items=[
-            QuickReplyItem(action=MessageAction(label="📅 วันนี้", text="วันนี้")),
-            QuickReplyItem(action=MessageAction(label="📅 พรุ่งนี้", text="พรุ่งนี้")),
-            QuickReplyItem(action=MessageAction(label="📅 วันจันทร์", text="วันจันทร์")),
-            QuickReplyItem(action=MessageAction(label="📅 วันอังคาร", text="วันอังคาร")),
-            QuickReplyItem(action=MessageAction(label="📅 วันพุธ", text="วันพุธ")),
-            QuickReplyItem(action=MessageAction(label="📅 วันพฤหัส", text="วันพฤหัสบดี")),
-            QuickReplyItem(action=MessageAction(label="📅 วันศุกร์", text="วันศุกร์")),
-            QuickReplyItem(action=MessageAction(label="📅 สัปดาห์หน้า", text="สัปดาห์หน้า")),
-            QuickReplyItem(action=MessageAction(label="❌ ยกเลิก", text="ยกเลิกการบ้าน")),
+            QuickReplyItem(action=MessageAction(label="วันนี้", text="วันนี้")),
+            QuickReplyItem(action=MessageAction(label="พรุ่งนี้", text="พรุ่งนี้")),
+            QuickReplyItem(action=MessageAction(label="วันจันทร์", text="วันจันทร์")),
+            QuickReplyItem(action=MessageAction(label="วันอังคาร", text="วันอังคาร")),
+            QuickReplyItem(action=MessageAction(label="วันพุธ", text="วันพุธ")),
+            QuickReplyItem(action=MessageAction(label="วันพฤหัส", text="วันพฤหัสบดี")),
+            QuickReplyItem(action=MessageAction(label="วันศุกร์", text="วันศุกร์")),
+            QuickReplyItem(action=MessageAction(label="สัปดาห์หน้า", text="สัปดาห์หน้า")),
+            QuickReplyItem(action=MessageAction(label="ยกเลิก", text="ยกเลิกการบ้าน")),
         ])
         
         return TextMessage(
-            text=f"✅ รายละเอียด: {user_message}\n\n"
-                 f"📅 กำหนดส่ง:\n"
-                 f"(เลือกด้านล่าง หรือพิมพ์เอง)",
+            text=f"รายละเอียด: {user_message}\n\n"
+                 f"กำหนดส่งวันไหน?\n"
+                 f"เลือกด้านล่าง หรือพิมพ์เองก็ได้",
             quick_reply=quick_reply
         )
     
@@ -214,12 +210,11 @@ def handle_homework_session(user_id: str, user_message: str) -> Union[TextMessag
         
         # Success message with summary
         return TextMessage(
-            text=f"✅ *บันทึกการบ้านสำเร็จ!*\n\n"
-                 f"📚 วิชา: {subject}\n"
-                 f"📝 รายละเอียด: {detail}\n"
-                 f"📅 กำหนดส่ง: {due_date}\n\n"
-                 f"━━━━━━━━━━━━━━━\n"
-                 f"💡 พิมพ์ 'การบ้าน' เพื่อดูทั้งหมด"
+            text=f"บันทึกแล้ว\n\n"
+                 f"วิชา: {subject}\n"
+                 f"รายละเอียด: {detail}\n"
+                 f"กำหนดส่ง: {due_date}\n\n"
+                 f"พิมพ์ 'การบ้าน' เพื่อดูทั้งหมด"
         )
     
     return None
@@ -228,15 +223,15 @@ def cancel_homework_session(user_id: str) -> str:
     """Cancel homework creation session"""
     if user_id in _homework_sessions:
         del _homework_sessions[user_id]
-        return "❌ ยกเลิกการเพิ่มการบ้านแล้ว"
+        return "ยกเลิกการเพิ่มการบ้านแล้ว"
     return None
 
 # ============================================================================
-# ENHANCED FLEX MESSAGE - IMPORTANT LINKS (NEW DESIGN!)
+# ENHANCED FLEX MESSAGE - IMPORTANT LINKS
 # ============================================================================
 
 def get_links_menu_message(user_message: str = "") -> FlexMessage:
-    """แสดงเมนูลิงก์ทั้งหมดด้วย Flex Message - Enhanced Design"""
+    """แสดงเมนูลิงก์ทั้งหมดด้วย Flex Message"""
     
     flex_content = {
         "type": "bubble",
@@ -400,7 +395,7 @@ def get_links_menu_message(user_message: str = "") -> FlexMessage:
                     "type": "separator",
                     "margin": "xl"
                 },
-                # เพิ่มเติม Section
+                # ความบันเทิง Section
                 {
                     "type": "box",
                     "layout": "vertical",
@@ -462,33 +457,33 @@ def get_links_menu_message(user_message: str = "") -> FlexMessage:
     }
     
     return FlexMessage(
-        alt_text="🔗 ลิงก์สำคัญทั้งหมด - คลิกเพื่อดู",
+        alt_text="ลิงก์สำคัญทั้งหมด",
         contents=FlexContainer.from_dict(flex_content)
     )
 
 # ============================================================================
-# IMPROVED MESSAGE FORMATS
+# MESSAGE FORMAT HELPERS
 # ============================================================================
 
 def format_success_message(title: str, details: List[str]) -> str:
-    """Format a beautiful success message"""
-    message = f"✅ *{title}*\n\n"
+    """Format a success message"""
+    message = f"{title}\n\n"
     for detail in details:
         message += f"  {detail}\n"
     return message
 
 def format_info_message(title: str, items: Dict[str, str]) -> str:
     """Format an informative message"""
-    message = f"ℹ️ *{title}*\n\n"
+    message = f"{title}\n\n"
     for key, value in items.items():
-        message += f"• {key}: {value}\n"
+        message += f"{key}: {value}\n"
     return message
 
 def format_error_message(error: str, suggestion: str = None) -> str:
     """Format an error message with optional suggestion"""
-    message = f"❌ {error}\n"
+    message = f"{error}\n"
     if suggestion:
-        message += f"\n💡 {suggestion}"
+        message += f"\n{suggestion}"
     return message
 
 # ============================================================================
@@ -540,16 +535,12 @@ def reply_to_line(reply_token: str, messages: List[Union[TextMessage, ImageMessa
 
 @handler.add(FollowEvent) if handler else (lambda f: f)
 def handle_follow(event):
-    """Handle user following - Improved welcome message"""
+    """Handle user following"""
     welcome_message = TextMessage(
-        text="👋 *ยินดีต้อนรับสู่ MTC Assistant!*\n\n"
-             "ผมคือบอทช่วยงานห้อง MTC\n"
-             "สร้างโดยนักเรียน MTC12 ❤️\n\n"
-             "━━━━━━━━━━━━━━━\n"
-             "💡 *เริ่มต้นใช้งาน:*\n"
-             "• พิมพ์ 'help' ดูคำสั่งทั้งหมด\n"
-             "• กดปุ่มด้านล่างเพื่อลองใช้\n\n"
-             "มีคำถาม? ถามผมได้เลย! 🤖"
+        text="ยินดีต้อนรับสู่ MTC Assistant\n\n"
+             "บอทช่วยงานห้อง MTC สร้างโดยนักเรียน MTC12\n\n"
+             "พิมพ์ 'help' เพื่อดูคำสั่งทั้งหมด\n"
+             "หรือถามอะไรก็ได้เลย"
     )
     try:
         reply_to_line(event.reply_token, [welcome_message])
@@ -558,7 +549,7 @@ def handle_follow(event):
 
 @handler.add(MessageEvent, message=TextMessageContent) if handler else (lambda f: f)
 def handle_message(event):
-    """Handle incoming text messages - IMPROVED UX"""
+    """Handle incoming text messages"""
     user_text = getattr(event.message, "text", "")
     user_message = user_text.strip()
     
@@ -579,7 +570,7 @@ def handle_message(event):
     logger.info("Message from %s: %s", user_id, user_message[:100])
     
     # ========================================================================
-    # 🚫 CHECK BLACKLIST (CRITICAL - FIRST CHECK!)
+    # CHECK BLACKLIST (CRITICAL - FIRST CHECK!)
     # ========================================================================
     try:
         from user_blacklist import check_user_banned
@@ -608,9 +599,7 @@ def handle_message(event):
     # Check rate limit
     if is_rate_limited(user_id):
         reply_to_line(event.reply_token, [TextMessage(
-            text="⏰ *ช้าลงหน่อยนะ*\n\n"
-                 "คุณส่งข้อความเร็วเกินไป\n"
-                 "รอสักครู่แล้วลองใหม่ 😊"
+            text="ใจเย็นๆ น้า พิมพ์รัวไปนิดนึง รอแป๊บนะ"
         )])
         return
     
@@ -618,7 +607,7 @@ def handle_message(event):
     reply_message = None
     
     # ========================================================================
-    # 📝 INTERACTIVE HOMEWORK SYSTEM (NEW!)
+    # INTERACTIVE HOMEWORK SYSTEM
     # ========================================================================
     
     # Start homework session
@@ -641,14 +630,14 @@ def handle_message(event):
             reply_to_line(event.reply_token, [result])
             return
     
-    # View homework (improved format)
+    # View homework
     if user_message in ["การบ้าน", "ดูการบ้าน", "homework"]:
         hw_text = get_homeworks_from_db()
         reply_to_line(event.reply_token, [TextMessage(text=hw_text)])
         return
     
     # ========================================================================
-    # 👨‍💼 ADMIN COMMANDS (Improved formatting)
+    # ADMIN COMMANDS
     # ========================================================================
     if user_id in ADMIN_USER_IDS:
         # Broadcast commands
@@ -660,10 +649,9 @@ def handle_message(event):
                 broadcast.save_broadcast_history(user_id, announcement, result)
                 
                 reply_message = TextMessage(
-                    text=f"📢 *ส่งประกาศสำเร็จ!*\n\n"
+                    text=f"ส่งประกาศเรียบร้อยแล้ว\n\n"
                          f"{result['message']}\n\n"
-                         f"━━━━━━━━━━━━━━━\n"
-                         f"⏰ {time.strftime('%H:%M:%S')}"
+                         f"เวลา {time.strftime('%H:%M:%S')}"
                 )
         
         elif user_message in ["สถิติประกาศ", "broadcast stats"]:
@@ -672,9 +660,7 @@ def handle_message(event):
         elif user_message in ["จำนวนผู้ใช้", "user count"]:
             count = broadcast.get_user_count()
             reply_message = TextMessage(
-                text=f"👥 *จำนวนผู้ใช้ทั้งหมด*\n\n"
-                     f"✅ {count} คน\n\n"
-                     f"━━━━━━━━━━━━━━━"
+                text=f"จำนวนผู้ใช้ทั้งหมด: {count} คน"
             )
         
         # Impersonate commands
@@ -723,29 +709,28 @@ def handle_message(event):
         except Exception as e:
             logger.error(f"Blacklist error: {e}")
         
-        # Admin help (improved format)
+        # Admin help
         if user_message in ["admin", "คำสั่งแอดมิน"]:
             admin_help = (
-                "👨‍💼 *คำสั่งแอดมิน*\n\n"
-                "━━━━━━━━━━━━━━━\n"
-                "   📢 *Broadcast*\n"
-                "  • ประกาศ [ข้อความ]\n"
-                "  • สถิติประกาศ\n"
-                "  • จำนวนผู้ใช้\n\n"
-                "   🎭 *Impersonate*\n"
-                "  • ดูผู้ใช้\n"
-                "  • ส่งถึง [user_id] [ข้อความ]\n"
-                "  • ทดสอบส่ง [ข้อความ]\n\n"
-                "   🚫 *Blacklist*\n"
-                "  • แบน [user_id] [เหตุผล]\n"
-                "  • ปลดแบน [user_id]\n"
-                "  • รายชื่อแบน\n"
-                "  • สถิติแบน"
+                "คำสั่งแอดมิน\n\n"
+                "Broadcast\n"
+                "  ประกาศ [ข้อความ]\n"
+                "  สถิติประกาศ\n"
+                "  จำนวนผู้ใช้\n\n"
+                "Impersonate\n"
+                "  ดูผู้ใช้\n"
+                "  ส่งถึง [user_id] [ข้อความ]\n"
+                "  ทดสอบส่ง [ข้อความ]\n\n"
+                "Blacklist\n"
+                "  แบน [user_id] [เหตุผล]\n"
+                "  ปลดแบน [user_id]\n"
+                "  รายชื่อแบน\n"
+                "  สถิติแบน"
             )
             reply_message = TextMessage(text=admin_help)
     
     # ========================================================================
-    # 📚 EXAM SIMULATOR
+    # EXAM SIMULATOR
     # ========================================================================
     if not reply_message:
         try:
@@ -810,7 +795,7 @@ def handle_message(event):
             logger.error(f"Exam simulator error: {e}")
     
     # ========================================================================
-    # 🍔 FOOD RANDOMIZER
+    # FOOD RANDOMIZER
     # ========================================================================
     if not reply_message and any(kw in user_message_lower for kw in ['กินอะไรดี', 'กินไร', 'แนะนำอาหาร']):
         try:
@@ -847,7 +832,7 @@ def handle_message(event):
                         reply_message = TextMessage(
                             text=format_error_message(
                                 "เกิดข้อผิดพลาด",
-                                "ลองใหม่อีกครั้งหรือติดต่อผู้ดูแล"
+                                "ลองใหม่อีกทีได้เลย"
                             )
                         )
                         break
@@ -855,21 +840,16 @@ def handle_message(event):
                 break
     
     # ========================================================================
-    # FALLBACK TO AI (Improved response format)
+    # FALLBACK TO AI
     # ========================================================================
     if not reply_message:
         try:
             ai_text = get_gemini_response(user_message)
-            # Add visual separator for long AI responses
-            if len(ai_text) > 500:
-                ai_text = "🤖 *คำตอบจาก AI*\n\n" + ai_text
             reply_message = TextMessage(text=ai_text)
         except Exception as e:
             logger.exception(f"AI error: {e}")
             reply_message = TextMessage(
-                text="❌ *ขออภัย*\n\n"
-                     "ระบบ AI มีปัญหาชั่วคราว\n"
-                     "กรุณาลองใหม่อีกครั้ง 🙏"
+                text="AI ขัดข้องชั่วคราว ลองใหม่อีกทีนะ"
             )
     
     # Send reply

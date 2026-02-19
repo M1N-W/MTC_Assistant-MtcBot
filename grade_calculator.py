@@ -62,38 +62,37 @@ def start_gpa_session(user_id: str) -> str:
     """Start new GPA calculation session"""
     _gpa_sessions[user_id] = []
     return (
-        "✅ เริ่ม session คำนวณ GPA\n\n"
-        "📝 เพิ่มวิชาทีละวิชา:\n"
+        "เริ่มคำนวณ GPA แล้ว\n\n"
+        "เพิ่มวิชาทีละวิชาได้เลย\n"
         "พิมพ์: เพิ่มวิชา [ชื่อ] [หน่วยกิต] [เกรด]\n"
-        "ตัวอย่าง: เพิ่มวิชา คณิต 3 4\n\n"
-        "เสร็จแล้ว? พิมพ์: คำนวณ GPA\n"
-        "ยกเลิก? พิมพ์: ยกเลิก GPA"
+        "เช่น: เพิ่มวิชา คณิต 3 4\n\n"
+        "เสร็จแล้วพิมพ์: คำนวณ GPA\n"
+        "ยกเลิกพิมพ์: ยกเลิก GPA"
     )
 
 def add_subject_to_session(user_id: str, subject: Subject) -> str:
     """Add subject to user's GPA session"""
     if user_id not in _gpa_sessions:
-        return "⚠️ ยังไม่ได้เริ่ม session\nพิมพ์ 'เริ่ม GPA' ก่อน"
+        return "ยังไม่ได้เริ่มนะ พิมพ์ 'เริ่ม GPA' ก่อนได้เลย"
     
     _gpa_sessions[user_id].append(subject)
     count = len(_gpa_sessions[user_id])
     
     return (
-        f"✅ เพิ่ม {subject.name} แล้ว\n"
-        f"หน่วยกิต: {subject.credits}, เกรด: {subject.grade}\n\n"
-        f"📊 รวม: {count} วิชา\n"
-        f"พิมพ์ 'คำนวณ GPA' เพื่อดูผล"
+        f"เพิ่ม {subject.name} แล้ว ({subject.credits} หน่วยกิต เกรด {subject.grade})\n"
+        f"ตอนนี้มี {count} วิชา\n"
+        f"พิมพ์ 'คำนวณ GPA' เมื่อเพิ่มครบแล้ว"
     )
 
 def calculate_session_gpa(user_id: str) -> str:
     """Calculate GPA from session"""
     if user_id not in _gpa_sessions:
-        return "⚠️ ไม่พบ session\nพิมพ์ 'เริ่ม GPA' เพื่อเริ่มใหม่"
+        return "ไม่พบข้อมูล GPA พิมพ์ 'เริ่ม GPA' เพื่อเริ่มใหม่ได้เลย"
     
     subjects = _gpa_sessions[user_id]
     
     if not subjects:
-        return "⚠️ ยังไม่มีวิชาในระบบ\nพิมพ์ 'เพิ่มวิชา [ชื่อ] [หน่วยกิต] [เกรด]'"
+        return "ยังไม่มีวิชาเลยนะ พิมพ์ 'เพิ่มวิชา [ชื่อ] [หน่วยกิต] [เกรด]' เพื่อเพิ่ม"
     
     gpa, details = calculate_gpa(subjects)
     result = format_gpa_result(gpa, details)
@@ -107,20 +106,20 @@ def cancel_gpa_session(user_id: str) -> str:
     """Cancel GPA session"""
     if user_id in _gpa_sessions:
         del _gpa_sessions[user_id]
-        return "✅ ยกเลิก session แล้ว"
-    return "⚠️ ไม่พบ session ที่จะยกเลิก"
+        return "ยกเลิกการคำนวณ GPA แล้ว"
+    return "ไม่มี session ที่จะยกเลิกนะ"
 
 def show_session_status(user_id: str) -> str:
     """Show current session subjects"""
     if user_id not in _gpa_sessions:
-        return "⚠️ ยังไม่ได้เริ่ม session\nพิมพ์ 'เริ่ม GPA' เพื่อเริ่ม"
+        return "ยังไม่ได้เริ่มนะ พิมพ์ 'เริ่ม GPA' เพื่อเริ่มได้เลย"
     
     subjects = _gpa_sessions[user_id]
     
     if not subjects:
-        return "📝 session ว่างอยู่\nพิมพ์ 'เพิ่มวิชา [ชื่อ] [หน่วยกิต] [เกรด]'"
+        return "ยังไม่มีวิชาในรายการ พิมพ์ 'เพิ่มวิชา [ชื่อ] [หน่วยกิต] [เกรด]' เพื่อเพิ่ม"
     
-    msg = f"📊 *วิชาใน session* ({len(subjects)} วิชา)\n\n"
+    msg = f"วิชาที่เพิ่มไว้แล้ว ({len(subjects)} วิชา)\n\n"
     
     for i, subj in enumerate(subjects, 1):
         msg += f"{i}. {subj.name}\n"
@@ -302,49 +301,48 @@ def parse_gpa_input(text: str) -> List[Subject]:
 def format_gpa_result(gpa: float, details: Dict) -> str:
     """Format GPA calculation result"""
     if "error" in details:
-        return f"❌ {details['error']}"
+        return details['error']
     
-    message = f"📊 *ผลการคำนวณ GPA*\n\n"
-    message += f"🎯 GPA: *{gpa:.2f}*\n"
-    message += f"📚 จำนวนวิชา: {details['subject_count']} วิชา\n"
-    message += f"💯 หน่วยกิตรวม: {details['total_credits']:.1f} หน่วยกิต\n"
+    message = f"GPA ของคุณ\n\n"
+    message += f"GPA: {gpa:.2f}\n"
+    message += f"จำนวนวิชา: {details['subject_count']} วิชา\n"
+    message += f"หน่วยกิตรวม: {details['total_credits']:.1f} หน่วยกิต\n"
     
     # Grade interpretation
     if gpa >= 3.5:
-        message += f"\n🌟 ยอดเยี่ยม! เก่งมาก!"
+        message += f"\nยอดเยี่ยมมากเลย"
     elif gpa >= 3.0:
-        message += f"\n😊 ดีมาก! พยายามต่อไป"
+        message += f"\nดีมาก พยายามต่อไปนะ"
     elif gpa >= 2.5:
-        message += f"\n👍 ดี แต่ยังพอมีที่พัฒนา"
+        message += f"\nดี ยังมีที่พัฒนาได้อีก"
     elif gpa >= 2.0:
-        message += f"\n💪 พอใช้ ลองตั้งใจเรียนมากขึ้น"
+        message += f"\nพอใช้ได้ ลองตั้งใจเรียนมากขึ้นนะ"
     else:
-        message += f"\n😢 ควรปรับปรุง พยายามนะ!"
+        message += f"\nเทอมหน้าสู้ใหม่ได้เลย"
     
     if details.get("invalid_subjects"):
-        message += f"\n\n⚠️ วิชาที่ไม่ถูกต้อง:\n"
+        message += f"\n\nวิชาที่ข้อมูลไม่ถูกต้อง:\n"
         for subj in details["invalid_subjects"]:
-            message += f"  • {subj}\n"
+            message += f"  {subj}\n"
     
     return message
 
 def format_score_to_grade(score: float, grade: str, gpa: float) -> str:
     """Format score to grade result"""
-    message = f"📝 *คำนวณเกรดจากคะแนน*\n\n"
-    message += f"คะแนน: {score}\n"
-    message += f"เกรด: *{grade}*\n"
-    message += f"GPA: *{gpa}*\n\n"
+    message = f"คะแนน {score}\n"
+    message += f"เกรด: {grade}\n"
+    message += f"GPA: {gpa}\n\n"
     
     if gpa >= 3.5:
-        message += "🌟 เยี่ยมมาก!"
+        message += "เยี่ยมมาก"
     elif gpa >= 3.0:
-        message += "😊 ดีมาก!"
+        message += "ดีมาก"
     elif gpa >= 2.5:
-        message += "👍 ดี"
+        message += "ดี"
     elif gpa >= 2.0:
-        message += "💪 พอใช้"
+        message += "พอใช้ได้"
     else:
-        message += "😢 ควรปรับปรุง"
+        message += "เทอมหน้าสู้ใหม่ได้เลย"
     
     return message
 
@@ -358,10 +356,7 @@ def handle_score_to_grade_command(user_message: str) -> str:
         # Extract score
         parts = user_message.split()
         if len(parts) < 2:
-            return (
-                "⚠️ กรุณาระบุคะแนน\n"
-                "ตัวอย่าง: คำนวณเกรด 85"
-            )
+            return "บอกคะแนนมาด้วยนะ เช่น คำนวณเกรด 85"
         
         score = float(parts[-1])
         grade = score_to_grade(score)
@@ -370,10 +365,10 @@ def handle_score_to_grade_command(user_message: str) -> str:
         return format_score_to_grade(score, grade, gpa)
         
     except ValueError:
-        return "❌ คะแนนไม่ถูกต้อง ต้องเป็นตัวเลข 0-100"
+        return "คะแนนไม่ถูกต้องนะ ต้องเป็นตัวเลข 0-100"
     except Exception as e:
         logger.error(f"Error in score_to_grade: {e}")
-        return "❌ เกิดข้อผิดพลาดในการคำนวณ"
+        return "คำนวณไม่ได้ ลองใหม่อีกทีนะ"
 
 def handle_gpa_calculation_command(user_message: str, user_id: str = None) -> str:
     """
@@ -404,9 +399,9 @@ def handle_gpa_calculation_command(user_message: str, user_id: str = None) -> st
             
             if not subject:
                 return (
-                    "❌ รูปแบบไม่ถูกต้อง\n"
+                    "รูปแบบไม่ถูกต้องนะ\n"
                     "ใช้: เพิ่มวิชา [ชื่อ] [หน่วยกิต] [เกรด]\n"
-                    "ตัวอย่าง: เพิ่มวิชา คณิต 3 4"
+                    "เช่น: เพิ่มวิชา คณิต 3 4"
                 )
             
             return add_subject_to_session(user_id, subject)
@@ -425,17 +420,17 @@ def handle_gpa_calculation_command(user_message: str, user_id: str = None) -> st
     
     if not subjects:
         return (
-            "⚠️ *วิธีใช้คำนวณ GPA*\n\n"
-            "📝 *แบบง่าย (แนะนำ):*\n"
+            "วิธีคำนวณ GPA\n\n"
+            "แบบทีละวิชา (แนะนำ)\n"
             "1. เริ่ม GPA\n"
             "2. เพิ่มวิชา คณิต 3 4\n"
             "3. เพิ่มวิชา ฟิสิกส์ 3 3.5\n"
             "4. คำนวณ GPA\n\n"
-            "📝 *แบบใส่ครั้งเดียว (ใช้ | คั่น):*\n"
+            "แบบใส่ครั้งเดียว (คั่นด้วย |)\n"
             "คำนวณ GPA | คณิต 3 4 | ฟิสิกส์ 3 3.5 | เคมี 2 3\n\n"
-            "📝 *แบบใส่ครั้งเดียว (ใช้ , คั่น):*\n"
+            "แบบใส่ครั้งเดียว (คั่นด้วย ,)\n"
             "คำนวณ GPA คณิต 3 4, ฟิสิกส์ 3 3.5, เคมี 2 3\n\n"
-            "💡 *รูปแบบ:* [ชื่อวิชา] [หน่วยกิต] [เกรด]\n"
+            "รูปแบบ: [ชื่อวิชา] [หน่วยกิต] [เกรด]\n"
             "เกรดที่ใช้ได้: 4, 3.5, 3, 2.5, 2, 1.5, 1, 0"
         )
     
@@ -445,7 +440,7 @@ def handle_gpa_calculation_command(user_message: str, user_id: str = None) -> st
         return format_gpa_result(gpa, details)
     except Exception as e:
         logger.error(f"Error calculating GPA: {e}")
-        return f"❌ เกิดข้อผิดพลาด: {str(e)}"
+        return f"คำนวณไม่ได้: {str(e)}"
 
 # ============================================================================
 # INTEGRATION
@@ -464,23 +459,19 @@ def get_grade_calculator_commands():
 
 def get_grade_calculator_help() -> str:
     """Return help text"""
-    return """
-🎓 *คำนวณเกรดและ GPA*
-
-📝 *วิธีที่ 1: ทีละวิชา (แนะนำ)*
-1. เริ่ม GPA
-2. เพิ่มวิชา คณิต 3 4
-3. เพิ่มวิชา ฟิสิกส์ 3 3.5
-4. คำนวณ GPA
-
-📝 *วิธีที่ 2: ใส่ครั้งเดียว (ใช้ | คั่น)*
-คำนวณ GPA | คณิต 3 4 | ฟิสิกส์ 3 3.5 | เคมี 2 3
-
-📝 *วิธีที่ 3: คะแนน → เกรด*
-คำนวณเกรด 85
-
-💡 รูปแบบ: [ชื่อวิชา] [หน่วยกิต] [เกรด]
-"""
+    return (
+        "คำนวณเกรดและ GPA\n\n"
+        "วิธีที่ 1 ทีละวิชา (แนะนำ)\n"
+        "1. เริ่ม GPA\n"
+        "2. เพิ่มวิชา คณิต 3 4\n"
+        "3. เพิ่มวิชา ฟิสิกส์ 3 3.5\n"
+        "4. คำนวณ GPA\n\n"
+        "วิธีที่ 2 ใส่ครั้งเดียว (คั่นด้วย |)\n"
+        "คำนวณ GPA | คณิต 3 4 | ฟิสิกส์ 3 3.5 | เคมี 2 3\n\n"
+        "วิธีที่ 3 คะแนน → เกรด\n"
+        "คำนวณเกรด 85\n\n"
+        "รูปแบบ: [ชื่อวิชา] [หน่วยกิต] [เกรด]"
+    )
 
 # ============================================================================
 # EXPORTS
