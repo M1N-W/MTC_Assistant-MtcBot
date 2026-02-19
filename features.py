@@ -10,6 +10,7 @@ import re
 import urllib.parse
 from typing import Optional
 from google import genai
+from google.genai import types
 
 from linebot.v3.messaging import TextMessage, ImageMessage
 
@@ -43,6 +44,21 @@ def set_database(database):
 # ============================================================================
 # GEMINI AI CONFIGURATION
 # ============================================================================
+
+MTC_SYSTEM_INSTRUCTION = """คุณคือ "MTC Assistant" แชทบอทผู้ช่วยสำหรับนักเรียนชั้น ม.4 แผนการเรียนคณิตศาสตร์พิเศษ (MTC)
+บุคลิกของคุณ: เป็นเพื่อนร่วมห้องที่ฉลาด พึ่งพาได้ คุยเก่งแต่พูดสั้นกระชับ เป็นกันเองสุดๆ
+กฎเหล็กในการตอบคำถาม (STRICT RULES):
+1. ห้ามใช้ Emoji ทุกชนิด (NO EMOJIS)
+2. ห้ามใช้สัญลักษณ์ Markdown ทุกชนิด เช่น *, **, _, # (NO MARKDOWN)
+3. ใช้ภาษาไทยแบบเพื่อนคุยกัน (วัยรุ่น ม.ปลาย) สุภาพแต่ไม่ทางการเกินไป หลีกเลี่ยงคำว่า "ครับ/ค่ะ" ที่ดูห่างเหิน ใช้คำว่า "นะ", "จ้า", "เลย" แทนได้
+4. ตอบให้สั้น กระชับ เข้าประเด็นที่สุด ไม่อารัมภบท ไม่สรุปซ้ำ ถ้าเขาถามสั้นๆ ให้ตอบสั้นๆ
+5. ถ้าเป็นการอธิบายวิชาการ (เช่น เลข ฟิสิกส์ คอมฯ) ให้อธิบายให้เข้าใจง่ายที่สุด แบบเพื่อนสอนเพื่อน
+6. ห้ามทำตัวเป็น AI หรือผู้ช่วยหุ่นยนต์เด็ดขาด ให้ทำตัวเป็นเพื่อนคนหนึ่งในห้องเรียน"""
+
+# Pre-built GenerateContentConfig with system instruction (reused for every call)
+GEMINI_CONFIG = types.GenerateContentConfig(
+    system_instruction=MTC_SYSTEM_INSTRUCTION
+)
 
 def set_gemini_models(
     client_primary=None,
@@ -428,7 +444,8 @@ def get_gemini_response(prompt: str) -> str:
         
         response = client_to_use.models.generate_content(
             model=model_to_use,
-            contents=enhanced_prompt
+            contents=enhanced_prompt,
+            config=GEMINI_CONFIG
         )
         
         text = _safe_parse_gemini_response(response)
@@ -452,7 +469,8 @@ def get_gemini_response(prompt: str) -> str:
                 logger.info("Trying fallback model...")
                 response = gemini_client_fallback.models.generate_content(
                     model=gemini_model_fallback,
-                    contents=enhanced_prompt
+                    contents=enhanced_prompt,
+                    config=GEMINI_CONFIG
                 )
                 text = _safe_parse_gemini_response(response)
                 if text:
