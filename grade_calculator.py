@@ -14,6 +14,7 @@ from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 import logging
 import re
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -41,26 +42,35 @@ GRADE_TO_GPA = {
     "0": 0.0,
 }
 
-SCORE_TO_GRADE = {
-    (80, 100): "4",
-    (75, 79): "3.5",
-    (70, 74): "3",
-    (65, 69): "2.5",
-    (60, 64): "2",
-    (55, 59): "1.5",
-    (50, 54): "1",
-    (0, 49): "0",
-}
+SCORE_TO_GRADE = [
+    (80, 100,  "4"),
+    (75,  79.99, "3.5"),
+    (70,  74.99, "3"),
+    (65,  69.99, "2.5"),
+    (60,  64.99, "2"),
+    (55,  59.99, "1.5"),
+    (50,  54.99, "1"),
+    (0,   49.99, "0"),
+]
 
 # ============================================================================
 # SESSION MANAGER FOR MULTI-STEP GPA
 # ============================================================================
 
-_gpa_sessions: Dict[str, List[Subject]] = {}
+_gpa_sessions: Dict[str, dict] = {}  # user_id -> {"subjects": [], "started": float}
+_GPA_SESSION_TTL = 3600  # 1 hour
+
+def _prune_stale_gpa_sessions():
+    """Remove GPA sessions older than TTL to prevent memory leaks."""
+    now = time.time()
+    stale = [uid for uid, s in _gpa_sessions.items() if now - s.get("started", 0) > _GPA_SESSION_TTL]
+    for uid in stale:
+        del _gpa_sessions[uid]
 
 def start_gpa_session(user_id: str) -> str:
     """Start new GPA calculation session"""
-    _gpa_sessions[user_id] = []
+    _prune_stale_gpa_sessions()
+    _gpa_sessions[user_id] = {"subjects": [], "started": time.time()}
     return (
         "เริ่มคำนวณ GPA แล้ว\n\n"
         "เพิ่มวิชาทีละวิชาได้เลย\n"
@@ -75,8 +85,8 @@ def add_subject_to_session(user_id: str, subject: Subject) -> str:
     if user_id not in _gpa_sessions:
         return "ยังไม่ได้เริ่มนะ พิมพ์ 'เริ่ม GPA' ก่อนได้เลย"
     
-    _gpa_sessions[user_id].append(subject)
-    count = len(_gpa_sessions[user_id])
+    _gpa_sessions[user_id]["subjects"].append(subject)
+    count = len(_gpa_sessions[user_id]["subjects"])
     
     return (
         f"เพิ่ม {subject.name} แล้ว ({subject.credits} หน่วยกิต เกรด {subject.grade})\n"
@@ -89,7 +99,7 @@ def calculate_session_gpa(user_id: str) -> str:
     if user_id not in _gpa_sessions:
         return "ไม่พบข้อมูล GPA พิมพ์ 'เริ่ม GPA' เพื่อเริ่มใหม่ได้เลย"
     
-    subjects = _gpa_sessions[user_id]
+    subjects = _gpa_sessions[user_id]["subjects"]
     
     if not subjects:
         return "ยังไม่มีวิชาเลยนะ พิมพ์ 'เพิ่มวิชา [ชื่อ] [หน่วยกิต] [เกรด]' เพื่อเพิ่ม"
@@ -104,6 +114,7 @@ def calculate_session_gpa(user_id: str) -> str:
 
 def cancel_gpa_session(user_id: str) -> str:
     """Cancel GPA session"""
+    _prune_stale_gpa_sessions()
     if user_id in _gpa_sessions:
         del _gpa_sessions[user_id]
         return "ยกเลิกการคำนวณ GPA แล้ว"
@@ -114,7 +125,7 @@ def show_session_status(user_id: str) -> str:
     if user_id not in _gpa_sessions:
         return "ยังไม่ได้เริ่มนะ พิมพ์ 'เริ่ม GPA' เพื่อเริ่มได้เลย"
     
-    subjects = _gpa_sessions[user_id]
+    subjects = _gpa_sessions[user_id]["subjects"]
     
     if not subjects:
         return "ยังไม่มีวิชาในรายการ พิมพ์ 'เพิ่มวิชา [ชื่อ] [หน่วยกิต] [เกรด]' เพื่อเพิ่ม"
@@ -138,7 +149,7 @@ def score_to_grade(score: float) -> str:
     if not (0 <= score <= 100):
         raise ValueError("คะแนนต้องอยู่ระหว่าง 0-100")
     
-    for (min_score, max_score), grade in SCORE_TO_GRADE.items():
+    for (min_score, max_score, grade) in SCORE_TO_GRADE:
         if min_score <= score <= max_score:
             return grade
     

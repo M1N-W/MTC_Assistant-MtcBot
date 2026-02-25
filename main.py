@@ -13,6 +13,7 @@ Improvements:
 """
 
 import os
+import threading
 
 import warnings
 warnings.filterwarnings('ignore', category=UserWarning, module='pydantic')
@@ -62,9 +63,7 @@ validate_config()
 # ============================================================================
 # PERFORMANCE MONITORING
 # ============================================================================
-from threading import Lock as _Lock
-
-_metrics_lock = _Lock()
+_metrics_lock = threading.Lock()
 _metrics = {
     "total_requests": 0,
     "total_errors": 0,
@@ -85,7 +84,8 @@ def _increment_metric(key: str, value: float = 1) -> None:
 def before_request():
     """Log request start time."""
     g.start_time = time.time()
-    _increment_metric("total_requests")
+    with _metrics_lock:
+        _metrics["total_requests"] += 1
 
 
 @app.after_request
@@ -93,7 +93,8 @@ def after_request(response):
     """Log response time and update metrics."""
     if hasattr(g, 'start_time'):
         elapsed = (time.time() - g.start_time) * 1000
-        _increment_metric("total_response_time", elapsed)
+        with _metrics_lock:
+            _metrics["total_response_time"] += elapsed
 
         if elapsed > 1000:
             logger.warning(f"Slow request to {request.path}: {elapsed:.2f}ms")
@@ -114,13 +115,11 @@ try:
         db = firestore.client()
         features.set_database(db)  # Set database in features module
         broadcast.set_database(db)  # Set database in broadcast module
-
-        # Wire Firestore into the blacklist manager so bans survive restarts
-        from user_blacklist import get_blacklist_manager as _get_bl
-        _bl = _get_bl()
-        _bl.db = db
-        _bl.load_blacklist()
-        logger.info("🚫 Blacklist loaded from Firestore")
+        from user_blacklist import get_blacklist_manager
+        _bm = get_blacklist_manager()
+        _bm.db = db
+        _bm.load_blacklist()
+        logger.info("🚫 Blacklist loaded from Firebase")
         logger.info("🔥 Firebase Connected Successfully!")
     else:
         logger.warning(f"⚠️ Missing {FIREBASE_KEY_PATH}. Homework DB features will be disabled.")
@@ -182,7 +181,8 @@ def callback():
     signature = request.headers.get('X-Line-Signature') or request.headers.get('x-line-signature')
     if not signature:
         logger.error("Missing X-Line-Signature header.")
-        _increment_metric("total_errors")
+        with _metrics_lock:
+            _metrics["total_errors"] += 1
         abort(400)
 
     body = request.get_data(as_text=True)
@@ -190,18 +190,21 @@ def callback():
 
     if handler is None:
         logger.error("Webhook handler not configured (missing CHANNEL_SECRET).")
-        _increment_metric("total_errors")
+        with _metrics_lock:
+            _metrics["total_errors"] += 1
         abort(500)
 
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
         logger.error("Invalid signature. Check CHANNEL_SECRET.")
-        _increment_metric("total_errors")
+        with _metrics_lock:
+            _metrics["total_errors"] += 1
         abort(400)
     except Exception as e:
         logger.exception("Error handling request: %s", e)
-        _increment_metric("total_errors")
+        with _metrics_lock:
+            _metrics["total_errors"] += 1
         abort(500)
 
     return "OK", 200
@@ -333,7 +336,8 @@ def not_found(error):
 def internal_error(error):
     """Handle 500 errors"""
     logger.error(f"Internal server error: {error}")
-    _increment_metric("total_errors")
+    with _metrics_lock:
+        _metrics["total_errors"] += 1
     return jsonify({
         "error": "Internal Server Error",
         "message": "An unexpected error occurred. Please try again later."

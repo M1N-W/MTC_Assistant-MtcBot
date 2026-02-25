@@ -46,8 +46,8 @@ FLASK_DEBUG = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
 GEMINI_API_KEY_V3 = os.environ.get("GEMINI_API_KEY_PRIMARY")
 GEMINI_API_KEY_V25 = os.environ.get("GEMINI_API_KEY_SECONDARY")
 
-GEMINI_MODEL_V3 = os.environ.get("GEMINI_MODEL_PRIMARY", "gemini-3-flash-preview")
-GEMINI_MODEL_V25 = os.environ.get("GEMINI_MODEL_SECONDARY", "gemini-2.5-flash-preview")
+GEMINI_MODEL_V3 = os.environ.get("GEMINI_MODEL_PRIMARY", "gemini-2.0-flash")
+GEMINI_MODEL_V25 = os.environ.get("GEMINI_MODEL_SECONDARY", "gemini-2.5-flash-preview-04-17")
 
 # ============================================================================
 # RATE LIMITING CONFIGURATION

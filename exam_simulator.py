@@ -23,6 +23,7 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from config import logger, LOCAL_TZ
+from firebase_admin import firestore as _fs
 
 # ============================================================================
 # CONSTANTS
@@ -370,11 +371,17 @@ class ExamSessionManager:
         # Move to next question
         session.current_index += 1
         
+        # Build per-answer feedback
+        if is_correct:
+            feedback = "✅ ถูกต้อง!"
+        else:
+            feedback = f"❌ ผิด! คำตอบที่ถูกต้องคือข้อ {current_q.correct_answer + 1}"
+
         # Check if exam is complete
         if session.current_index >= len(session.questions):
             return True, self._finish_exam(user_id)
-        
-        return True, ""
+
+        return True, feedback
     
     def _finish_exam(self, user_id: str) -> str:
         """Finish exam and show results"""
@@ -516,6 +523,8 @@ def get_session_manager(db=None) -> ExamSessionManager:
     global _session_manager
     if _session_manager is None:
         _session_manager = ExamSessionManager(db)
+    elif db is not None and _session_manager.db is None:
+        _session_manager.db = db
     return _session_manager
 
 # ============================================================================
@@ -680,7 +689,7 @@ def handle_exam_stats(user_id: str, db=None) -> str:
         # Get user's exam results
         results = db.collection('exam_results')\
             .where('user_id', '==', user_id)\
-            .order_by('completed_at', direction='DESCENDING')\
+            .order_by('completed_at', direction=_fs.Query.DESCENDING)\
             .limit(10)\
             .stream()
         

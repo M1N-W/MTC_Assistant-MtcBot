@@ -14,6 +14,7 @@ import operator as op
 import math
 import re
 import sys
+from collections import OrderedDict
 from typing import Any, Dict, Optional
 
 # ---------- ALLOWED OPERATIONS & FUNCTIONS ----------
@@ -77,12 +78,17 @@ _ALLOWED_CONSTS: Dict[str, float] = {
 # ---------- Per-user variable storage ----------
 # Each user gets their own isolated namespace so User A's variables
 # never bleed into User B's calculations.
-_USER_VARS: Dict[str, Dict[str, float]] = {}
+_USER_VARS: OrderedDict = OrderedDict()
+_USER_VARS_MAX = 500
 
 def get_user_vars(user_id: str) -> Dict[str, float]:
     """Return (and lazily create) the variable namespace for a given user."""
     if user_id not in _USER_VARS:
+        if len(_USER_VARS) >= _USER_VARS_MAX:
+            _USER_VARS.popitem(last=False)  # evict oldest entry
         _USER_VARS[user_id] = {}
+    else:
+        _USER_VARS.move_to_end(user_id)  # mark as recently used
     return _USER_VARS[user_id]
 
 # ---------- SAFE AST EVALUATOR ----------

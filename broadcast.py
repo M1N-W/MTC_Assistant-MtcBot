@@ -17,6 +17,7 @@ from firebase_admin import firestore
 # Global variables
 db = None
 line_api = None
+_tracked_users_cache: set = set()  # in-memory cache of already-seen user IDs
 
 # ============================================================================
 # INITIALIZATION
@@ -47,13 +48,10 @@ def track_user(user_id: str, display_name: str = "Unknown"):
         return False
 
     try:
-        user_ref = db.collection('users').document(user_id)
-        # Use get() to check whether this is a brand-new user so we only
-        # increment the counter once per unique user, not on every message.
-        existing = user_ref.get()
-        is_new_user = not existing.exists
+        is_new_user = user_id not in _tracked_users_cache
+        _tracked_users_cache.add(user_id)
 
-        user_ref.set({
+        db.collection('users').document(user_id).set({
             'user_id': user_id,
             'display_name': display_name,
             'last_seen': firestore.SERVER_TIMESTAMP,
@@ -61,8 +59,6 @@ def track_user(user_id: str, display_name: str = "Unknown"):
         }, merge=True)
 
         if is_new_user:
-            # Increment the cheap counter document instead of scanning the
-            # entire collection every time get_user_count() is called.
             db.collection('meta').document('stats').set(
                 {'user_count': firestore.Increment(1)},
                 merge=True,
@@ -82,7 +78,8 @@ def get_all_users():
     
     try:
         users_ref = db.collection('users').where('is_active', '==', True).stream()
-        user_ids = [user.to_dict().get('user_id') for user in users_ref]
+        user_ids = [u.to_dict().get('user_id') for u in users_ref]
+        user_ids = [uid for uid in user_ids if uid]
         logger.info(f"Retrieved {len(user_ids)} active users")
         return user_ids
     except Exception as e:

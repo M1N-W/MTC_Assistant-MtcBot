@@ -90,7 +90,11 @@ def is_rate_limited(user_id: str) -> bool:
         
         history = _user_message_history.get(user_id, [])
         recent = [t for t in history if now_ts - t < RATE_LIMIT_WINDOW]
-        
+
+        if not recent:
+            _user_message_history.pop(user_id, None)
+            return False
+
         if len(recent) > RATE_LIMIT_MAX * 3:
             _banned_users[user_id] = now_ts + 300
             logger.error(f"User {user_id} BANNED for severe abuse")
@@ -115,6 +119,7 @@ def is_rate_limited(user_id: str) -> bool:
 
 # Store homework creation state for each user
 _homework_sessions: Dict[str, Dict] = {}
+_homework_sessions_lock = threading.Lock()
 
 # Subject list for homework
 SUBJECTS = [
@@ -125,12 +130,13 @@ SUBJECTS = [
 
 def start_homework_session(user_id: str) -> tuple:
     """Start interactive homework creation session"""
-    _homework_sessions[user_id] = {
-        "step": "subject",
-        "subject": None,
-        "detail": None,
-        "due_date": None
-    }
+    with _homework_sessions_lock:
+        _homework_sessions[user_id] = {
+            "step": "subject",
+            "subject": None,
+            "detail": None,
+            "due_date": None
+        }
     
     # Create quick reply buttons for subject selection
     quick_reply_items = []
@@ -618,10 +624,9 @@ def handle_message(event):
     
     # Cancel homework session
     if user_message in ["ยกเลิกการบ้าน", "cancel homework"]:
-        result = cancel_homework_session(user_id)
-        if result:
-            reply_to_line(event.reply_token, [TextMessage(text=result)])
-            return
+        result = cancel_homework_session(user_id) or "ไม่มี session การบ้านที่จะยกเลิก"
+        reply_to_line(event.reply_token, [TextMessage(text=result)])
+        return
     
     # Handle homework session steps
     if user_id in _homework_sessions:
@@ -645,12 +650,13 @@ def handle_message(event):
             msg = user_message.replace("ประกาศ ", "", 1).strip()
             if msg:
                 announcement = broadcast.create_announcement("ประกาศจากผู้ดูแล", msg)
-                result = broadcast.broadcast_message(announcement)
-                broadcast.save_broadcast_history(user_id, announcement, result)
-                
+                def _do_broadcast(ann=announcement, aid=user_id):
+                    result = broadcast.broadcast_message(ann)
+                    broadcast.save_broadcast_history(aid, ann, result)
+                    logger.info(f"Broadcast complete: {result['message']}")
+                threading.Thread(target=_do_broadcast, daemon=True).start()
                 reply_message = TextMessage(
-                    text=f"ส่งประกาศเรียบร้อยแล้ว\n\n"
-                         f"{result['message']}\n\n"
+                    text=f"กำลังส่งประกาศในพื้นหลัง...\n"
                          f"เวลา {time.strftime('%H:%M:%S')}"
                 )
         
@@ -749,17 +755,19 @@ def handle_message(event):
             
             # Check if in exam session
             if exam_mgr.has_active_session(user_id):
-                # Answer question
-                if user_message.strip().isdigit() or any(x in user_message_lower for x in ['ตอบ', 'คือ']):
+                session = exam_mgr.get_session(user_id)
+                exam_finished = session and session.current_index >= len(session.questions)
+
+                # Answer question (only if exam not already finished)
+                if not exam_finished and (user_message.strip().isdigit() or any(x in user_message_lower for x in ['ตอบ', 'คือ'])):
                     msg_text, send_next = handle_answer_command(user_id, user_message, db)
-                    
-                    if msg_text:
-                        reply_to_line(event.reply_token, [TextMessage(text=msg_text)])
-                        return
-                    
-                    if send_next:
+
+                    if msg_text and send_next:
                         next_q = handle_show_current_question(user_id, db)
-                        reply_to_line(event.reply_token, [TextMessage(text=next_q)])
+                        reply_to_line(event.reply_token, [TextMessage(text=msg_text), TextMessage(text=next_q)])
+                        return
+                    elif msg_text:
+                        reply_to_line(event.reply_token, [TextMessage(text=msg_text)])
                         return
             
             # Start exam
@@ -824,7 +832,7 @@ def handle_message(event):
             for keyword in keywords:
                 if keyword.lower() in user_message_lower:
                     try:
-                        reply_message = action(user_message) if action.__code__.co_argcount > 0 else action()
+                        reply_message = action(user_message)
                         matched = True
                         break
                     except Exception as e:

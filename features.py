@@ -60,6 +60,19 @@ GEMINI_CONFIG = types.GenerateContentConfig(
     system_instruction=MTC_SYSTEM_INSTRUCTION
 )
 
+# Per-minute date context cache (avoids rebuilding on every AI call)
+_date_context_cache: dict = {"value": "", "minute": -1}
+
+def _get_date_context() -> str:
+    """Return a cached Thai date string, refreshed once per minute."""
+    now = datetime.datetime.now(LOCAL_TZ)
+    if now.minute != _date_context_cache["minute"]:
+        _date_context_cache["value"] = (
+            f"วันนี้คือ{now.strftime('%A')}ที่ {now.strftime('%d %B')} พ.ศ. {now.year + 543}"
+        )
+        _date_context_cache["minute"] = now.minute
+    return _date_context_cache["value"]
+
 def set_gemini_models(
     client_primary=None,
     model_primary: str = None,
@@ -143,12 +156,12 @@ def clear_homework_db() -> str:
         return "ระบบขัดข้องชั่วคราวนะ ลองใหม่อีกทีได้เลย"
     
     try:
-        docs = db.collection('homeworks').stream()
-        count = 0
+        docs = list(db.collection('homeworks').stream())
+        batch = db.batch()
         for doc in docs:
-            doc.reference.delete()
-            count += 1
-        
+            batch.delete(doc.reference)
+        batch.commit()
+        count = len(docs)
         return f"ลบการบ้านออกไปแล้ว {count} รายการ"
     except Exception as e:
         logger.error(f"DB Clear Error: {e}")
@@ -430,17 +443,15 @@ def get_gemini_response(prompt: str) -> str:
     
     if not gemini_client_primary and not gemini_client_fallback:
         return MESSAGES["AI_DISABLED"]
-    
+
+    client_to_use = gemini_client_primary or gemini_client_fallback
+    model_to_use = gemini_model_primary or gemini_model_fallback
+
+    if not client_to_use or not model_to_use:
+        return MESSAGES["AI_DISABLED"]
+
     try:
-        now = datetime.datetime.now(LOCAL_TZ)
-        date_context = f"วันนี้คือ{now.strftime('%A')}ที่ {now.strftime('%d %B')} พ.ศ. {now.year + 543}"
-        enhanced_prompt = f"(บริบท: {date_context})\n\nคำถาม: {prompt}"
-        
-        client_to_use = gemini_client_primary or gemini_client_fallback
-        model_to_use = gemini_model_primary or gemini_model_fallback
-        
-        if not client_to_use or not model_to_use:
-            return MESSAGES["AI_DISABLED"]
+        enhanced_prompt = f"(บริบท: {_get_date_context()})\n\nคำถาม: {prompt}"
         
         response = client_to_use.models.generate_content(
             model=model_to_use,
