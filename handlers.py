@@ -70,9 +70,46 @@ def get_line_api() -> Optional[MessagingApi]:
 # ============================================================================
 # RATE LIMITING
 # ============================================================================
+# Rate limiting with memory cleanup
 _user_message_history: Dict[str, List[float]] = {}
 _rate_limit_lock = threading.Lock()
 _banned_users: Dict[str, float] = {}
+
+# Cleanup old rate limit data periodically
+def cleanup_rate_limit_data():
+    """Clean up old rate limit data to prevent memory leaks"""
+    now_ts = time.time()
+    with _rate_limit_lock:
+        # Clean old message history (older than 1 hour)
+        old_users = []
+        for user_id, timestamps in _user_message_history.items():
+            recent = [t for t in timestamps if now_ts - t < 3600]  # 1 hour
+            if recent:
+                _user_message_history[user_id] = recent
+            else:
+                old_users.append(user_id)
+        
+        for user_id in old_users:
+            del _user_message_history[user_id]
+        
+        # Clean expired bans
+        expired_bans = []
+        for user_id, ban_until in _banned_users.items():
+            if now_ts >= ban_until:
+                expired_bans.append(user_id)
+        
+        for user_id in expired_bans:
+            del _banned_users[user_id]
+
+# Auto-cleanup every 10 minutes
+def auto_cleanup():
+    while True:
+        time.sleep(600)  # 10 minutes
+        cleanup_rate_limit_data()
+
+# Start cleanup thread
+cleanup_thread = threading.Thread(target=auto_cleanup, daemon=True)
+cleanup_thread.start()
 
 def is_rate_limited(user_id: str) -> bool:
     """Check if user is rate limited"""

@@ -7,10 +7,12 @@ Contains all feature functions with beautiful, concise messages
 import datetime
 import math
 import re
+import signal
 import urllib.parse
 from typing import Optional
 from google import genai
 from google.genai import types
+from firebase_admin import firestore
 
 from linebot.v3.messaging import TextMessage, ImageMessage
 
@@ -118,51 +120,62 @@ def add_homework_to_db(subject: str, detail: str, due_date: str = "ไม่ร�
         return "บันทึกไม่ได้ ลองใหม่อีกทีนะ"
 
 def get_homeworks_from_db() -> str:
-    """ดึงรายการการบ้านจาก Firebase"""
+    """ดึงการบ้านทั้งหมดจาก Firebase (optimized with limit)"""
     if not db:
         return "ระบบขัดข้องชั่วคราวนะ ลองใหม่อีกทีได้เลย"
     
     try:
-        from firebase_admin import firestore
-        docs = db.collection('homeworks').order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
-        hw_list = []
+        # Limit to prevent memory issues
+        docs = list(db.collection('homeworks').order_by('created_at', direction=firestore.Query.DESCENDING).limit(20).stream())
         
+        if not docs:
+            return "ไม่มีการบ้านที่กำหนดไว้"
+        
+        homework_list = []
         for doc in docs:
-            d = doc.to_dict()
-            hw_list.append(
-                f"{d.get('subject', 'ไม่ระบุ')}\n"
-                f"  {d.get('detail', 'ไม่มีรายละเอียด')}\n"
-                f"  ส่ง: {d.get('due_date', 'ไม่ระบุ')}"
-            )
+            data = doc.to_dict()
+            subject = data.get('subject', 'ไม่ระบุ')
+            detail = data.get('detail', 'ไม่ระบุ')
+            due_date = data.get('due_date', 'ไม่ระบุ')
+            created_at = data.get('created_at', 'ไม่ระบุ')
+            
+            homework_list.append(f"📚 {subject}\n📝 {detail}\n🗓️ {due_date}")
         
-        if not hw_list:
-            return (
-                "ตอนนี้ไม่มีการบ้านค้างอยู่เลย\n\n"
-                "พิมพ์ 'สั่งการบ้าน' ถ้าจะเพิ่ม"
-            )
-        
-        header = f"การบ้านทั้งหมด ({len(hw_list)} รายการ)\n\n"
-        separator = "\n---\n"
-        
-        return header + separator.join(hw_list)
-        
+        if homework_list:
+            return "การบ้านที่ต้องทำ:\n\n" + "\n\n".join(homework_list[:10])  # Show max 10 items
+        else:
+            return "ไม่มีการบ้านที่กำหนดไว้"
+            
     except Exception as e:
         logger.error(f"DB Get Error: {e}")
         return "ดึงข้อมูลไม่ได้ ลองใหม่อีกทีนะ"
 
 def clear_homework_db() -> str:
-    """ลบการบ้านทั้งหมดใน Firebase"""
+    """ลบการบ้านทั้งหมดใน Firebase (optimized with batch limits)"""
     if not db:
         return "ระบบขัดข้องชั่วคราวนะ ลองใหม่อีกทีได้เลย"
     
     try:
-        docs = list(db.collection('homeworks').stream())
-        batch = db.batch()
-        for doc in docs:
-            batch.delete(doc.reference)
-        batch.commit()
-        count = len(docs)
-        return f"ลบการบ้านออกไปแล้ว {count} รายการ"
+        # Process in batches to prevent memory issues
+        total_deleted = 0
+        batch_size = 500  # Firebase batch limit
+        
+        while True:
+            docs = list(db.collection('homeworks').limit(batch_size).stream())
+            if not docs:
+                break
+                
+            batch = db.batch()
+            for doc in docs:
+                batch.delete(doc.reference)
+            batch.commit()
+            total_deleted += len(docs)
+            
+            # Safety check to prevent infinite loops
+            if len(docs) < batch_size:
+                break
+        
+        return f"ลบการบ้านออกไปแล้ว {total_deleted} รายการ"
     except Exception as e:
         logger.error(f"DB Clear Error: {e}")
         return "ลบไม่ได้ ลองใหม่อีกทีนะ"
@@ -435,8 +448,14 @@ def _safe_parse_gemini_response(response) -> str:
         logger.error("Error parsing Gemini response: %s", e)
         return ""
 
+class GeminiTimeoutError(Exception):
+    pass
+
+def timeout_handler(signum, frame):
+    raise GeminiTimeoutError("Operation timed out")
+
 def get_gemini_response(prompt: str) -> str:
-    """Get response from Gemini AI"""
+    """Get response from Gemini AI with timeout protection"""
     identity_queries = ["คุณคือใคร", "เป็นใคร", "who are you", "คุณชื่ออะไร", "ชื่ออะไร", "ตัวตน"]
     if any(q in prompt.lower() for q in identity_queries):
         return MESSAGES["IDENTITY"]
@@ -450,42 +469,65 @@ def get_gemini_response(prompt: str) -> str:
     if not client_to_use or not model_to_use:
         return MESSAGES["AI_DISABLED"]
 
+    enhanced_prompt = f"(บริบท: {_get_date_context()})\n\nคำถาม: {prompt}"
+
     try:
-        enhanced_prompt = f"(บริบท: {_get_date_context()})\n\nคำถาม: {prompt}"
+        # Set timeout for AI calls
+        old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(15)  # 15 second timeout
         
-        response = client_to_use.models.generate_content(
-            model=model_to_use,
-            contents=enhanced_prompt,
-            config=GEMINI_CONFIG
-        )
+        try:
+            response = client_to_use.models.generate_content(
+                model=model_to_use,
+                contents=enhanced_prompt,
+                config=GEMINI_CONFIG
+            )
+            
+            text = _safe_parse_gemini_response(response)
+            
+            if not text:
+                return MESSAGES["AI_NO_RESPONSE"]
+            
+            text = re.sub(r'\b[Gg]oogle\b', 'Gemini', text)
+            text = text.replace('กูเกิล', 'Gemini')
+            
+            if len(text) > LINE_SAFE_TRUNCATE:
+                text = text[:LINE_SAFE_TRUNCATE] + "...\n\n(ข้อความยาวเกินไป ตัดบางส่วน)"
+            
+            return text
+            
+        finally:
+            signal.alarm(0)  # Cancel timeout
+            signal.signal(signal.SIGALRM, old_handler)  # Restore old handler
         
-        text = _safe_parse_gemini_response(response)
-        
-        if not text:
-            return MESSAGES["AI_NO_RESPONSE"]
-        
-        text = re.sub(r'\b[Gg]oogle\b', 'Gemini', text)
-        text = text.replace('กูเกิล', 'Gemini')
-        
-        if len(text) > LINE_SAFE_TRUNCATE:
-            text = text[:LINE_SAFE_TRUNCATE] + "...\n\n(ข้อความยาวเกินไป ตัดบางส่วน)"
-        
-        return text
-        
+    except GeminiTimeoutError:
+        logger.warning("Gemini API call timed out")
+        return "AI ตอบช้าไปหน่อย ลองใหม่อีกทีนะ"
     except Exception as e:
         logger.error("Gemini Generate Error: %s", e)
         
         if client_to_use == gemini_client_primary and gemini_client_fallback:
             try:
                 logger.info("Trying fallback model...")
-                response = gemini_client_fallback.models.generate_content(
-                    model=gemini_model_fallback,
-                    contents=enhanced_prompt,
-                    config=GEMINI_CONFIG
-                )
-                text = _safe_parse_gemini_response(response)
-                if text:
-                    return text
+                # Set timeout for fallback
+                old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(15)
+                
+                try:
+                    response = gemini_client_fallback.models.generate_content(
+                        model=gemini_model_fallback,
+                        contents=enhanced_prompt,
+                        config=GEMINI_CONFIG
+                    )
+                    text = _safe_parse_gemini_response(response)
+                    if text:
+                        return text
+                finally:
+                    signal.alarm(0)
+                    signal.signal(signal.SIGALRM, old_handler)
+                    
+            except GeminiTimeoutError:
+                logger.warning("Fallback Gemini API also timed out")
             except Exception as e2:
                 logger.error("Fallback also failed: %s", e2)
         

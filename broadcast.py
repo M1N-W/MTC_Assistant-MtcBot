@@ -14,10 +14,20 @@ from linebot.v3.messaging import (
 from config import logger, ACCESS_TOKEN
 from firebase_admin import firestore
 
-# Global variables
+# Global variables with memory management
 db = None
 line_api = None
 _tracked_users_cache: set = set()  # in-memory cache of already-seen user IDs
+_cache_max_size = 10000  # Maximum cache size to prevent memory issues
+
+def cleanup_user_cache():
+    """Clean up user cache to prevent memory leaks"""
+    global _tracked_users_cache
+    if len(_tracked_users_cache) > _cache_max_size:
+        # Remove oldest half of the cache
+        cache_list = list(_tracked_users_cache)
+        _tracked_users_cache = set(cache_list[_cache_max_size//2:])
+        logger.info(f"Cleaned user cache, size now: {len(_tracked_users_cache)}")
 
 # ============================================================================
 # INITIALIZATION
@@ -50,6 +60,9 @@ def track_user(user_id: str, display_name: str = "Unknown"):
     try:
         is_new_user = user_id not in _tracked_users_cache
         _tracked_users_cache.add(user_id)
+        
+        # Clean cache if it gets too large
+        cleanup_user_cache()
 
         db.collection('users').document(user_id).set({
             'user_id': user_id,

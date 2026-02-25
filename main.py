@@ -13,6 +13,7 @@ Improvements:
 """
 
 import os
+import signal
 import threading
 
 import warnings
@@ -250,11 +251,25 @@ def healthz():
         "broadcast": bool(line_config),
     }
 
-    # Test Firebase connectivity
+    # Test Firebase connectivity with timeout
     if db:
         try:
-            list(db.collection('health_check').limit(1).stream())
-            services_status["firebase_connectivity"] = True
+            def _healthz_timeout_handler(signum, frame):
+                raise TimeoutError("Firebase connectivity test timed out")
+            
+            old_handler = signal.signal(signal.SIGALRM, _healthz_timeout_handler)
+            signal.alarm(5)  # 5 second timeout
+            
+            try:
+                list(db.collection('health_check').limit(1).stream())
+                services_status["firebase_connectivity"] = True
+            finally:
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, old_handler)
+                
+        except TimeoutError:
+            logger.warning("Firebase connectivity test timed out")
+            services_status["firebase_connectivity"] = False
         except Exception as e:
             logger.warning(f"Firebase connectivity test failed: {e}")
             services_status["firebase_connectivity"] = False
