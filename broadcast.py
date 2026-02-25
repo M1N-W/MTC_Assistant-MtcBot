@@ -5,6 +5,7 @@ MTC Assistant - Broadcast Module
 """
 
 import datetime  # FIXED: Added missing import for broadcast_homework_reminder
+import time
 
 from linebot.v3.messaging import (
     ApiClient, MessagingApi, Configuration,
@@ -44,16 +45,30 @@ def track_user(user_id: str, display_name: str = "Unknown"):
     if not db:
         logger.warning("Firebase not available for user tracking")
         return False
-    
+
     try:
         user_ref = db.collection('users').document(user_id)
+        # Use get() to check whether this is a brand-new user so we only
+        # increment the counter once per unique user, not on every message.
+        existing = user_ref.get()
+        is_new_user = not existing.exists
+
         user_ref.set({
             'user_id': user_id,
             'display_name': display_name,
             'last_seen': firestore.SERVER_TIMESTAMP,
-            'is_active': True
+            'is_active': True,
         }, merge=True)
-        logger.debug(f"User tracked: {user_id}")
+
+        if is_new_user:
+            # Increment the cheap counter document instead of scanning the
+            # entire collection every time get_user_count() is called.
+            db.collection('meta').document('stats').set(
+                {'user_count': firestore.Increment(1)},
+                merge=True,
+            )
+
+        logger.debug(f"User tracked: {user_id} (new={is_new_user})")
         return True
     except Exception as e:
         logger.error(f"Error tracking user: {e}")
@@ -75,21 +90,65 @@ def get_all_users():
         return []
 
 def get_user_count() -> int:
-    """นับจำนวนผู้ใช้ทั้งหมด"""
+    """
+    นับจำนวนผู้ใช้ทั้งหมด
+
+    Reads a single counter document instead of streaming the entire users
+    collection — O(1) Firestore reads regardless of how many users exist.
+    The counter is incremented by track_user() the first time each user appears.
+    """
     if not db:
         return 0
-    
     try:
-        users_ref = db.collection('users').where('is_active', '==', True).stream()
-        count = sum(1 for _ in users_ref)
-        return count
+        doc = db.collection('meta').document('stats').get()
+        if doc.exists:
+            return doc.to_dict().get('user_count', 0)
+        return 0
     except Exception as e:
-        logger.error(f"Error counting users: {e}")
+        logger.error(f"Error getting user count: {e}")
         return 0
 
 # ============================================================================
-# BROADCAST FUNCTIONS
+# INTERNAL HELPERS
 # ============================================================================
+
+def _push_with_retry(user_id: str, message_text: str, max_retries: int = 3) -> bool:
+    """
+    Send a single push message with exponential-backoff retry.
+
+    Retries only on LINE rate-limit (HTTP 429) errors.  All other errors are
+    treated as non-retryable to avoid hammering the API on permanent failures.
+
+    Returns:
+        True if the message was delivered successfully.
+    """
+    for attempt in range(max_retries):
+        try:
+            line_api.push_message(
+                PushMessageRequest(
+                    to=user_id,
+                    messages=[TextMessage(text=message_text)]
+                )
+            )
+            return True
+        except Exception as e:
+            err_str = str(e)
+            if "429" in err_str or "Too Many Requests" in err_str.lower():
+                wait = 2 ** attempt   # 1 s → 2 s → 4 s
+                logger.warning(
+                    f"⚠️ Rate-limited by LINE API. "
+                    f"Waiting {wait}s before retry {attempt + 1}/{max_retries}…"
+                )
+                time.sleep(wait)
+            else:
+                # Non-retryable (bad user_id, auth error, etc.)
+                logger.error(f"❌ Non-retryable error sending to {user_id}: {e}")
+                return False
+    logger.error(f"❌ Gave up sending to {user_id} after {max_retries} attempts")
+    return False
+
+
+
 
 def broadcast_message(message_text: str) -> dict:
     """
@@ -118,21 +177,18 @@ def broadcast_message(message_text: str) -> dict:
     
     sent_count = 0
     failed_count = 0
-    
-    # ส่งข้อความไปทีละคน (เพราะ broadcast มี limit)
-    for user_id in user_ids:
-        try:
-            line_api.push_message(
-                PushMessageRequest(
-                    to=user_id,
-                    messages=[TextMessage(text=message_text)]
-                )
-            )
+
+    for i, user_id in enumerate(user_ids):
+        if _push_with_retry(user_id, message_text):
             sent_count += 1
             logger.debug(f"Message sent to {user_id}")
-        except Exception as e:
+        else:
             failed_count += 1
-            logger.error(f"Failed to send to {user_id}: {e}")
+
+        # Throttle: pause briefly every 10 messages to stay within
+        # LINE's soft push-message rate limit (~500 req/min).
+        if i > 0 and i % 10 == 0:
+            time.sleep(0.2)
     
     result_message = f"✅ ส่งสำเร็จ: {sent_count} คน"
     if failed_count > 0:
@@ -238,9 +294,9 @@ def get_broadcast_stats() -> str:
             total_sent += data.get('sent_count', 0)
             
             timestamp = data.get('timestamp')
-            if timestamp:
-                time_str = timestamp.strftime("%d/%m %H:%M")
-            else:
+            try:
+                time_str = timestamp.strftime("%d/%m %H:%M") if hasattr(timestamp, 'strftime') else "N/A"
+            except Exception:
                 time_str = "N/A"
             
             recent_broadcasts.append(
@@ -249,13 +305,23 @@ def get_broadcast_stats() -> str:
         
         user_count = get_user_count()
         
+        # Resolve the ternary BEFORE building the stats string.
+        # Inlining it caused Python's operator precedence to bind the entire
+        # left-hand f-string to the conditional, silently discarding all
+        # counters/headers when recent_broadcasts was empty.
+        history_text = (
+            "\n".join(recent_broadcasts[:5])
+            if recent_broadcasts
+            else "ยังไม่มีประวัติ"
+        )
+
         stats = (
             f"📊 *สถิติ Broadcast*\n\n"
             f"👥 ผู้ใช้ทั้งหมด: {user_count} คน\n"
             f"📢 ส่งแล้ว: {total_broadcasts} ครั้ง\n"
             f"✅ ข้อความทั้งหมด: {total_sent} ข้อความ\n\n"
-            f"📝 *ประวัติล่าสุด:*\n" +
-            "\n".join(recent_broadcasts[:5]) if recent_broadcasts else "ยังไม่มีประวัติ"
+            f"📝 *ประวัติล่าสุด:*\n"
+            f"{history_text}"
         )
         
         return stats

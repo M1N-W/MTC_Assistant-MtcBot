@@ -1,4 +1,3 @@
-
 # smart_calc.py
 # -*- coding: utf-8 -*-
 """
@@ -33,6 +32,17 @@ _UNARY_OPS = {
     ast.USub: lambda x: -x,
 }
 
+def _safe_factorial(n):
+    """Factorial wrapper that rejects floats, negatives, and dangerously large inputs."""
+    if not isinstance(n, (int, float)) or n != int(n):
+        raise ValueError("factorial ต้องการเลขจำนวนเต็มเท่านั้น")
+    n = int(n)
+    if n < 0:
+        raise ValueError("factorial ไม่รองรับจำนวนลบ")
+    if n > 1000:
+        raise ValueError("ตัวเลขใหญ่เกินไปสำหรับ factorial (สูงสุด 1000)")
+    return math.factorial(n)
+
 _ALLOWED_FUNCS: Dict[str, Any] = {
     "sin": math.sin,
     "cos": math.cos,
@@ -51,8 +61,8 @@ _ALLOWED_FUNCS: Dict[str, Any] = {
     "ceil": math.ceil,
     "degrees": math.degrees,
     "radians": math.radians,
-    "factorial": math.factorial,
-    "fact": math.factorial,
+    "factorial": _safe_factorial,
+    "fact": _safe_factorial,
     "comb": getattr(math, "comb", None),
     "perm": getattr(math, "perm", None),
 }
@@ -64,8 +74,16 @@ _ALLOWED_CONSTS: Dict[str, float] = {
     "inf": math.inf,
 }
 
-# ---------- Variables storage ----------
-_VARS: Dict[str, float] = {}
+# ---------- Per-user variable storage ----------
+# Each user gets their own isolated namespace so User A's variables
+# never bleed into User B's calculations.
+_USER_VARS: Dict[str, Dict[str, float]] = {}
+
+def get_user_vars(user_id: str) -> Dict[str, float]:
+    """Return (and lazily create) the variable namespace for a given user."""
+    if user_id not in _USER_VARS:
+        _USER_VARS[user_id] = {}
+    return _USER_VARS[user_id]
 
 # ---------- SAFE AST EVALUATOR ----------
 class _SafeEvaluator(ast.NodeVisitor):
@@ -178,95 +196,98 @@ def _format_result(value: Any) -> str:
     return str(value)
 
 # ---------- VARIABLES API ----------
-def list_vars() -> Dict[str, str]:
-    """Return current variables as name -> formatted value"""
-    return {k: _format_result(v) for k, v in _VARS.items()}
+def list_vars(user_id: str = "global") -> Dict[str, str]:
+    """Return the calling user's variables as name -> formatted value."""
+    return {k: _format_result(v) for k, v in get_user_vars(user_id).items()}
 
-def clear_vars() -> None:
-    _VARS.clear()
+def clear_vars(user_id: str = "global") -> None:
+    """Clear only the calling user's variable namespace."""
+    _USER_VARS.pop(user_id, None)
 
-def set_var(name: str, value: float) -> None:
-    _VARS[name] = value
+def set_var(name: str, value: float, user_id: str = "global") -> None:
+    """Store a variable in the calling user's namespace."""
+    get_user_vars(user_id)[name] = value
 
 # ---------- MAIN CALCULATE FUNCTION ----------
 _VAR_NAME_RE = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
 
-def calculate(expression: str) -> str:
+def calculate(expression: str, user_id: str = "global") -> tuple:
+    """
+    Evaluate a math expression in the calling user's isolated variable namespace.
+
+    Returns:
+        (result_string: str, is_numeric: bool)
+        is_numeric=True  → result is a plain number (caller may prefix "Result:")
+        is_numeric=False → result is a status/error message
+    """
     if not expression or not isinstance(expression, str):
-        return "กรุณาใส่สมการ เช่น: 12*(5+3)^2"
+        return "กรุณาใส่สมการ เช่น: 12*(5+3)^2", False
 
     expr = expression.strip()
+    user_vars = get_user_vars(user_id)
 
     # special commands
     if expr.lower() == "vars":
-        vars_map = list_vars()
+        vars_map = list_vars(user_id)
         if not vars_map:
-            return "ไม่มีตัวแปรถูกเก็บไว้"
-        return "\n".join([f"{k} = {v}" for k, v in vars_map.items()])
+            return "ไม่มีตัวแปรถูกเก็บไว้", False
+        return "\n".join([f"{k} = {v}" for k, v in vars_map.items()]), False
     if expr.lower() == "clearvars":
-        clear_vars()
-        return "ลบตัวแปรทั้งหมดแล้ว"
+        clear_vars(user_id)
+        return "ลบตัวแปรทั้งหมดแล้ว", False
 
     # handle assignment: only single '=' allowed
     if "=" in expr:
         parts = expr.split("=")
         if len(parts) != 2:
-            return "ข้อผิดพลาด: รูปแบบการกำหนดตัวแปรไม่ถูกต้อง (ใช้ได้เช่น x = 5)"
+            return "ข้อผิดพลาด: รูปแบบการกำหนดตัวแปรไม่ถูกต้อง (ใช้ได้เช่น x = 5)", False
         var_name = parts[0].strip()
         rhs = parts[1].strip()
         if not _VAR_NAME_RE.match(var_name):
-            return "ข้อผิดพลาด: ชื่อตัวแปรไม่ถูกต้อง (ต้องขึ้นต้นด้วยตัวอักษรหรือ _ และมีตัวอักษร/ตัวเลข/_)"
-        # cannot override allowed funcs or consts
+            return "ข้อผิดพลาด: ชื่อตัวแปรไม่ถูกต้อง (ต้องขึ้นต้นด้วยตัวอักษรหรือ _ และมีตัวอักษร/ตัวเลข/_)", False
         if var_name in _ALLOWED_FUNCS or var_name in _ALLOWED_CONSTS:
-            return f"ข้อผิดพลาด: ไม่สามารถใช้ชื่อนี้ ({var_name}) เป็นชื่อตัวแปร"
-        # evaluate RHS using current vars
+            return f"ข้อผิดพลาด: ไม่สามารถใช้ชื่อนี้ ({var_name}) เป็นชื่อตัวแปร", False
         try:
             pre = _preprocess(rhs)
             node = ast.parse(pre, mode="eval")
-            evaluator = _SafeEvaluator(variables=_VARS)
+            evaluator = _SafeEvaluator(variables=user_vars)
             value = evaluator.visit(node)
             if not isinstance(value, (int, float)):
-                return "ข้อผิดพลาด: ผลลัพธ์ที่ได้ไม่ใช่ตัวเลข"
-            set_var(var_name, float(value))
-            return f"{var_name} = {_format_result(value)}"
+                return "ข้อผิดพลาด: ผลลัพธ์ที่ได้ไม่ใช่ตัวเลข", False
+            set_var(var_name, float(value), user_id)
+            return f"{var_name} = {_format_result(value)}", False
         except Exception as e:
             msg = str(e)
             if "division by zero" in msg:
-                return "ข้อผิดพลาด: หารด้วยศูนย์"
+                return "ข้อผิดพลาด: หารด้วยศูนย์", False
             if "math domain error" in msg:
-                return "ข้อผิดพลาด: ค่าอยู่นอกโดเมนทางคณิตศาสตร์"
-            return f"ไม่สามารถคำนวณได้: {msg}"
+                return "ข้อผิดพลาด: ค่าอยู่นอกโดเมนทางคณิตศาสตร์", False
+            return f"ไม่สามารถคำนวณได้: {msg}", False
 
-    # otherwise evaluate expression with current vars
+    # otherwise evaluate expression with current user's vars
     try:
         pre = _preprocess(expr)
         node = ast.parse(pre, mode="eval")
-        evaluator = _SafeEvaluator(variables=_VARS)
+        evaluator = _SafeEvaluator(variables=user_vars)
         result = evaluator.visit(node)
-        return _format_result(result)
+        return _format_result(result), True
     except Exception as e:
         msg = str(e)
         if "division by zero" in msg:
-            return "ข้อผิดพลาด: หารด้วยศูนย์"
+            return "ข้อผิดพลาด: หารด้วยศูนย์", False
         if "math domain error" in msg:
-            return "ข้อผิดพลาด: ค่าอยู่นอกโดเมนทางคณิตศาสตร์"
-        return f"ไม่สามารถคำนวณได้: {msg}"
+            return "ข้อผิดพลาด: ค่าอยู่นอกโดเมนทางคณิตศาสตร์", False
+        return f"ไม่สามารถคำนวณได้: {msg}", False
 
-# ---------- smart_calculate wrapper (added) ----------
-def smart_calculate(expression: str) -> str:
+# ---------- smart_calculate wrapper ----------
+def smart_calculate(expression: str, user_id: str = "global") -> str:
     """
-    Backwards-compatible wrapper expected by handlers.py.
-    If the result is a plain number, prefix with 'Result: '. Otherwise return calculate() output unchanged.
+    Public wrapper called by handlers.py.
+    Passes user_id so each user has an isolated variable namespace.
+    Prefixes numeric results with an emoji label for readability.
     """
-    res = calculate(expression)
-    # try to parse as float/int; if so, return with prefix
-    try:
-        float_res = float(res)
-        # integer-looking strings like "4" or "4.0" parse fine
-        return f"Result: {res}"
-    except Exception:
-        # not a plain number -> return original output (e.g., variable list, errors, assignments)
-        return res
+    result, is_numeric = calculate(expression, user_id)
+    return f"🔢 Result: {result}" if is_numeric else result
 
 # ---------- CLI ----------
 def _cli_main():
@@ -279,7 +300,8 @@ def _cli_main():
         sys.exit(0)
     expr = " ".join(sys.argv[1:])
     print("Expression:", expr)
-    print("Result:", calculate(expr))
+    result, _ = calculate(expr)
+    print("Result:", result)
 
 if __name__ == "__main__":
     _cli_main()

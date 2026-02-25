@@ -62,29 +62,40 @@ validate_config()
 # ============================================================================
 # PERFORMANCE MONITORING
 # ============================================================================
+from threading import Lock as _Lock
+
+_metrics_lock = _Lock()
 _metrics = {
     "total_requests": 0,
     "total_errors": 0,
-    "total_response_time": 0,
+    "total_response_time": 0.0,
     "cache_hits": 0,
     "cache_misses": 0,
-    "start_time": time.time()
+    "start_time": time.time(),
 }
+
+
+def _increment_metric(key: str, value: float = 1) -> None:
+    """Thread-safe counter increment for _metrics."""
+    with _metrics_lock:
+        _metrics[key] += value
+
 
 @app.before_request
 def before_request():
-    """Log request start time"""
+    """Log request start time."""
     g.start_time = time.time()
-    _metrics["total_requests"] += 1
+    _increment_metric("total_requests")
+
 
 @app.after_request
 def after_request(response):
-    """Log response time and update metrics"""
+    """Log response time and update metrics."""
     if hasattr(g, 'start_time'):
         elapsed = (time.time() - g.start_time) * 1000
-        _metrics["total_response_time"] += elapsed
+        _increment_metric("total_response_time", elapsed)
 
-        if elapsed > 1000:  # Log slow requests
+        if elapsed > 1000:
             logger.warning(f"Slow request to {request.path}: {elapsed:.2f}ms")
         else:
             logger.debug(f"Request to {request.path}: {elapsed:.2f}ms")
@@ -103,6 +114,13 @@ try:
         db = firestore.client()
         features.set_database(db)  # Set database in features module
         broadcast.set_database(db)  # Set database in broadcast module
+
+        # Wire Firestore into the blacklist manager so bans survive restarts
+        from user_blacklist import get_blacklist_manager as _get_bl
+        _bl = _get_bl()
+        _bl.db = db
+        _bl.load_blacklist()
+        logger.info("🚫 Blacklist loaded from Firestore")
         logger.info("🔥 Firebase Connected Successfully!")
     else:
         logger.warning(f"⚠️ Missing {FIREBASE_KEY_PATH}. Homework DB features will be disabled.")
@@ -164,7 +182,7 @@ def callback():
     signature = request.headers.get('X-Line-Signature') or request.headers.get('x-line-signature')
     if not signature:
         logger.error("Missing X-Line-Signature header.")
-        _metrics["total_errors"] += 1
+        _increment_metric("total_errors")
         abort(400)
 
     body = request.get_data(as_text=True)
@@ -172,18 +190,18 @@ def callback():
 
     if handler is None:
         logger.error("Webhook handler not configured (missing CHANNEL_SECRET).")
-        _metrics["total_errors"] += 1
+        _increment_metric("total_errors")
         abort(500)
 
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
         logger.error("Invalid signature. Check CHANNEL_SECRET.")
-        _metrics["total_errors"] += 1
+        _increment_metric("total_errors")
         abort(400)
     except Exception as e:
         logger.exception("Error handling request: %s", e)
-        _metrics["total_errors"] += 1
+        _increment_metric("total_errors")
         abort(500)
 
     return "OK", 200
@@ -276,21 +294,21 @@ def metrics():
 @app.route("/stats", methods=['GET'])
 def stats():
     """Show bot statistics"""
-    from handlers import _user_message_history
+    try:
+        from handlers import _user_message_history
+        total_users = len(_user_message_history)
+        total_messages = sum(len(msgs) for msgs in _user_message_history.values())
+    except (ImportError, AttributeError) as e:
+        logger.warning(f"Could not read _user_message_history from handlers: {e}")
+        total_users = -1
+        total_messages = -1
 
-    total_users = len(_user_message_history)
-    total_messages = sum(len(msgs) for msgs in _user_message_history.values())
-
-    # Get broadcast stats if available
     broadcast_stats = {}
     if db:
         try:
-            user_count = broadcast.get_user_count()
-            broadcast_stats = {
-                "registered_users": user_count
-            }
-        except:
-            pass
+            broadcast_stats = {"registered_users": broadcast.get_user_count()}
+        except Exception as e:
+            logger.warning(f"Could not get broadcast stats: {e}")
 
     return jsonify({
         "total_users": total_users,
@@ -315,7 +333,7 @@ def not_found(error):
 def internal_error(error):
     """Handle 500 errors"""
     logger.error(f"Internal server error: {error}")
-    _metrics["total_errors"] += 1
+    _increment_metric("total_errors")
     return jsonify({
         "error": "Internal Server Error",
         "message": "An unexpected error occurred. Please try again later."
@@ -377,6 +395,8 @@ def print_startup_banner():
     logger.info("=" * 60)
 
 if __name__ == "__main__":
+    # Print the banner FIRST so any hang during Firebase / Gemini init is
+    # immediately visible in the console rather than producing silent delay.
     print_startup_banner()
 
     # Run Flask app

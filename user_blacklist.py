@@ -6,8 +6,9 @@ MTC Assistant - User Blacklist System (FIXED)
 """
 
 import time
-import json
-from typing import Dict, Set, Optional, Tuple  # ✅ FIXED: Added Tuple import
+import json  # kept only for potential future export helpers
+from threading import Lock
+from typing import Dict, Set, Optional, Tuple
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from config import logger, LOCAL_TZ
@@ -31,160 +32,137 @@ class BanRecord:
 
 class BlacklistManager:
     """
-    Manage permanent and temporary bans
-    
+    Manage permanent bans backed by Firebase Firestore.
+
+    An in-memory cache (_cache) is kept in sync so every is_banned() check
+    is O(1) without a network round-trip.  Writes go to both Firestore and
+    the cache atomically (within Python's GIL).
+
     Usage:
-        blacklist = BlacklistManager()
-        
-        # Check if user is banned
+        blacklist = BlacklistManager(db=firestore_client)
+
         if blacklist.is_banned(user_id):
             return "You are banned!"
-        
-        # Ban a user
+
         blacklist.ban_user(user_id, admin_id, "Spamming")
-        
-        # Unban a user
         blacklist.unban_user(user_id)
     """
-    
-    def __init__(self, storage_file: str = "blacklist.json"):
-        """Initialize blacklist manager"""
-        self.storage_file = storage_file
-        self.blacklist: Dict[str, BanRecord] = {}
-        self.load_blacklist()
-    
+
+    def __init__(self, db=None):
+        """
+        Args:
+            db: Firebase Firestore client.  When None the manager operates in
+                memory-only mode (bans survive the request but not a restart).
+        """
+        self.db = db
+        self._cache: Dict[str, BanRecord] = {}
+        if self.db:
+            self.load_blacklist()
+        else:
+            logger.warning(
+                "BlacklistManager: no Firestore client provided — "
+                "bans will not persist across restarts."
+            )
+
     def load_blacklist(self):
-        """Load blacklist from file"""
+        """Load all ban records from Firestore into the in-memory cache."""
         try:
-            with open(self.storage_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                self.blacklist = {
-                    user_id: BanRecord(**record) 
-                    for user_id, record in data.items()
-                }
-            logger.info(f"Loaded {len(self.blacklist)} banned users")
-        except FileNotFoundError:
-            logger.info("No blacklist file found, starting fresh")
-            self.blacklist = {}
-        except Exception as e:
-            logger.error(f"Error loading blacklist: {e}")
-            self.blacklist = {}
-    
-    def save_blacklist(self):
-        """Save blacklist to file"""
-        try:
-            data = {
-                user_id: asdict(record) 
-                for user_id, record in self.blacklist.items()
+            docs = self.db.collection('blacklist').stream()
+            self._cache = {
+                doc.id: BanRecord(**doc.to_dict()) for doc in docs
             }
-            with open(self.storage_file, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-            logger.info(f"Saved {len(self.blacklist)} banned users")
+            logger.info(f"Loaded {len(self._cache)} banned users from Firestore")
         except Exception as e:
-            logger.error(f"Error saving blacklist: {e}")
-    
+            logger.error(f"Error loading blacklist from Firestore: {e}")
+            self._cache = {}
+
     def is_banned(self, user_id: str) -> bool:
-        """Check if user is banned"""
-        return user_id in self.blacklist
-    
+        """O(1) ban check — reads only from the in-memory cache."""
+        return user_id in self._cache
+
     def ban_user(
-        self, 
-        user_id: str, 
-        admin_id: str, 
+        self,
+        user_id: str,
+        admin_id: str,
         reason: str = "Violation of terms",
         permanent: bool = True
     ) -> bool:
         """
-        Ban a user permanently
-        
-        Args:
-            user_id: User ID to ban
-            admin_id: Admin who issued the ban
-            reason: Reason for ban
-            permanent: Whether ban is permanent
-        
+        Ban a user.  Writes to Firestore first; updates cache on success.
+
         Returns:
-            True if successful
+            True if the ban was stored successfully.
         """
         try:
             now = datetime.now(tz=LOCAL_TZ).isoformat()
-            
-            self.blacklist[user_id] = BanRecord(
+            record = BanRecord(
                 user_id=user_id,
                 banned_at=now,
                 banned_by=admin_id,
                 reason=reason,
-                is_permanent=permanent
+                is_permanent=permanent,
             )
-            
-            self.save_blacklist()
+            if self.db:
+                self.db.collection('blacklist').document(user_id).set(asdict(record))
+            # Update cache only after a successful write
+            self._cache[user_id] = record
             logger.warning(f"User {user_id} banned by {admin_id}: {reason}")
             return True
-            
         except Exception as e:
-            logger.error(f"Error banning user: {e}")
+            logger.error(f"Error banning user {user_id}: {e}")
             return False
-    
+
     def unban_user(self, user_id: str) -> bool:
         """
-        Unban a user
-        
-        Args:
-            user_id: User ID to unban
-        
+        Remove a ban.  Deletes from Firestore first; updates cache on success.
+
         Returns:
-            True if successful
+            True if the user was found and unbanned.
         """
-        try:
-            if user_id in self.blacklist:
-                del self.blacklist[user_id]
-                self.save_blacklist()
-                logger.info(f"User {user_id} unbanned")
-                return True
-            else:
-                logger.warning(f"User {user_id} not in blacklist")
-                return False
-        except Exception as e:
-            logger.error(f"Error unbanning user: {e}")
+        if user_id not in self._cache:
+            logger.warning(f"Unban requested for {user_id} but they are not banned")
             return False
-    
+        try:
+            if self.db:
+                self.db.collection('blacklist').document(user_id).delete()
+            del self._cache[user_id]
+            logger.info(f"User {user_id} unbanned")
+            return True
+        except Exception as e:
+            logger.error(f"Error unbanning user {user_id}: {e}")
+            return False
+
     def get_ban_info(self, user_id: str) -> Optional[BanRecord]:
-        """Get ban information for a user"""
-        return self.blacklist.get(user_id)
-    
+        """Get ban information for a user."""
+        return self._cache.get(user_id)
+
     def get_all_banned(self) -> Dict[str, BanRecord]:
-        """Get all banned users"""
-        return self.blacklist.copy()
-    
+        """Return a snapshot of all banned users."""
+        return self._cache.copy()
+
     def get_stats(self) -> str:
-        """Get blacklist statistics"""
-        total = len(self.blacklist)
-        permanent = sum(1 for r in self.blacklist.values() if r.is_permanent)
-        
-        message = f"🚫 *Blacklist Statistics*\n\n"
+        """Get blacklist statistics."""
+        total = len(self._cache)
+        permanent = sum(1 for r in self._cache.values() if r.is_permanent)
+        message = "🚫 *Blacklist Statistics*\n\n"
         message += f"Total banned: {total}\n"
         message += f"Permanent: {permanent}\n"
         message += f"Temporary: {total - permanent}\n"
-        
         return message
-    
+
     def format_ban_message(self, user_id: str) -> str:
-        """Format ban message for user"""
+        """Format a user-facing ban message."""
         record = self.get_ban_info(user_id)
-        
         if not record:
             return "⚠️ คุณถูกจำกัดการใช้งานชั่วคราว"
-        
         message = "🚫 *คุณถูกแบนจากการใช้งาน*\n\n"
         message += f"เหตุผล: {record.reason}\n"
         message += f"วันที่แบน: {record.banned_at}\n"
-        
         if record.is_permanent:
-            message += f"\nสถานะ: ถาวร\n"
-            message += f"หากต้องการอุทธรณ์ กรุณาติดต่อผู้ดูแลระบบ"
+            message += "\nสถานะ: ถาวร\n"
+            message += "หากต้องการอุทธรณ์ กรุณาติดต่อผู้ดูแลระบบ"
         else:
-            message += f"\nสถานะ: ชั่วคราว"
-        
+            message += "\nสถานะ: ชั่วคราว"
         return message
 
 # ============================================================================
@@ -192,12 +170,23 @@ class BlacklistManager:
 # ============================================================================
 
 _blacklist_manager: Optional[BlacklistManager] = None
+_blacklist_lock = Lock()
+
 
 def get_blacklist_manager() -> BlacklistManager:
-    """Get or create global blacklist manager"""
+    """
+    Return the process-wide BlacklistManager singleton.
+
+    Uses double-checked locking so that even under concurrent Flask threads
+    only one instance is ever created.  Wire up Firestore via
+    ``get_blacklist_manager().db = db`` (and call ``.load_blacklist()``)
+    during app startup in main.py.
+    """
     global _blacklist_manager
     if _blacklist_manager is None:
-        _blacklist_manager = BlacklistManager()
+        with _blacklist_lock:
+            if _blacklist_manager is None:   # second check inside the lock
+                _blacklist_manager = BlacklistManager()
     return _blacklist_manager
 
 # ============================================================================

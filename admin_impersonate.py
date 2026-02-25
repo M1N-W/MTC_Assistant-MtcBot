@@ -16,6 +16,8 @@ Usage:
 """
 
 import time
+import re
+from threading import Lock
 from typing import Dict, Optional, Tuple
 from config import logger, ADMIN_USER_IDS
 from linebot.v3.messaging import (
@@ -23,12 +25,22 @@ from linebot.v3.messaging import (
     PushMessageRequest, TextMessage
 )
 
+# LINE User IDs are always exactly 33 characters: "U" followed by 32 hex digits.
+LINE_USER_ID_PATTERN = re.compile(r'^U[0-9a-f]{32}$')
+
+
+def is_valid_line_user_id(user_id: str) -> bool:
+    """Return True only for well-formed LINE User IDs."""
+    return bool(LINE_USER_ID_PATTERN.match(user_id))
+
+
 # ============================================================================
 # GLOBAL STATE (Session Management)
 # ============================================================================
 
 # Store recent users list for easy selection
 _recent_users_cache: Dict[str, Dict] = {}
+_cache_lock = Lock()   # Guards all reads/writes to _recent_users_cache
 
 # LINE API client
 _line_api = None
@@ -50,27 +62,27 @@ def set_line_api(config: Configuration):
 
 def track_user_activity(user_id: str, display_name: str = "Unknown"):
     """
-    Track user activity for the recent users list
-    Called automatically when users send messages
+    Track user activity for the recent users list.
+    Called automatically when users send messages.
+    Thread-safe — multiple webhook threads can call this concurrently.
     """
-    global _recent_users_cache
-    
-    _recent_users_cache[user_id] = {
-        "user_id": user_id,
-        "display_name": display_name,
-        "last_seen": time.time(),
-        "last_seen_str": time.strftime("%d/%m/%Y %H:%M")
-    }
-    
-    # Keep only last 20 users
-    if len(_recent_users_cache) > 20:
-        # Sort by last_seen and keep newest 20
-        sorted_users = sorted(
-            _recent_users_cache.items(),
-            key=lambda x: x[1]["last_seen"],
-            reverse=True
-        )
-        _recent_users_cache = dict(sorted_users[:20])
+    with _cache_lock:
+        _recent_users_cache[user_id] = {
+            "user_id": user_id,
+            "display_name": display_name,
+            "last_seen": time.time(),
+            "last_seen_str": time.strftime("%d/%m/%Y %H:%M"),
+        }
+
+        # Keep only the 20 most-recently-seen users
+        if len(_recent_users_cache) > 20:
+            sorted_users = sorted(
+                _recent_users_cache.items(),
+                key=lambda x: x[1]["last_seen"],
+                reverse=True,
+            )
+            _recent_users_cache.clear()
+            _recent_users_cache.update(dict(sorted_users[:20]))
 
 # ============================================================================
 # CORE FUNCTIONS (WITH RETRY MECHANISM)
@@ -168,40 +180,41 @@ def send_impersonate_message(
 def handle_list_users_command(admin_id: str) -> str:
     """
     Handle: ดูผู้ใช้
-    Show list of recent users for easy selection
+    Show list of recent users for easy selection.
     """
-    if not _recent_users_cache:
+    with _cache_lock:
+        snapshot = dict(_recent_users_cache)   # take a consistent snapshot
+
+    if not snapshot:
         return (
             "📋 *ผู้ใช้ล่าสุด*\n\n"
             "⚠️ ยังไม่มีผู้ใช้ในระบบ\n"
             "รอให้มีคนส่งข้อความก่อนนะครับ"
         )
-    
-    message = f"📋 *ผู้ใช้ล่าสุด* ({len(_recent_users_cache)} คน)\n\n"
-    
-    # Sort by last seen (newest first)
+
+    message = f"📋 *ผู้ใช้ล่าสุด* ({len(snapshot)} คน)\n\n"
+
     sorted_users = sorted(
-        _recent_users_cache.items(),
+        snapshot.items(),
         key=lambda x: x[1]["last_seen"],
-        reverse=True
+        reverse=True,
     )
-    
+
     for i, (user_id, info) in enumerate(sorted_users[:10], 1):
-        # Truncate user_id for display
         short_id = user_id[:12] + "..."
         message += f"{i}. `{short_id}`\n"
         message += f"   เห็นล่าสุด: {info['last_seen_str']}\n\n"
-    
+
     if len(sorted_users) > 10:
         message += f"... และอีก {len(sorted_users) - 10} คน\n\n"
-    
+
     message += (
         "💡 *วิธีส่งข้อความ:*\n"
         "ส่งถึง [user_id] [ข้อความ]\n\n"
         "📌 *ตัวอย่าง:*\n"
         f"ส่งถึง {sorted_users[0][0][:15]} สวัสดีครับ"
     )
-    
+
     return message
 
 def handle_send_impersonate_command(admin_id: str, user_message: str) -> str:
@@ -224,11 +237,11 @@ def handle_send_impersonate_command(admin_id: str, user_message: str) -> str:
     target_user_id = parts[1]
     message = parts[2]
     
-    # Validate user_id format (basic check)
-    if not target_user_id.startswith("U") or len(target_user_id) < 10:
+    # Validate user_id format — LINE IDs are always "U" + 32 hex chars (33 total)
+    if not is_valid_line_user_id(target_user_id):
         return (
             "❌ User ID ไม่ถูกต้อง\n\n"
-            "User ID ต้องเริ่มด้วย 'U' และมีความยาวอย่างน้อย 33 ตัวอักษร\n\n"
+            "User ID ต้องขึ้นต้นด้วย 'U' ตามด้วยตัวเลข hex 32 ตัว (รวม 33 ตัวอักษร)\n\n"
             "💡 พิมพ์ 'ดูผู้ใช้' เพื่อดู User ID ที่ถูกต้อง"
         )
     
