@@ -781,7 +781,6 @@ def handle_message(event):
                 )
                 
                 if "✅" in result:
-                    time.sleep(1)
                     first_q = handle_show_current_question(user_id, db)
                     reply_to_line(event.reply_token, [TextMessage(text=result), TextMessage(text=first_q)])
                     return
