@@ -13,7 +13,6 @@ Improvements:
 """
 
 import os
-import signal
 import threading
 
 import warnings
@@ -241,7 +240,7 @@ def home():
 
 @app.route("/healthz", methods=['GET'])
 def healthz():
-    """Enhanced health check endpoint with connectivity test"""
+    """Health check — fast response, non-blocking Firebase probe."""
     start_time = time.time()
 
     services_status = {
@@ -251,33 +250,37 @@ def healthz():
         "broadcast": bool(line_config),
     }
 
-    # Test Firebase connectivity with timeout
+    # Test Firebase connectivity using a daemon thread with a hard timeout.
+    # SIGALRM cannot be used here — it only works on the main OS thread,
+    # but gunicorn worker threads are *not* the main thread.  A blocking
+    # gRPC call inside SIGALRM would keep the worker busy even after the
+    # alarm fires, eventually causing a WORKER TIMEOUT.
     if db:
-        try:
-            def _healthz_timeout_handler(signum, frame):
-                raise TimeoutError("Firebase connectivity test timed out")
-            
-            old_handler = signal.signal(signal.SIGALRM, _healthz_timeout_handler)
-            signal.alarm(5)  # 5 second timeout
-            
+        result_holder = [None]  # mutable container so the thread can write back
+
+        def _probe():
             try:
                 list(db.collection('health_check').limit(1).stream())
-                services_status["firebase_connectivity"] = True
-            finally:
-                signal.alarm(0)
-                signal.signal(signal.SIGALRM, old_handler)
-                
-        except TimeoutError:
-            logger.warning("Firebase connectivity test timed out")
-            services_status["firebase_connectivity"] = False
-        except Exception as e:
-            logger.warning(f"Firebase connectivity test failed: {e}")
-            services_status["firebase_connectivity"] = False
+                result_holder[0] = True
+            except Exception as e:
+                result_holder[0] = False
+                logger.debug(f"Firebase probe error: {e}")
 
-    response_time = (time.time() - start_time) * 1000  # ms
+        probe_thread = threading.Thread(target=_probe, daemon=True)
+        probe_thread.start()
+        probe_thread.join(timeout=3.0)  # wait at most 3 s
 
-    # Determine overall health
-    all_critical_ok = services_status["line"] and services_status["firebase"]
+        if probe_thread.is_alive():
+            # Thread is still blocked on gRPC — Firebase is unhealthy
+            logger.warning("Firebase connectivity probe timed out (3s)")
+            services_status["firebase_connectivity"] = False
+        else:
+            services_status["firebase_connectivity"] = bool(result_holder[0])
+
+    response_time = (time.time() - start_time) * 1000
+
+    # Only LINE config is truly critical for the bot to operate
+    all_critical_ok = services_status["line"]
     status_code = 200 if all_critical_ok else 503
 
     return jsonify({

@@ -5,35 +5,19 @@ services:
     env: python
     plan: starter
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn --workers 2 --timeout 120 --bind 0.0.0.0:$PORT main:app"
+    startCommand: "gunicorn --worker-class gevent --workers 2 --worker-connections 100 --timeout 120 --keep-alive 5 --preload --bind 0.0.0.0:$PORT main:app"
     healthCheckPath: /healthz
     autoDeploy: true
-    
-    # Environment Variables (set these in Render Dashboard)
+
     envVars:
       - key: FLASK_DEBUG
         value: "false"
       - key: PYTHON_VERSION
         value: "3.11.0"
 
-  # Background Worker for cleanup tasks
   - type: worker
     name: mtc-cleanup
     env: python
     plan: starter
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "python -c \"import time; while True: time.sleep(3600)\""
-    
-# Render-specific optimizations
-build:
-  - pip install --upgrade pip
-  - pip install gunicorn
-
-# Health check configuration
-healthChecks:
-  web:
-    - path: /healthz
-      initialDelaySeconds: 30
-      periodSeconds: 30
-      timeoutSeconds: 10
-      failureThreshold: 3
+    startCommand: "python -c \"import time; [time.sleep(3600) for _ in iter(int, 1)]\""
