@@ -104,27 +104,59 @@ def after_request(response):
     return response
 
 # ============================================================================
-# FIREBASE INITIALIZATION
+# FIREBASE INITIALIZATION (lazy + reconnect-safe)
 # ============================================================================
+# We deliberately keep startup non-blocking. A corrupted gRPC SSL channel
+# from a previous deploy (exit code 139 / TSI_DATA_CORRUPTED) is cleared by
+# forcing a full SDK re-init with delete_app + initialize_app, which opens a
+# fresh TCP connection. The eager connect runs in a background daemon thread
+# so the Flask app is ready to serve /healthz immediately.
 db = None
-try:
-    if os.path.exists(FIREBASE_KEY_PATH):
-        if not firebase_admin._apps:
-            cred = credentials.Certificate(FIREBASE_KEY_PATH)
-            firebase_admin.initialize_app(cred)
-        db = firestore.client()
-        features.set_database(db)  # Set database in features module
-        broadcast.set_database(db)  # Set database in broadcast module
+_db_lock = threading.Lock()
+
+def _connect_firebase() -> bool:
+    """Init (or re-init) Firebase Admin SDK. Safe to call multiple times."""
+    global db
+    try:
+        if not os.path.exists(FIREBASE_KEY_PATH):
+            logger.warning(f"⚠️ Missing {FIREBASE_KEY_PATH}. Firebase disabled.")
+            return False
+
+        # delete_app + re-init forces a brand-new gRPC channel,
+        # clearing any corrupted SSL state from a previous session.
+        if firebase_admin._apps:
+            firebase_admin.delete_app(firebase_admin.get_app())
+
+        cred = credentials.Certificate(FIREBASE_KEY_PATH)
+        firebase_admin.initialize_app(cred)
+        new_db = firestore.client()
+
+        # Quick smoke-test — raises immediately if rules still block us
+        list(new_db.collection("health_check").limit(1).stream())
+
+        db = new_db
+        features.set_database(db)
+        broadcast.set_database(db)
+
         from user_blacklist import get_blacklist_manager
         _bm = get_blacklist_manager()
         _bm.db = db
         _bm.load_blacklist()
-        logger.info("🚫 Blacklist loaded from Firebase")
+
         logger.info("🔥 Firebase Connected Successfully!")
-    else:
-        logger.warning(f"⚠️ Missing {FIREBASE_KEY_PATH}. Homework DB features will be disabled.")
-except Exception as e:
-    logger.exception(f"❌ Firebase Init Error: {e}")
+        logger.info("🚫 Blacklist loaded from Firebase")
+        return True
+
+    except Exception as e:
+        logger.error(f"❌ Firebase connect failed: {e}")
+        db = None
+        return False
+
+def _eager_firebase_connect():
+    with _db_lock:
+        _connect_firebase()
+
+threading.Thread(target=_eager_firebase_connect, daemon=True).start()
 
 # ============================================================================
 # GEMINI AI INITIALIZATION (google-genai client)
@@ -240,7 +272,7 @@ def home():
 
 @app.route("/healthz", methods=['GET'])
 def healthz():
-    """Health check — fast response, non-blocking Firebase probe."""
+    """Fast health check — non-blocking Firebase probe via daemon thread."""
     start_time = time.time()
 
     services_status = {
@@ -250,36 +282,41 @@ def healthz():
         "broadcast": bool(line_config),
     }
 
-    # Test Firebase connectivity using a daemon thread with a hard timeout.
-    # SIGALRM cannot be used here — it only works on the main OS thread,
-    # but gunicorn worker threads are *not* the main thread.  A blocking
-    # gRPC call inside SIGALRM would keep the worker busy even after the
-    # alarm fires, eventually causing a WORKER TIMEOUT.
+    # If Firebase is not connected yet, try reconnecting in background.
+    if not db:
+        threading.Thread(target=lambda: _db_lock.locked() or threading.Thread(
+            target=_eager_firebase_connect, daemon=True).start(), daemon=True).start()
+
+    # Probe Firebase with a hard 3-second timeout using a daemon thread.
+    # NEVER use signal.SIGALRM here — it only works on the main OS thread.
+    # A gunicorn worker thread is NOT the main thread; SIGALRM would fire but
+    # the blocking gRPC call would keep running, eventually killing the worker.
     if db:
-        result_holder = [None]  # mutable container so the thread can write back
+        result_holder = [None]
 
         def _probe():
             try:
-                list(db.collection('health_check').limit(1).stream())
+                list(db.collection("health_check").limit(1).stream())
                 result_holder[0] = True
             except Exception as e:
                 result_holder[0] = False
                 logger.debug(f"Firebase probe error: {e}")
 
-        probe_thread = threading.Thread(target=_probe, daemon=True)
-        probe_thread.start()
-        probe_thread.join(timeout=3.0)  # wait at most 3 s
+        t = threading.Thread(target=_probe, daemon=True)
+        t.start()
+        t.join(timeout=3.0)
 
-        if probe_thread.is_alive():
-            # Thread is still blocked on gRPC — Firebase is unhealthy
+        if t.is_alive():
             logger.warning("Firebase connectivity probe timed out (3s)")
             services_status["firebase_connectivity"] = False
+            # Stale gRPC channel — schedule a reconnect
+            threading.Thread(target=_eager_firebase_connect, daemon=True).start()
         else:
             services_status["firebase_connectivity"] = bool(result_holder[0])
 
     response_time = (time.time() - start_time) * 1000
 
-    # Only LINE config is truly critical for the bot to operate
+    # Only LINE config is truly critical for the bot to serve messages.
     all_critical_ok = services_status["line"]
     status_code = 200 if all_critical_ok else 503
 
