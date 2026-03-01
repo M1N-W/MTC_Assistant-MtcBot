@@ -265,10 +265,10 @@ def calculate(expression: str, user_id: str = "global") -> tuple:
         except Exception as e:
             msg = str(e)
             if "division by zero" in msg:
-                return "ข้อผิดพลาด: หารด้วยศูนย์", False
+                return "อ๊ะ! ในทางคณิตศาสตร์เราหารด้วยศูนย์ไม่ได้น้าา 🚫 ลองแก้ตัวเลขดูใหม่นะครับ", False
             if "math domain error" in msg:
-                return "ข้อผิดพลาด: ค่าอยู่นอกโดเมนทางคณิตศาสตร์", False
-            return f"ไม่สามารถคำนวณได้: {msg}", False
+                return "ตัวเลขนี้มันหลุดขอบจักรวาลคณิตศาสตร์ไปหน่อยฮะ 🌌 ลองเปลี่ยนค่าดูน้า", False
+            return f"แงงง ระบบคำนวณไม่ถูกเลยฮะ เช็คสมการให้อีกทีได้มั้ยเอ่ย? 🧐 ({msg})", False
 
     # otherwise evaluate expression with current user's vars
     try:
@@ -280,10 +280,10 @@ def calculate(expression: str, user_id: str = "global") -> tuple:
     except Exception as e:
         msg = str(e)
         if "division by zero" in msg:
-            return "ข้อผิดพลาด: หารด้วยศูนย์", False
+            return "อ๊ะ! ในทางคณิตศาสตร์เราหารด้วยศูนย์ไม่ได้น้าา 🚫 ลองแก้ตัวเลขดูใหม่นะครับ", False
         if "math domain error" in msg:
-            return "ข้อผิดพลาด: ค่าอยู่นอกโดเมนทางคณิตศาสตร์", False
-        return f"ไม่สามารถคำนวณได้: {msg}", False
+            return "ตัวเลขนี้มันหลุดขอบจักรวาลคณิตศาสตร์ไปหน่อยฮะ 🌌 ลองเปลี่ยนค่าดูน้า", False
+        return f"แงงง ระบบคำนวณไม่ถูกเลยฮะ เช็คสมการให้อีกทีได้มั้ยเอ่ย? 🧐 ({msg})", False
 
 # ---------- smart_calculate wrapper ----------
 def smart_calculate(expression: str, user_id: str = "global") -> str:
@@ -293,7 +293,7 @@ def smart_calculate(expression: str, user_id: str = "global") -> str:
     Prefixes numeric results with an emoji label for readability.
     """
     result, is_numeric = calculate(expression, user_id)
-    return f"🔢 Result: {result}" if is_numeric else result
+    return f"✨ คำตอบคือ: {result} 🤓" if is_numeric else result
 
 # ---------- CLI ----------
 def _cli_main():

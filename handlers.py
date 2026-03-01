@@ -875,8 +875,8 @@ def handle_message(event):
                         logger.exception(f"Error: {e}")
                         reply_message = TextMessage(
                             text=format_error_message(
-                                "เกิดข้อผิดพลาด",
-                                "ลองใหม่อีกทีได้เลย"
+                                "แงงง ระบบขัดข้องนิดหน่อยฮะ 🥺",
+                                "ลองส่งคำสั่งมาใหม่อีกทีน้า"
                             )
                         )
                         break
@@ -893,7 +893,7 @@ def handle_message(event):
         except Exception as e:
             logger.exception(f"AI error: {e}")
             reply_message = TextMessage(
-                text="AI ขัดข้องชั่วคราว ลองใหม่อีกทีนะ"
+                text="AI ของเรากำลังมึนตึ้บ ขอเวลาตั้งสติแป๊บนึงนะ 😵‍💫 ลองทักมาใหม่นะครับ!"
             )
     
     # Send reply

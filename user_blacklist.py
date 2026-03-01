@@ -144,7 +144,7 @@ class BlacklistManager:
         """Get blacklist statistics."""
         total = len(self._cache)
         permanent = sum(1 for r in self._cache.values() if r.is_permanent)
-        message = "🚫 *Blacklist Statistics*\n\n"
+        message = "📊 *รายงานสถิติบัญชีดำ (Blacklist)* 🚫\n\n"
         message += f"Total banned: {total}\n"
         message += f"Permanent: {permanent}\n"
         message += f"Temporary: {total - permanent}\n"
@@ -154,15 +154,15 @@ class BlacklistManager:
         """Format a user-facing ban message."""
         record = self.get_ban_info(user_id)
         if not record:
-            return "⚠️ คุณถูกจำกัดการใช้งานชั่วคราว"
-        message = "🚫 *คุณถูกแบนจากการใช้งาน*\n\n"
-        message += f"เหตุผล: {record.reason}\n"
-        message += f"วันที่แบน: {record.banned_at}\n"
+            return "อุ๊ย! ดูเหมือนคุณจะถูกระงับการใช้งานชั่วคราวนะฮะ 🥺"
+        message = "แงงง.. คุณถูกจำกัดสิทธิ์การใช้งานบอทฮะ 🚫\n\n"
+        message += f"📝 สาเหตุ: {record.reason}\n"
+        message += f"📅 ตั้งแต่วันที่: {record.banned_at}\n"
         if record.is_permanent:
-            message += "\nสถานะ: ถาวร\n"
-            message += "หากต้องการอุทธรณ์ กรุณาติดต่อผู้ดูแลระบบ"
+            message += "\nสถานะ: ถาวร 🔒\n"
+            message += "(ถ้าคิดว่านี่คือเรื่องเข้าใจผิด ทักหาแอดมินให้ช่วยตรวจสอบได้เลยน้า ✌️)"
         else:
-            message += "\nสถานะ: ชั่วคราว"
+            message += "\nสถานะ: ชั่วคราว ⏳"
         return message
 
 # ============================================================================
@@ -206,10 +206,8 @@ def handle_ban_user_command(admin_id: str, user_message: str) -> str:
     
     if len(parts) < 2:
         return (
-            "⚠️ รูปแบบคำสั่ง:\n"
-            "แบน [user_id] [เหตุผล]\n\n"
-            "ตัวอย่าง:\n"
-            "แบน U1234567890 Spamming"
+            "บอสครับ! รูปแบบคำสั่งไม่ถูกฮะ 🕵️‍♂️ ต้องพิมพ์แบบนี้:\n"
+            "แบน [รหัสผู้ใช้] [เหตุผล]"
         )
     
     target_user_id = parts[1]
@@ -218,14 +216,14 @@ def handle_ban_user_command(admin_id: str, user_message: str) -> str:
     # ป้องกันไม่ให้แบน admin
     from config import ADMIN_USER_IDS
     if target_user_id in ADMIN_USER_IDS:
-        return "❌ ไม่สามารถแบน Admin ได้"
+        return "บอสจะแบนพวกเดียวกันไม่ได้นะฮะ! 🛑"
     
     success = blacklist.ban_user(target_user_id, admin_id, reason)
     
     if success:
-        return f"✅ แบน {target_user_id} สำเร็จ\nเหตุผล: {reason}"
+        return f"🎯 จัดการแบนเป้าหมาย {target_user_id} เรียบร้อยครับบอส!\nข้อหา: {reason} 🤫"
     else:
-        return "❌ เกิดข้อผิดพลาดในการแบน"
+        return "❌ ภารกิจล้มเหลวฮะ ระบบแบนมีปัญหา"
 
 def handle_unban_user_command(admin_id: str, user_message: str) -> str:
     """
@@ -240,19 +238,17 @@ def handle_unban_user_command(admin_id: str, user_message: str) -> str:
     
     if len(parts) < 2:
         return (
-            "⚠️ รูปแบบคำสั่ง:\n"
-            "ปลดแบน [user_id]\n\n"
-            "ตัวอย่าง:\n"
-            "ปลดแบน U1234567890"
+            "บอสครับ! จะให้ผมปลดแบนใคร พิมพ์มาแบบนี้นะฮะ:\n"
+            "ปลดแบน [รหัสผู้ใช้]"
         )
     
     target_user_id = parts[1]
     success = blacklist.unban_user(target_user_id)
     
     if success:
-        return f"✅ ปลดแบน {target_user_id} สำเร็จ"
+        return f"🔓 ปลดล็อกเป้าหมาย {target_user_id} ให้กลับมาใช้งานได้แล้วครับบอส!"
     else:
-        return f"⚠️ {target_user_id} ไม่อยู่ในรายการแบน"
+        return f"🧐 เป้าหมาย {target_user_id} ไม่ได้อยู่ในแฟ้มบัญชีดำนะฮะ"
 
 def handle_list_banned_command(admin_id: str, user_message: str = "") -> str:
     """
@@ -264,9 +260,9 @@ def handle_list_banned_command(admin_id: str, user_message: str = "") -> str:
     banned = blacklist.get_all_banned()
     
     if not banned:
-        return "📋 ไม่มีผู้ใช้ที่ถูกแบนในระบบ"
+        return "📋 แฟ้มบัญชีดำว่างเปล่าครับบอส! ตอนนี้ทุกคนเป็นเด็กดีหมดเลย 😇"
     
-    message = f"🚫 *รายชื่อผู้ใช้ที่ถูกแบน* ({len(banned)} คน)\n\n"
+    message = f"📂 *แฟ้มลับ: รายชื่อบัญชีดำ* ({len(banned)} เป้าหมาย)\n\n"
     
     for i, (user_id, record) in enumerate(banned.items(), 1):
         message += f"{i}. `{user_id}`\n"

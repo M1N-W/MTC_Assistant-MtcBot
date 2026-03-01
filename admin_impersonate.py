@@ -108,7 +108,7 @@ def send_impersonate_message(
         (success, result_message)
     """
     if not _line_api:
-        return False, "❌ LINE API ไม่พร้อมใช้งาน"
+        return False, "บอสครับ! LINE API ยังไม่พร้อมฮะ 🔧 รอแป๊บนึงก่อนนะ"
     
     last_error = None
     
@@ -123,7 +123,7 @@ def send_impersonate_message(
             )
             
             logger.info(f"📤 Impersonate message sent to {target_user_id} (attempt {attempt + 1})")
-            return True, f"✅ ส่งข้อความสำเร็จถึง {target_user_id[:8]}..."
+            return True, f"🎯 ส่งข้อความสวมรอยเรียบร้อยครับบอส! ปลอดภัย ไร้ร่องรอย 🤫 (→ {target_user_id[:8]}...)"
         
         except ConnectionResetError as e:
             last_error = f"Connection reset: {e}"
@@ -168,9 +168,9 @@ def send_impersonate_message(
     
     # All retries failed
     return False, (
-        f"❌ ส่งข้อความล้มเหลวหลังพยายาม {max_retries} ครั้ง\n"
+        f"บอสครับ! พยายามส่งแล้ว {max_retries} ครั้งแต่ยังไม่ได้เลยฮะ 😤\n"
         f"สาเหตุ: {last_error[:100]}\n\n"
-        f"💡 กรุณารอสักครู่แล้วลองใหม่อีกครั้ง"
+        f"💡 รอสักครู่แล้วลองใหม่อีกทีน้าบอส"
     )
 
 # ============================================================================
@@ -187,12 +187,12 @@ def handle_list_users_command(admin_id: str) -> str:
 
     if not snapshot:
         return (
-            "📋 *ผู้ใช้ล่าสุด*\n\n"
-            "⚠️ ยังไม่มีผู้ใช้ในระบบ\n"
-            "รอให้มีคนส่งข้อความก่อนนะครับ"
+            "🕵️‍♂️ *รายชื่อเป้าหมาย*\n\n"
+            "บอสครับ ตอนนี้ยังไม่มีใครในระบบเลยฮะ 🫥\n"
+            "รอให้เพื่อนๆ ทักบอทก่อน แล้วค่อยกลับมาเช็คใหม่น้า"
         )
 
-    message = f"📋 *ผู้ใช้ล่าสุด* ({len(snapshot)} คน)\n\n"
+    message = f"🕵️‍♂️ *รายชื่อเป้าหมาย* ({len(snapshot)} คน) — เลือกได้เลยครับบอส!\n\n"
 
     sorted_users = sorted(
         snapshot.items(),
@@ -209,7 +209,7 @@ def handle_list_users_command(admin_id: str) -> str:
         message += f"... และอีก {len(sorted_users) - 10} คน\n\n"
 
     message += (
-        "💡 *วิธีส่งข้อความ:*\n"
+        "🎯 *สั่งภารกิจ:*\n"
         "ส่งถึง [user_id] [ข้อความ]\n\n"
         "📌 *ตัวอย่าง:*\n"
         f"ส่งถึง {sorted_users[0][0][:15]} สวัสดีครับ"
@@ -240,9 +240,9 @@ def handle_send_impersonate_command(admin_id: str, user_message: str) -> str:
     # Validate user_id format — LINE IDs are always "U" + 32 hex chars (33 total)
     if not is_valid_line_user_id(target_user_id):
         return (
-            "❌ User ID ไม่ถูกต้อง\n\n"
-            "User ID ต้องขึ้นต้นด้วย 'U' ตามด้วยตัวเลข hex 32 ตัว (รวม 33 ตัวอักษร)\n\n"
-            "💡 พิมพ์ 'ดูผู้ใช้' เพื่อดู User ID ที่ถูกต้อง"
+            "บอสครับ! หาตัวเป้าหมายไม่เจอฮะ 🧐 หรือว่าเขาจะหลบหนีไปแล้ว?\n\n"
+            "User ID ต้องขึ้นต้นด้วย 'U' ตามด้วย hex 32 ตัว (รวม 33 ตัวอักษร)\n\n"
+            "💡 พิมพ์ 'ดูผู้ใช้' เพื่อดู User ID ที่ถูกต้องน้าครับ"
         )
     
     # Prevent sending to admin themselves
@@ -267,7 +267,7 @@ def handle_send_impersonate_command(admin_id: str, user_message: str) -> str:
             f"{result}\n\n"
             f"📨 *ข้อความที่ส่ง:*\n"
             f"{message[:200]}\n\n"
-            f"🎭 ผู้ใช้จะเห็นข้อความนี้เหมือนบอทพูดเอง\n"
+            f"🎭 เป้าหมายจะเห็นเหมือนบอทพูดเองเลยครับบอส 😈\n"
             f"⏰ เวลา: {time.strftime('%H:%M:%S')}"
         )
     else:
@@ -295,34 +295,29 @@ def handle_test_impersonate_command(admin_id: str, user_message: str) -> str:
     
     if success:
         return (
-            "✅ ส่งข้อความทดสอบแล้ว!\n\n"
-            "คุณควรเห็นข้อความนี้ในแชทส่วนตัว:\n"
+            "✅ ส่งข้อความทดสอบแล้วครับบอส! ภารกิจเบื้องต้นสำเร็จ 🎯\n\n"
+            "บอสควรเห็นข้อความนี้ในแชทส่วนตัว:\n"
             f'"{message[:100]}"\n\n'
-            "💡 ถ้าได้รับแล้ว แสดงว่าระบบทำงานปกติ"
+            "💡 ถ้าได้รับแล้ว แสดงว่าระบบสายลับพร้อมใช้งานเต็มที่แล้วครับ 🕵️‍♂️"
         )
     else:
         return result
 
 def get_impersonate_help() -> str:
     """Get help text for impersonate commands"""
-    return """
-🎭 *ส่งข้อความหาผู้ใช้*
-
-• ดูผู้ใช้
-  → ดูรายชื่อผู้ใช้ล่าสุด
-
-• ส่งถึง [user_id] [ข้อความ]
-  → ส่งข้อความไปหาผู้ใช้ที่เลือก
-  
-• ทดสอบส่ง [ข้อความ]
-  → ส่งข้อความทดสอบหาตัวเอง
-
-⚠️ *หมายเหตุ:*
-- ใช้เพื่อความสนุกเท่านั้น
-- อย่าส่งข้อความที่ไม่เหมาะสม
-- ผู้ใช้จะเห็นเหมือนบอทพูดเอง
-- ระบบจะลองส่งใหม่อัตโนมัติถ้าเกิด error
-"""
+    return (
+        "🕵️‍♂️ *ระบบสายลับ — พร้อมรับคำสั่งจากบอสเสมอ!*\n\n"
+        "• ดูผู้ใช้\n"
+        "  → ดูรายชื่อเป้าหมายทั้งหมด 🎯\n\n"
+        "• ส่งถึง [user_id] [ข้อความ]\n"
+        "  → สวมรอยส่งข้อความหาเป้าหมาย 🎭\n\n"
+        "• ทดสอบส่ง [ข้อความ]\n"
+        "  → ทดสอบระบบโดยส่งหาตัวบอสเอง 🔧\n\n"
+        "⚠️ *หมายเหตุจากสายลับ:*\n"
+        "- ใช้เพื่อความสนุกเท่านั้นนะครับบอส\n"
+        "- เป้าหมายจะเห็นเหมือนบอทพูดเองเลย\n"
+        "- ระบบจะลองส่งใหม่อัตโนมัติถ้าเกิด error 🔄"
+    )
 
 # ============================================================================
 # INTEGRATION HELPER

@@ -102,7 +102,7 @@ def set_gemini_models(
 def add_homework_to_db(subject: str, detail: str, due_date: str = "ไม่ระบุ") -> str:
     """เพิ่มการบ้านเข้า Firebase"""
     if not db:
-        return "ระบบขัดข้องชั่วคราวนะ ลองใหม่อีกทีได้เลย"
+        return "แงงง ระบบขัดข้องนิดหน่อยฮะ 🥺 ลองส่งคำสั่งมาใหม่อีกทีน้า"
     
     try:
         from firebase_admin import firestore
@@ -117,12 +117,12 @@ def add_homework_to_db(subject: str, detail: str, due_date: str = "ไม่ร�
         return f"บันทึกการบ้านวิชา {subject} เรียบร้อยแล้ว"
     except Exception as e:
         logger.error(f"DB Add Error: {e}")
-        return "บันทึกไม่ได้ ลองใหม่อีกทีนะ"
+        return "บันทึกไม่ได้อ่ะฮะ 😓 ลองส่งใหม่อีกทีน้า"
 
 def get_homeworks_from_db() -> str:
     """ดึงการบ้านทั้งหมดจาก Firebase (optimized with limit)"""
     if not db:
-        return "ระบบขัดข้องชั่วคราวนะ ลองใหม่อีกทีได้เลย"
+        return "แงงง ระบบขัดข้องนิดหน่อยฮะ 🥺 ลองส่งคำสั่งมาใหม่อีกทีน้า"
     
     try:
         # Limit to prevent memory issues
@@ -148,12 +148,12 @@ def get_homeworks_from_db() -> str:
             
     except Exception as e:
         logger.error(f"DB Get Error: {e}")
-        return "ดึงข้อมูลไม่ได้ ลองใหม่อีกทีนะ"
+        return "ดึงข้อมูลไม่ได้ฮะ 😵‍💫 ลองส่งใหม่อีกทีน้า"
 
 def clear_homework_db() -> str:
     """ลบการบ้านทั้งหมดใน Firebase (optimized with batch limits)"""
     if not db:
-        return "ระบบขัดข้องชั่วคราวนะ ลองใหม่อีกทีได้เลย"
+        return "แงงง ระบบขัดข้องนิดหน่อยฮะ 🥺 ลองส่งคำสั่งมาใหม่อีกทีน้า"
     
     try:
         # Process in batches to prevent memory issues
@@ -178,7 +178,7 @@ def clear_homework_db() -> str:
         return f"ลบการบ้านออกไปแล้ว {total_deleted} รายการ"
     except Exception as e:
         logger.error(f"DB Clear Error: {e}")
-        return "ลบไม่ได้ ลองใหม่อีกทีนะ"
+        return "ลบไม่ได้อ่ะฮะ 😓 ลองส่งใหม่อีกทีน้า"
 
 # ============================================================================
 # BASIC COMMAND FUNCTIONS
@@ -502,7 +502,7 @@ def get_gemini_response(prompt: str) -> str:
         
     except GeminiTimeoutError:
         logger.warning("Gemini API call timed out")
-        return "AI ตอบช้าไปหน่อย ลองใหม่อีกทีนะ"
+        return "AI ของเรากำลังมึนตึ้บ ขอเวลาตั้งสติแป๊บนึงนะ 😵‍💫 ลองทักมาใหม่นะครับ!"
     except Exception as e:
         logger.error("Gemini Generate Error: %s", e)
         
@@ -562,10 +562,10 @@ def get_calculator_response(user_message: str):
         
     except ImportError:
         logger.error("smart_calc.py not found")
-        return TextMessage(text="ระบบคำนวณยังไม่พร้อมใช้งาน")
+        return TextMessage(text="ฟีเจอร์เครื่องคิดเลขกำลังซ่อมบำรุงอยู่ฮะ 🛠️ รอนิดนึงน้า")
     except Exception as e:
         logger.error(f"Calculator error: {e}")
-        return TextMessage(text=f"คำนวณไม่ได้: {str(e)}")
+        return TextMessage(text=f"แงงง เครื่องคิดเลขรวนฮะ 😵‍💫 ขอเช็คแป๊บนึงนะ ({str(e)})")
 
 def get_grade_calculator_response(user_message: str, user_id: str = None) -> TextMessage:
     """Handle grade calculator commands"""
@@ -588,7 +588,7 @@ def get_grade_calculator_response(user_message: str, user_id: str = None) -> Tex
         
     except ImportError:
         logger.error("grade_calculator.py not found")
-        return TextMessage(text="ระบบคำนวณเกรดยังไม่พร้อมใช้งาน")
+        return TextMessage(text="ระบบคิดเกรดยังหลับอยู่ฮะ 😴 เดี๋ยวให้แอดมินมาปลุกให้นะ")
     except Exception as e:
         logger.error(f"Grade calculator error: {e}")
-        return TextMessage(text=f"คำนวณเกรดไม่ได้: {str(e)}")
+        return TextMessage(text=f"แงงง เครื่องคิดเลขรวนฮะ 😵‍💫 ขอเช็คแป๊บนึงนะ ({str(e)})")

@@ -200,9 +200,9 @@ def broadcast_message(message_text: str) -> dict:
         if i > 0 and i % 10 == 0:
             time.sleep(0.2)
     
-    result_message = f"✅ ส่งสำเร็จ: {sent_count} คน"
+    result_message = f"🎯 บอสครับ! กระจายข่าวสำเร็จ {sent_count} เป้าหมาย"
     if failed_count > 0:
-        result_message += f"\n❌ ล้มเหลว: {failed_count} คน"
+        result_message += f"\n⚠️ แต่มี {failed_count} คนที่สัญญาณขาดหายไปฮะ"
     
     return {
         "success": sent_count > 0,
@@ -234,10 +234,10 @@ def broadcast_homework_reminder():
         
         if hw_list:
             message = (
-                "⏰ 📢 เตือนความจำ!\n\n"
-                "การบ้านที่ต้องส่งพรุ่งนี้:\n" +
+                "ประกาศจากระบบหัวหน้าห้อง! 📢✨\n\n"
+                "พรุ่งนี้พวกเรามีภารกิจ (การบ้าน) ต้องส่งน้า:\n" +
                 "\n".join(hw_list) +
-                "\n\nอย่าลืมทำนะครับ! 💪"
+                "\n\nใครยังไม่เริ่ม ปั่นด่วนๆ เลยนะคืนนี้ สู้ๆ! ✌️🔥"
             )
             
             result = broadcast_message(message)
@@ -286,7 +286,7 @@ def save_broadcast_history(admin_id: str, message: str, result: dict):
 def get_broadcast_stats() -> str:
     """ดูสถิติการส่ง broadcast"""
     if not db:
-        return "⚠️ ไม่สามารถดึงข้อมูลได้"
+        return "บอสครับ! แฟ้มสถิติถูกล็อค ดึงข้อมูลไม่ได้ฮะ 🕵️‍♂️"
     
     try:
         # นับจำนวนครั้งที่ส่ง
@@ -322,22 +322,22 @@ def get_broadcast_stats() -> str:
         history_text = (
             "\n".join(recent_broadcasts[:5])
             if recent_broadcasts
-            else "ยังไม่มีประวัติ"
+            else "ยังไม่มีประวัติการทำภารกิจครับผม 🤫"
         )
 
         stats = (
-            f"📊 *สถิติ Broadcast*\n\n"
-            f"👥 ผู้ใช้ทั้งหมด: {user_count} คน\n"
-            f"📢 ส่งแล้ว: {total_broadcasts} ครั้ง\n"
-            f"✅ ข้อความทั้งหมด: {total_sent} ข้อความ\n\n"
-            f"📝 *ประวัติล่าสุด:*\n"
+            f"📁 *TOP SECRET: Broadcast Report* 📁\n\n"
+            f"👥 เป้าหมายทั้งหมด: {user_count} คน\n"
+            f"📢 ภารกิจกระจายข่าว: {total_broadcasts} ครั้ง\n"
+            f"✅ ส่งข้อความแล้ว: {total_sent} ข้อความ\n\n"
+            f"📝 *ประวัติภารกิจล่าสุด:*\n"
             f"{history_text}"
         )
         
         return stats
     except Exception as e:
         logger.error(f"Error getting broadcast stats: {e}")
-        return f"❌ เกิดข้อผิดพลาด: {str(e)}"
+        return f"ระบบฐานข้อมูลรวนนิดหน่อยฮะบอส 🚧 ({str(e)})"
 
 # ============================================================================
 # EXPORTS
