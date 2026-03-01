@@ -1,6 +1,5 @@
 Flask>=2.0,<3
 gunicorn>=21.2,<22
-gevent>=23.0,<25
 line-bot-sdk>=3.0,<4
 google-genai>=0.7.0,<1.0
 requests>=2.28,<3
