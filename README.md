@@ -236,10 +236,23 @@ export RATE_LIMIT_WINDOW="60"
 - [x] ระบบแบนผู้ใช้ (Blacklist + Firestore cache)
 - [x] ระบบสวมรอย (Admin Impersonate + Retry)
 - [x] UX Copywriting Refactor (Persona ครบทุก Module)
+- [x] Firebase Credentials via ENV (ไม่ต้องแนบ key เข้า repo)
+- [x] Log Hygiene (ลบ warning ที่ทำให้สับสนตอน startup)
 - [ ] Food Randomizer (ระบบแนะนำอาหาร)
-- [ ] Quick Notes
-- [ ] Expense Tracker
-- [ ] Study Timer (Pomodoro)
+- [ ] Quick Notes (โน้ตด่วนพร้อม tag)
+- [ ] Expense Tracker (จดรายรับ-รายจ่าย)
+- [ ] Study Timer (Pomodoro 25/5)
+- [ ] Birthday Tracker (เก็บ + แจ้งเตือนวันเกิดเพื่อนในห้อง)
+- [ ] Random Group Maker (สุ่มจับกลุ่ม/คู่)
+- [ ] Vocabulary Builder (คลังศัพท์ + Flashcard)
+- [ ] Goal Tracker (เป้าหมายการเรียน + ความคืบหน้า)
+- [ ] Class Poll/Vote (โพลในห้องแบบไม่เปิดเผยตัวตน)
+- [ ] Smart Homework Reminder (เตือนการบ้านล่วงหน้าตามกำหนดส่ง)
+- [ ] Personal AI Memory (Gemini จำบทสนทนาเดิม per-user)
+- [ ] Document/PDF Q&A (ส่ง PDF ให้ AI สรุป + ถามตอบ)
+- [ ] Image OCR (อ่านโจทย์/สรุปจากรูปถ่ายกระดาน)
+- [ ] Voice Message Support (ถอดเสียง → ตอบกลับ)
+- [ ] Web Admin Dashboard (จัดการ users/blacklist/broadcast ผ่านเว็บ)
 
 ---
 
@@ -252,7 +265,7 @@ MIT License — ใช้ได้อย่างอิสระ
 ## 👥 ผู้พัฒนา
 
 พัฒนาโดยนักเรียนห้อง ม.5/2 โรงเรียนเบญจมราชูทิศ  
-ผู้ใช้งานปัจจุบัน: **40+ คน** | Active User: **9 คน**  
+ผู้ใช้งานปัจจุบัน: **40+ คน** | Active User: **10 คน**  
 อัปเดตล่าสุด: **26 เมษายน 2569**
 
 ## 🙏 ขอบคุณ

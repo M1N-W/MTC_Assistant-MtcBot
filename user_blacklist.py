@@ -59,9 +59,13 @@ class BlacklistManager:
         if self.db:
             self.load_blacklist()
         else:
-            logger.warning(
-                "BlacklistManager: no Firestore client provided — "
-                "bans will not persist across restarts."
+            # Expected during startup: the singleton is created before
+            # Firebase finishes its async connect; main.py wires `db` in
+            # later via `_bm.db = db; _bm.load_blacklist()`.  Use DEBUG so
+            # we don't pollute production logs with a misleading warning.
+            logger.debug(
+                "BlacklistManager initialised without Firestore client "
+                "(will be wired up after Firebase connects)."
             )
 
     def load_blacklist(self):

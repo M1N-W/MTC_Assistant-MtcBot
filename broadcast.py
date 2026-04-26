@@ -19,6 +19,7 @@ db = None
 line_api = None
 _tracked_users_cache: set = set()  # in-memory cache of already-seen user IDs
 _cache_max_size = 10000  # Maximum cache size to prevent memory issues
+_firebase_unavailable_warned = False  # log "Firebase unavailable" only once per process
 
 def cleanup_user_cache():
     """Clean up user cache to prevent memory leaks"""
@@ -53,8 +54,18 @@ def track_user(user_id: str, display_name: str = "Unknown"):
     บันทึก user_id เข้า Firebase เพื่อส่ง broadcast
     เรียกฟังก์ชันนี้ทุกครั้งที่มีคนส่งข้อความ
     """
+    global _firebase_unavailable_warned
     if not db:
-        logger.warning("Firebase not available for user tracking")
+        if not _firebase_unavailable_warned:
+            logger.warning(
+                "Firebase not yet available for user tracking — "
+                "messages will still be answered, but user data won't be persisted "
+                "until the Firebase connection is established. "
+                "(further occurrences logged at DEBUG)"
+            )
+            _firebase_unavailable_warned = True
+        else:
+            logger.debug("Firebase not available for user tracking (suppressed)")
         return False
 
     try:
