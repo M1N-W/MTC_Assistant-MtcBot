@@ -13,6 +13,8 @@ Improvements:
 """
 
 import os
+import json
+import base64
 import threading
 
 import warnings
@@ -114,12 +116,46 @@ def after_request(response):
 db = None
 _db_lock = threading.Lock()
 
+def _load_firebase_credentials():
+    """
+    Resolve Firebase service-account credentials from (in order):
+      1. FIREBASE_CREDENTIALS_JSON   — raw JSON string (Render env var)
+      2. FIREBASE_CREDENTIALS_BASE64 — base64-encoded JSON (avoids newline issues)
+      3. FIREBASE_KEY_PATH file on disk (local development fallback)
+    Returns a credentials.Certificate or None if nothing usable was found.
+    """
+    raw = os.environ.get("FIREBASE_CREDENTIALS_JSON")
+    if raw:
+        try:
+            return credentials.Certificate(json.loads(raw))
+        except Exception as e:
+            logger.error(f"FIREBASE_CREDENTIALS_JSON is invalid: {e}")
+
+    b64 = os.environ.get("FIREBASE_CREDENTIALS_BASE64")
+    if b64:
+        try:
+            decoded = base64.b64decode(b64).decode("utf-8")
+            return credentials.Certificate(json.loads(decoded))
+        except Exception as e:
+            logger.error(f"FIREBASE_CREDENTIALS_BASE64 is invalid: {e}")
+
+    if os.path.exists(FIREBASE_KEY_PATH):
+        return credentials.Certificate(FIREBASE_KEY_PATH)
+
+    return None
+
+
 def _connect_firebase() -> bool:
     """Init (or re-init) Firebase Admin SDK. Safe to call multiple times."""
     global db
     try:
-        if not os.path.exists(FIREBASE_KEY_PATH):
-            logger.warning(f"⚠️ Missing {FIREBASE_KEY_PATH}. Firebase disabled.")
+        cred = _load_firebase_credentials()
+        if cred is None:
+            logger.warning(
+                "⚠️ No Firebase credentials found. Set FIREBASE_CREDENTIALS_JSON "
+                "(or FIREBASE_CREDENTIALS_BASE64) env var, or place "
+                f"{FIREBASE_KEY_PATH} in the project root. Firebase disabled."
+            )
             return False
 
         # delete_app + re-init forces a brand-new gRPC channel,
@@ -127,7 +163,6 @@ def _connect_firebase() -> bool:
         if firebase_admin._apps:
             firebase_admin.delete_app(firebase_admin.get_app())
 
-        cred = credentials.Certificate(FIREBASE_KEY_PATH)
         firebase_admin.initialize_app(cred)
         new_db = firestore.client()
 
