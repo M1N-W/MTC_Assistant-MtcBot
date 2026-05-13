@@ -252,13 +252,16 @@ def handle_homework_session(user_id: str, user_message: str) -> Union[TextMessag
         del _homework_sessions[user_id]
         
         # Success message with summary
-        return TextMessage(
-            text=f"บันทึกแล้ว\n\n"
-                 f"วิชา: {subject}\n"
-                 f"รายละเอียด: {detail}\n"
-                 f"กำหนดส่ง: {due_date}\n\n"
-                 f"พิมพ์ 'การบ้าน' เพื่อดูทั้งหมด"
-        )
+        if "เรียบร้อยแล้ว" in result:
+            return TextMessage(
+                text=f"บันทึกแล้ว\n\n"
+                     f"วิชา: {subject}\n"
+                     f"รายละเอียด: {detail}\n"
+                     f"กำหนดส่ง: {due_date}\n\n"
+                     f"พิมพ์ 'การบ้าน' เพื่อดูทั้งหมด"
+            )
+        
+        return TextMessage(text=result)
     
     return None
 
@@ -536,7 +539,7 @@ def format_error_message(error: str, suggestion: str = None) -> str:
 COMMANDS = [
     (("ตารางเรียน", "ตารางสอน"), get_timetable_image_message),
     (("เช็คเวลาเรียน", "เช็คเวลา"), get_time_until_next_class_message),
-    (("บันทึกการบ้าน", "ดูงาน"), lambda msg: TextMessage(text=get_homeworks_from_db())),
+    (("ดูงาน",), lambda msg: TextMessage(text=get_homeworks_from_db())),
     (("ลิงก์ที่สำคัญ", "ลิงก์", "links"), get_links_menu_message),
     (("ปฏิทินกิจกรรม", "ปฏิทิน"), get_exam_countdown_message),
     (("ช่วยเหลือ", "คำสั่ง", "help"), get_help_message),
@@ -654,7 +657,7 @@ def handle_message(event):
     # ========================================================================
     
     # Start homework session
-    if user_message in ["สั่งการบ้าน", "เพิ่มการบ้าน", "add homework"]:
+    if user_message in ["สั่งการบ้าน", "เพิ่มการบ้าน", "บันทึกการบ้าน", "📝 บันทึกการบ้าน", "add homework"]:
         message, quick_reply = start_homework_session(user_id)
         reply_to_line(event.reply_token, [message])
         return
