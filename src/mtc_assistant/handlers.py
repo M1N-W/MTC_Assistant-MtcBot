@@ -11,16 +11,14 @@ from flask import request
 from linebot.v3 import WebhookHandler
 from linebot.v3.messaging import (
     Configuration, ApiClient, MessagingApi, ReplyMessageRequest, 
-    TextMessage, ImageMessage, FlexMessage, FlexContainer,
-    QuickReply, QuickReplyItem, MessageAction
+    TextMessage, ImageMessage, FlexMessage
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent, FollowEvent
 
 # Import from config
 from mtc_assistant.config import (
     logger, ACCESS_TOKEN, CHANNEL_SECRET, MESSAGES,
-    RATE_LIMIT_MAX, RATE_LIMIT_WINDOW, ADMIN_USER_IDS,
-    SCHOOL_LINK, GRADE_LINK, ABSENCE_LINK, Bio_LINK, Physic_LINK
+    RATE_LIMIT_MAX, RATE_LIMIT_WINDOW, ADMIN_USER_IDS
 )
 
 # Import from features
@@ -39,6 +37,14 @@ import mtc_assistant.features as features
 
 # Import broadcast functions
 import mtc_assistant.broadcast as broadcast
+
+from mtc_assistant.constants import (
+    HOMEWORK_START_COMMANDS,
+    HOMEWORK_CANCEL_COMMANDS,
+    HOMEWORK_VIEW_COMMANDS,
+)
+from mtc_assistant.flex_messages import get_links_menu_message
+from mtc_assistant.quick_replies import build_subject_quick_reply, build_due_date_quick_reply
 
 # ============================================================================
 # LINE BOT CONFIGURATION
@@ -158,13 +164,6 @@ def is_rate_limited(user_id: str) -> bool:
 _homework_sessions: Dict[str, Dict] = {}
 _homework_sessions_lock = threading.Lock()
 
-# Subject list for homework
-SUBJECTS = [
-    "คณิตเพิ่มเติม", "คณิตพื้นฐาน", "คณิตเพิ่มพูน", "ฟิสิกส์", "เคมี", "ชีวะ",
-    "ไทย", "อังกฤษพื้นฐาน", "อังกฤษเพิ่มเติม", "สังคมศึกษา", "ประวัติศาสตร์",
-    "คอมพิวเตอร์", "การงาน", "พละ/สุขศึกษา", "ดนตรี"
-]
-
 def start_homework_session(user_id: str) -> tuple:
     """Start interactive homework creation session"""
     with _homework_sessions_lock:
@@ -175,16 +174,7 @@ def start_homework_session(user_id: str) -> tuple:
             "due_date": None
         }
     
-    # Create quick reply buttons for subject selection
-    quick_reply_items = []
-    for i in range(0, min(len(SUBJECTS), 13)):  # Max 13 items
-        quick_reply_items.append(
-            QuickReplyItem(
-                action=MessageAction(label=SUBJECTS[i], text=SUBJECTS[i])
-            )
-        )
-    
-    quick_reply = QuickReply(items=quick_reply_items)
+    quick_reply = build_subject_quick_reply()
     
     message = TextMessage(
         text="เลือกวิชาที่จะสั่งการบ้านได้เลย",
@@ -217,18 +207,7 @@ def handle_homework_session(user_id: str, user_message: str) -> Union[TextMessag
         session["detail"] = user_message
         session["step"] = "due_date"
         
-        # Quick reply for due date
-        quick_reply = QuickReply(items=[
-            QuickReplyItem(action=MessageAction(label="วันนี้", text="วันนี้")),
-            QuickReplyItem(action=MessageAction(label="พรุ่งนี้", text="พรุ่งนี้")),
-            QuickReplyItem(action=MessageAction(label="วันจันทร์", text="วันจันทร์")),
-            QuickReplyItem(action=MessageAction(label="วันอังคาร", text="วันอังคาร")),
-            QuickReplyItem(action=MessageAction(label="วันพุธ", text="วันพุธ")),
-            QuickReplyItem(action=MessageAction(label="วันพฤหัส", text="วันพฤหัสบดี")),
-            QuickReplyItem(action=MessageAction(label="วันศุกร์", text="วันศุกร์")),
-            QuickReplyItem(action=MessageAction(label="สัปดาห์หน้า", text="สัปดาห์หน้า")),
-            QuickReplyItem(action=MessageAction(label="ยกเลิก", text="ยกเลิกการบ้าน")),
-        ])
+        quick_reply = build_due_date_quick_reply()
         
         return TextMessage(
             text=f"รายละเอียด: {user_message}\n\n"
@@ -271,241 +250,6 @@ def cancel_homework_session(user_id: str) -> str:
         del _homework_sessions[user_id]
         return "ยกเลิกการเพิ่มการบ้านแล้ว"
     return None
-
-# ============================================================================
-# ENHANCED FLEX MESSAGE - IMPORTANT LINKS
-# ============================================================================
-
-def get_links_menu_message(user_message: str = "") -> FlexMessage:
-    """แสดงเมนูลิงก์ทั้งหมดด้วย Flex Message"""
-    
-    flex_content = {
-        "type": "bubble",
-        "size": "mega",
-        "hero": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-                {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "🔗",
-                            "size": "xxl",
-                            "color": "#FFFFFF",
-                            "align": "center",
-                            "weight": "bold"
-                        },
-                        {
-                            "type": "text",
-                            "text": "ลิงก์สำคัญ",
-                            "size": "xl",
-                            "color": "#FFFFFF",
-                            "align": "center",
-                            "weight": "bold",
-                            "margin": "md"
-                        },
-                        {
-                            "type": "text",
-                            "text": "เข้าถึงง่าย ครบจบในที่เดียว",
-                            "size": "sm",
-                            "color": "#FFFFFF",
-                            "align": "center",
-                            "margin": "sm",
-                            "opacity": 0.8
-                        }
-                    ],
-                    "paddingAll": "30px"
-                }
-            ],
-            "backgroundColor": "#7C3AED",
-            "paddingAll": "0px"
-        },
-        "body": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-                # การเรียน Section
-                {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "📚 การเรียน",
-                            "weight": "bold",
-                            "size": "lg",
-                            "color": "#1A1A1A"
-                        },
-                        {
-                            "type": "box",
-                            "layout": "vertical",
-                            "contents": [
-                                {
-                                    "type": "button",
-                                    "action": {
-                                        "type": "uri",
-                                        "label": "🏫 เว็บโรงเรียน",
-                                        "uri": SCHOOL_LINK
-                                    },
-                                    "style": "primary",
-                                    "color": "#00C300",
-                                    "height": "sm"
-                                },
-                                {
-                                    "type": "button",
-                                    "action": {
-                                        "type": "uri",
-                                        "label": "📊 ระบบเช็คเกรด",
-                                        "uri": GRADE_LINK
-                                    },
-                                    "style": "primary",
-                                    "color": "#3B82F6",
-                                    "height": "sm",
-                                    "margin": "sm"
-                                },
-                                {
-                                    "type": "button",
-                                    "action": {
-                                        "type": "uri",
-                                        "label": "📝 แบบฟอร์มลาออนไลน์",
-                                        "uri": ABSENCE_LINK
-                                    },
-                                    "style": "primary",
-                                    "color": "#F59E0B",
-                                    "height": "sm",
-                                    "margin": "sm"
-                                }
-                            ],
-                            "margin": "md"
-                        }
-                    ],
-                    "paddingAll": "0px"
-                },
-                # Separator
-                {
-                    "type": "separator",
-                    "margin": "xl"
-                },
-                # เฉลยวิชา Section
-                {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "📖 เฉลยวิชา",
-                            "weight": "bold",
-                            "size": "lg",
-                            "color": "#1A1A1A"
-                        },
-                        {
-                            "type": "box",
-                            "layout": "horizontal",
-                            "contents": [
-                                {
-                                    "type": "button",
-                                    "action": {
-                                        "type": "uri",
-                                        "label": "🧬 ชีววิทยา",
-                                        "uri": Bio_LINK
-                                    },
-                                    "style": "primary",
-                                    "color": "#10B981",
-                                    "height": "sm",
-                                    "flex": 1
-                                },
-                                {
-                                    "type": "button",
-                                    "action": {
-                                        "type": "uri",
-                                        "label": "⚛️ ฟิสิกส์",
-                                        "uri": Physic_LINK
-                                    },
-                                    "style": "primary",
-                                    "color": "#8B5CF6",
-                                    "height": "sm",
-                                    "flex": 1,
-                                    "margin": "sm"
-                                }
-                            ],
-                            "margin": "md"
-                        }
-                    ],
-                    "margin": "xl"
-                },
-                # Separator
-                {
-                    "type": "separator",
-                    "margin": "xl"
-                },
-                # ความบันเทิง Section
-                {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "🎵 ความบันเทิง",
-                            "weight": "bold",
-                            "size": "lg",
-                            "color": "#1A1A1A"
-                        },
-                        {
-                            "type": "button",
-                            "action": {
-                                "type": "message",
-                                "label": "ค้นหาเพลงใน YouTube",
-                                "text": "เปิดเพลง"
-                            },
-                            "style": "primary",
-                            "color": "#EC4899",
-                            "height": "sm",
-                            "margin": "md"
-                        }
-                    ],
-                    "margin": "xl"
-                }
-            ],
-            "paddingAll": "20px"
-        },
-        "footer": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-                {
-                    "type": "box",
-                    "layout": "horizontal",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "💡",
-                            "size": "sm",
-                            "flex": 0
-                        },
-                        {
-                            "type": "text",
-                            "text": "บันทึกลิงก์ที่ใช้บ่อยไว้เพื่อเข้าถึงได้เร็วขึ้น",
-                            "size": "xs",
-                            "color": "#999999",
-                            "wrap": True,
-                            "flex": 1,
-                            "margin": "sm"
-                        }
-                    ]
-                }
-            ],
-            "backgroundColor": "#F9FAFB",
-            "paddingAll": "16px"
-        }
-    }
-    
-    return FlexMessage(
-        alt_text="ลิงก์สำคัญทั้งหมด",
-        contents=FlexContainer.from_dict(flex_content)
-    )
 
 # ============================================================================
 # MESSAGE FORMAT HELPERS
@@ -657,13 +401,13 @@ def handle_message(event):
     # ========================================================================
     
     # Start homework session
-    if user_message in ["สั่งการบ้าน", "เพิ่มการบ้าน", "บันทึกการบ้าน", "📝 บันทึกการบ้าน", "add homework"]:
+    if user_message in HOMEWORK_START_COMMANDS:
         message, quick_reply = start_homework_session(user_id)
         reply_to_line(event.reply_token, [message])
         return
     
     # Cancel homework session
-    if user_message in ["ยกเลิกการบ้าน", "cancel homework"]:
+    if user_message in HOMEWORK_CANCEL_COMMANDS:
         result = cancel_homework_session(user_id) or "ไม่มี session การบ้านที่จะยกเลิก"
         reply_to_line(event.reply_token, [TextMessage(text=result)])
         return
@@ -676,7 +420,7 @@ def handle_message(event):
             return
     
     # View homework
-    if user_message in ["การบ้าน", "ดูการบ้าน", "homework"]:
+    if user_message in HOMEWORK_VIEW_COMMANDS:
         hw_text = get_homeworks_from_db()
         reply_to_line(event.reply_token, [TextMessage(text=hw_text)])
         return
