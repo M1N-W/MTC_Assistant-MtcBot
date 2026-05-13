@@ -11,7 +11,7 @@ from linebot.v3.messaging import (
     ApiClient, MessagingApi, Configuration,
     BroadcastRequest, TextMessage, PushMessageRequest
 )
-from config import logger, ACCESS_TOKEN
+from mtc_assistant.config import logger, ACCESS_TOKEN
 from firebase_admin import firestore
 
 # Global variables with memory management

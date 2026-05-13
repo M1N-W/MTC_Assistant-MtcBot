@@ -22,7 +22,7 @@ import time
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, asdict
 from datetime import datetime
-from config import logger, LOCAL_TZ
+from mtc_assistant.config import logger, LOCAL_TZ
 from firebase_admin import firestore as _fs
 
 # ============================================================================

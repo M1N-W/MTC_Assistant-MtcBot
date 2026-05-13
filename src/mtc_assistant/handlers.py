@@ -17,14 +17,14 @@ from linebot.v3.messaging import (
 from linebot.v3.webhooks import MessageEvent, TextMessageContent, FollowEvent
 
 # Import from config
-from config import (
+from mtc_assistant.config import (
     logger, ACCESS_TOKEN, CHANNEL_SECRET, MESSAGES,
     RATE_LIMIT_MAX, RATE_LIMIT_WINDOW, ADMIN_USER_IDS,
     SCHOOL_LINK, GRADE_LINK, ABSENCE_LINK, Bio_LINK, Physic_LINK
 )
 
 # Import from features
-from features import (
+from mtc_assistant.features import (
     get_worksheet_message, get_school_link_message, get_timetable_image_message,
     get_grade_link_message, get_absence_form_message, get_bio_link_message,
     get_physic_link_message, get_help_message, get_next_class_message,
@@ -35,10 +35,10 @@ from features import (
 )
 
 # Import features module to access db
-import features
+import mtc_assistant.features as features
 
 # Import broadcast functions
-import broadcast
+import mtc_assistant.broadcast as broadcast
 
 # ============================================================================
 # LINE BOT CONFIGURATION
@@ -619,7 +619,7 @@ def handle_message(event):
     # CHECK BLACKLIST (CRITICAL - FIRST CHECK!)
     # ========================================================================
     try:
-        from user_blacklist import check_user_banned
+        from mtc_assistant.user_blacklist import check_user_banned
         is_banned, ban_message = check_user_banned(user_id)
         if is_banned:
             reply_to_line(event.reply_token, [TextMessage(text=ban_message)])
@@ -635,7 +635,7 @@ def handle_message(event):
         broadcast.track_user(user_id)
         
         try:
-            from admin_impersonate import track_user_activity
+            from mtc_assistant.admin_impersonate import track_user_activity
             track_user_activity(user_id)
         except ImportError:
             pass
@@ -711,7 +711,7 @@ def handle_message(event):
         
         # Impersonate commands
         try:
-            from admin_impersonate import (
+            from mtc_assistant.admin_impersonate import (
                 handle_list_users_command,
                 handle_send_impersonate_command,
                 handle_test_impersonate_command
@@ -732,7 +732,7 @@ def handle_message(event):
         
         # Blacklist commands
         try:
-            from user_blacklist import (
+            from mtc_assistant.user_blacklist import (
                 handle_ban_user_command,
                 handle_unban_user_command,
                 handle_list_banned_command,
@@ -780,7 +780,7 @@ def handle_message(event):
     # ========================================================================
     if not reply_message:
         try:
-            from exam_simulator import (
+            from mtc_assistant.exam_simulator import (
                 get_session_manager,
                 handle_start_exam_command,
                 handle_answer_command,

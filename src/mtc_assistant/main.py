@@ -35,7 +35,7 @@ from google import genai
 from linebot.v3.exceptions import InvalidSignatureError
 
 # Import from our modules
-from config import (
+from mtc_assistant.config import (
     logger, setup_logging, validate_config,
     PORT, FLASK_DEBUG, ACCESS_TOKEN, CHANNEL_SECRET,
     GEMINI_API_KEY_V3, GEMINI_API_KEY_V25,
@@ -44,10 +44,10 @@ from config import (
     LOCAL_TZ
 )
 
-from handlers import handler
+from mtc_assistant.handlers import handler
 
-import features  # Import features module to set global variables
-import broadcast  # Import broadcast module
+import mtc_assistant.features as features  # Import features module to set global variables
+import mtc_assistant.broadcast as broadcast  # Import broadcast module
 
 # ============================================================================
 # FLASK APP INITIALIZATION
@@ -173,7 +173,7 @@ def _connect_firebase() -> bool:
         features.set_database(db)
         broadcast.set_database(db)
 
-        from user_blacklist import get_blacklist_manager
+        from mtc_assistant.user_blacklist import get_blacklist_manager
         _bm = get_blacklist_manager()
         _bm.db = db
         _bm.load_blacklist()
@@ -232,7 +232,7 @@ if line_config:
     
     # Initialize impersonate (NEW!)
     try:
-        from admin_impersonate import set_line_api as set_impersonate_line_api
+        from mtc_assistant.admin_impersonate import set_line_api as set_impersonate_line_api
         set_impersonate_line_api(line_config)
         logger.info("🎭 Impersonate feature initialized")
     except ImportError:
@@ -388,7 +388,7 @@ def metrics():
 def stats():
     """Show bot statistics"""
     try:
-        from handlers import _user_message_history
+        from mtc_assistant.handlers import _user_message_history
         total_users = len(_user_message_history)
         total_messages = sum(len(msgs) for msgs in _user_message_history.values())
     except (ImportError, AttributeError) as e:

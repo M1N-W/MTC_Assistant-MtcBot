@@ -11,7 +11,7 @@ from threading import Lock
 from typing import Dict, Set, Optional, Tuple
 from dataclasses import dataclass, asdict
 from datetime import datetime
-from config import logger, LOCAL_TZ
+from mtc_assistant.config import logger, LOCAL_TZ
 
 # ============================================================================
 # DATA STRUCTURES
@@ -218,7 +218,7 @@ def handle_ban_user_command(admin_id: str, user_message: str) -> str:
     reason = parts[2] if len(parts) > 2 else "ไม่ระบุเหตุผล"
     
     # ป้องกันไม่ให้แบน admin
-    from config import ADMIN_USER_IDS
+    from mtc_assistant.config import ADMIN_USER_IDS
     if target_user_id in ADMIN_USER_IDS:
         return "บอสจะแบนพวกเดียวกันไม่ได้นะฮะ! 🛑"
     
@@ -304,7 +304,7 @@ def get_admin_ban_commands():
     Return admin ban commands for integration
     
     Usage in handlers.py:
-        from user_blacklist import get_admin_ban_commands, check_user_banned
+        from mtc_assistant.user_blacklist import get_admin_ban_commands, check_user_banned
         
         # In handle_message:
         # Check if banned

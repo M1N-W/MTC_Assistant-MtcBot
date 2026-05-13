@@ -19,7 +19,7 @@ import time
 import re
 from threading import Lock
 from typing import Dict, Optional, Tuple
-from config import logger, ADMIN_USER_IDS
+from mtc_assistant.config import logger, ADMIN_USER_IDS
 from linebot.v3.messaging import (
     ApiClient, MessagingApi, Configuration,
     PushMessageRequest, TextMessage

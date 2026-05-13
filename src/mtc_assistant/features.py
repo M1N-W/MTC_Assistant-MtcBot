@@ -17,7 +17,7 @@ from firebase_admin import firestore
 from linebot.v3.messaging import TextMessage, ImageMessage
 
 # Import from config
-from config import (
+from mtc_assistant.config import (
     logger, LOCAL_TZ, SCHEDULE, EXAM_DATES, MESSAGES,
     WORKSHEET_LINK, SCHOOL_LINK, TIMETABLE_IMG, GRADE_LINK,
     ABSENCE_LINK, Bio_LINK, Physic_LINK, LINE_SAFE_TRUNCATE
@@ -539,7 +539,7 @@ def get_gemini_response(prompt: str) -> str:
 
 def get_calculator_response(user_message: str):
     try:
-        from smart_calc import smart_calculate
+        from mtc_assistant.smart_calc import smart_calculate
         
         expression = user_message.lower()
         for keyword in ['คำนวณ', 'คิด', 'calc', 'calculate']:
@@ -570,7 +570,7 @@ def get_calculator_response(user_message: str):
 def get_grade_calculator_response(user_message: str, user_id: str = None) -> TextMessage:
     """Handle grade calculator commands"""
     try:
-        from grade_calculator import (
+        from mtc_assistant.grade_calculator import (
             handle_score_to_grade_command,
             handle_gpa_calculation_command
         )
