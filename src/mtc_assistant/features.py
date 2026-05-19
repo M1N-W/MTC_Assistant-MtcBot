@@ -7,7 +7,7 @@ Contains all feature functions with beautiful, concise messages
 import datetime
 import math
 import re
-import signal
+import threading
 import urllib.parse
 from typing import Optional
 from google import genai
@@ -451,8 +451,32 @@ def _safe_parse_gemini_response(response) -> str:
 class GeminiTimeoutError(Exception):
     pass
 
-def timeout_handler(signum, frame):
-    raise GeminiTimeoutError("Operation timed out")
+def _generate_content_with_timeout(client, model: str, contents: str, config=None, timeout_seconds: float = 15):
+    result = {"response": None, "error": None}
+
+    def _call_gemini():
+        try:
+            kwargs = {
+                "model": model,
+                "contents": contents,
+            }
+            if config is not None:
+                kwargs["config"] = config
+            result["response"] = client.models.generate_content(**kwargs)
+        except Exception as e:
+            result["error"] = e
+
+    thread = threading.Thread(target=_call_gemini, daemon=True)
+    thread.start()
+    thread.join(timeout=timeout_seconds)
+
+    if thread.is_alive():
+        raise GeminiTimeoutError("Operation timed out")
+
+    if result["error"]:
+        raise result["error"]
+
+    return result["response"]
 
 def get_gemini_response(prompt: str) -> str:
     """Get response from Gemini AI with timeout protection"""
@@ -472,33 +496,26 @@ def get_gemini_response(prompt: str) -> str:
     enhanced_prompt = f"(บริบท: {_get_date_context()})\n\nคำถาม: {prompt}"
 
     try:
-        # Set timeout for AI calls
-        old_handler = signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(15)  # 15 second timeout
+        response = _generate_content_with_timeout(
+            client_to_use,
+            model_to_use,
+            enhanced_prompt,
+            config=GEMINI_CONFIG,
+            timeout_seconds=15,
+        )
         
-        try:
-            response = client_to_use.models.generate_content(
-                model=model_to_use,
-                contents=enhanced_prompt,
-                config=GEMINI_CONFIG
-            )
-            
-            text = _safe_parse_gemini_response(response)
-            
-            if not text:
-                return MESSAGES["AI_NO_RESPONSE"]
-            
-            text = re.sub(r'\b[Gg]oogle\b', 'Gemini', text)
-            text = text.replace('กูเกิล', 'Gemini')
-            
-            if len(text) > LINE_SAFE_TRUNCATE:
-                text = text[:LINE_SAFE_TRUNCATE] + "...\n\n(ข้อความยาวเกินไป ตัดบางส่วน)"
-            
-            return text
-            
-        finally:
-            signal.alarm(0)  # Cancel timeout
-            signal.signal(signal.SIGALRM, old_handler)  # Restore old handler
+        text = _safe_parse_gemini_response(response)
+        
+        if not text:
+            return MESSAGES["AI_NO_RESPONSE"]
+        
+        text = re.sub(r'\b[Gg]oogle\b', 'Gemini', text)
+        text = text.replace('กูเกิล', 'Gemini')
+        
+        if len(text) > LINE_SAFE_TRUNCATE:
+            text = text[:LINE_SAFE_TRUNCATE] + "...\n\n(ข้อความยาวเกินไป ตัดบางส่วน)"
+        
+        return text
         
     except GeminiTimeoutError:
         logger.warning("Gemini API call timed out")
@@ -509,22 +526,16 @@ def get_gemini_response(prompt: str) -> str:
         if client_to_use == gemini_client_primary and gemini_client_fallback:
             try:
                 logger.info("Trying fallback model...")
-                # Set timeout for fallback
-                old_handler = signal.signal(signal.SIGALRM, timeout_handler)
-                signal.alarm(15)
-                
-                try:
-                    response = gemini_client_fallback.models.generate_content(
-                        model=gemini_model_fallback,
-                        contents=enhanced_prompt,
-                        config=GEMINI_CONFIG
-                    )
-                    text = _safe_parse_gemini_response(response)
-                    if text:
-                        return text
-                finally:
-                    signal.alarm(0)
-                    signal.signal(signal.SIGALRM, old_handler)
+                response = _generate_content_with_timeout(
+                    gemini_client_fallback,
+                    gemini_model_fallback,
+                    enhanced_prompt,
+                    config=GEMINI_CONFIG,
+                    timeout_seconds=15,
+                )
+                text = _safe_parse_gemini_response(response)
+                if text:
+                    return text
                     
             except GeminiTimeoutError:
                 logger.warning("Fallback Gemini API also timed out")
