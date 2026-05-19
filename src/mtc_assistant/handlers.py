@@ -3,9 +3,8 @@
 MTC Assistant - Handlers Module (IMPROVED UX Edition)
 """
 
-import time
 import threading
-from typing import Dict, List, Optional, Union, Callable
+from typing import Dict, List, Optional, Union
 from flask import request
 
 from linebot.v3 import WebhookHandler
@@ -18,7 +17,7 @@ from linebot.v3.webhooks import MessageEvent, TextMessageContent, FollowEvent
 # Import from config
 from mtc_assistant.config import (
     logger, ACCESS_TOKEN, CHANNEL_SECRET, MESSAGES,
-    RATE_LIMIT_MAX, RATE_LIMIT_WINDOW, ADMIN_USER_IDS
+    ADMIN_USER_IDS
 )
 
 # Import from features
@@ -38,6 +37,7 @@ import mtc_assistant.features as features
 # Import broadcast functions
 import mtc_assistant.broadcast as broadcast
 
+from mtc_assistant.admin_router import handle_admin_command
 from mtc_assistant.constants import (
     HOMEWORK_START_COMMANDS,
     HOMEWORK_CANCEL_COMMANDS,
@@ -50,6 +50,7 @@ from mtc_assistant.homework_session import (
     handle_homework_session,
     cancel_homework_session,
 )
+from mtc_assistant.rate_limit import is_rate_limited
 
 # ============================================================================
 # LINE BOT CONFIGURATION
@@ -77,89 +78,6 @@ def get_line_api() -> Optional[MessagingApi]:
                     logger.error(f"Failed to initialize LINE API client: {e}")
     
     return _line_api_client
-
-# ============================================================================
-# RATE LIMITING
-# ============================================================================
-# Rate limiting with memory cleanup
-_user_message_history: Dict[str, List[float]] = {}
-_rate_limit_lock = threading.Lock()
-_banned_users: Dict[str, float] = {}
-
-# Cleanup old rate limit data periodically
-def cleanup_rate_limit_data():
-    """Clean up old rate limit data to prevent memory leaks"""
-    now_ts = time.time()
-    with _rate_limit_lock:
-        # Clean old message history (older than 1 hour)
-        old_users = []
-        for user_id, timestamps in _user_message_history.items():
-            recent = [t for t in timestamps if now_ts - t < 3600]  # 1 hour
-            if recent:
-                _user_message_history[user_id] = recent
-            else:
-                old_users.append(user_id)
-        
-        for user_id in old_users:
-            del _user_message_history[user_id]
-        
-        # Clean expired bans
-        expired_bans = []
-        for user_id, ban_until in _banned_users.items():
-            if now_ts >= ban_until:
-                expired_bans.append(user_id)
-        
-        for user_id in expired_bans:
-            del _banned_users[user_id]
-
-# Auto-cleanup every 10 minutes
-def auto_cleanup():
-    while True:
-        time.sleep(600)  # 10 minutes
-        cleanup_rate_limit_data()
-
-# Start cleanup thread
-cleanup_thread = threading.Thread(target=auto_cleanup, daemon=True)
-cleanup_thread.start()
-
-def is_rate_limited(user_id: str) -> bool:
-    """Check if user is rate limited"""
-    now_ts = time.time()
-    
-    with _rate_limit_lock:
-        if user_id in _banned_users:
-            ban_until = _banned_users[user_id]
-            if now_ts < ban_until:
-                remaining = int(ban_until - now_ts)
-                logger.warning(f"User {user_id} is banned for {remaining}s")
-                return True
-            else:
-                del _banned_users[user_id]
-        
-        history = _user_message_history.get(user_id, [])
-        recent = [t for t in history if now_ts - t < RATE_LIMIT_WINDOW]
-
-        if not recent:
-            _user_message_history.pop(user_id, None)
-            return False
-
-        if len(recent) > RATE_LIMIT_MAX * 3:
-            _banned_users[user_id] = now_ts + 300
-            logger.error(f"User {user_id} BANNED for severe abuse")
-            return True
-        
-        if len(recent) > RATE_LIMIT_MAX * 2:
-            logger.warning(f"User {user_id} in extended cooldown")
-            return True
-        
-        recent.append(now_ts)
-        _user_message_history[user_id] = recent
-        
-        if len(recent) > RATE_LIMIT_MAX:
-            logger.info(f"User {user_id} rate limited")
-            return True
-    
-    return False
 
 # ============================================================================
 # MESSAGE FORMAT HELPERS
@@ -339,95 +257,7 @@ def handle_message(event):
     # ADMIN COMMANDS
     # ========================================================================
     if user_id in ADMIN_USER_IDS:
-        # Broadcast commands
-        if user_message.startswith("ประกาศ "):
-            msg = user_message.replace("ประกาศ ", "", 1).strip()
-            if msg:
-                announcement = broadcast.create_announcement("ประกาศจากผู้ดูแล", msg)
-                def _do_broadcast(ann=announcement, aid=user_id):
-                    result = broadcast.broadcast_message(ann)
-                    broadcast.save_broadcast_history(aid, ann, result)
-                    logger.info(f"Broadcast complete: {result['message']}")
-                threading.Thread(target=_do_broadcast, daemon=True).start()
-                reply_message = TextMessage(
-                    text=f"กำลังส่งประกาศในพื้นหลัง...\n"
-                         f"เวลา {time.strftime('%H:%M:%S')}"
-                )
-        
-        elif user_message in ["สถิติประกาศ", "broadcast stats"]:
-            reply_message = TextMessage(text=broadcast.get_broadcast_stats())
-        
-        elif user_message in ["จำนวนผู้ใช้", "user count"]:
-            count = broadcast.get_user_count()
-            reply_message = TextMessage(
-                text=f"จำนวนผู้ใช้ทั้งหมด: {count} คน"
-            )
-        
-        # Impersonate commands
-        try:
-            from mtc_assistant.admin_impersonate import (
-                handle_list_users_command,
-                handle_send_impersonate_command,
-                handle_test_impersonate_command
-            )
-            
-            if user_message in ["ดูผู้ใช้", "users list"]:
-                reply_message = TextMessage(text=handle_list_users_command(user_id))
-            
-            elif user_message.startswith("ส่งถึง "):
-                reply_message = TextMessage(text=handle_send_impersonate_command(user_id, user_message))
-            
-            elif user_message.startswith("ทดสอบส่ง "):
-                reply_message = TextMessage(text=handle_test_impersonate_command(user_id, user_message))
-        except ImportError:
-            pass
-        except Exception as e:
-            logger.error(f"Impersonate error: {e}")
-        
-        # Blacklist commands
-        try:
-            from mtc_assistant.user_blacklist import (
-                handle_ban_user_command,
-                handle_unban_user_command,
-                handle_list_banned_command,
-                handle_ban_stats_command
-            )
-            
-            if user_message.startswith("แบน "):
-                reply_message = TextMessage(text=handle_ban_user_command(user_id, user_message))
-            
-            elif user_message.startswith("ปลดแบน "):
-                reply_message = TextMessage(text=handle_unban_user_command(user_id, user_message))
-            
-            elif user_message in ["รายชื่อแบน", "banned list"]:
-                reply_message = TextMessage(text=handle_list_banned_command(user_id))
-            
-            elif user_message in ["สถิติแบน", "ban stats"]:
-                reply_message = TextMessage(text=handle_ban_stats_command(user_id))
-        except ImportError:
-            pass
-        except Exception as e:
-            logger.error(f"Blacklist error: {e}")
-        
-        # Admin help
-        if user_message in ["admin", "คำสั่งแอดมิน"]:
-            admin_help = (
-                "คำสั่งแอดมิน\n\n"
-                "Broadcast\n"
-                "  ประกาศ [ข้อความ]\n"
-                "  สถิติประกาศ\n"
-                "  จำนวนผู้ใช้\n\n"
-                "Impersonate\n"
-                "  ดูผู้ใช้\n"
-                "  ส่งถึง [user_id] [ข้อความ]\n"
-                "  ทดสอบส่ง [ข้อความ]\n\n"
-                "Blacklist\n"
-                "  แบน [user_id] [เหตุผล]\n"
-                "  ปลดแบน [user_id]\n"
-                "  รายชื่อแบน\n"
-                "  สถิติแบน"
-            )
-            reply_message = TextMessage(text=admin_help)
+        reply_message = handle_admin_command(user_id, user_message)
     
     # ========================================================================
     # EXAM SIMULATOR

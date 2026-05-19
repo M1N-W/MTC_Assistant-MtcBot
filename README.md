@@ -210,6 +210,7 @@ export RATE_LIMIT_WINDOW="60"
 ## 🎓 สิ่งที่เรียนรู้จากโปรเจกต์
 
 ### Technical Skills
+
 - **System Architecture** — แยก Module ตาม Separation of Concerns อย่างชัดเจน
 - **Concurrency & Deadlock** — วิเคราะห์และแก้ปัญหา gRPC + gevent conflict ด้วย gthread
 - **UX/UI Copywriting** — ออกแบบ Tone of Voice ของแชทบอทให้ครอบคลุมทุก Module
@@ -218,6 +219,7 @@ export RATE_LIMIT_WINDOW="60"
 - **Retry & Backoff** — Exponential backoff สำหรับ rate-limited API calls
 
 ### Soft Skills
+
 - การแก้ปัญหาและ Debugging ระดับ Production
 - การทำงานร่วมกับ AI (Claude + Gemini) ในฐานะ Dev Partner
 - การบริหารโปรเจกต์และวาง Feature Roadmap

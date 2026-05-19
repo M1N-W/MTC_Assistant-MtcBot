@@ -388,11 +388,12 @@ def metrics():
 def stats():
     """Show bot statistics"""
     try:
-        from mtc_assistant.handlers import _user_message_history
-        total_users = len(_user_message_history)
-        total_messages = sum(len(msgs) for msgs in _user_message_history.values())
+        from mtc_assistant.rate_limit import get_rate_limit_stats
+        rate_limit_stats = get_rate_limit_stats()
+        total_users = rate_limit_stats["total_users"]
+        total_messages = rate_limit_stats["total_messages"]
     except (ImportError, AttributeError) as e:
-        logger.warning(f"Could not read _user_message_history from handlers: {e}")
+        logger.warning(f"Could not read rate limit stats: {e}")
         total_users = -1
         total_messages = -1
 
