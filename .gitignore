@@ -6,6 +6,14 @@ firebase_key.json
 *.service-account.json
 *.credentials.json
 
+# Node / Next.js dashboard
+dashboard/node_modules/
+dashboard/.next/
+dashboard/out/
+dashboard/*.tsbuildinfo
+dashboard/.env*
+!dashboard/.env.example
+
 # Python caches
 __pycache__/
 *.py[cod]

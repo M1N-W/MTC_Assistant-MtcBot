@@ -7,7 +7,31 @@ Contains all constants, settings, messages, and data structures
 import os
 import datetime
 import logging
+from pathlib import Path
 from zoneinfo import ZoneInfo
+
+
+def _load_local_env_file() -> None:
+    """Load root .env for local development without overriding real env vars."""
+    env_path = Path(__file__).resolve().parents[2] / ".env"
+    if not env_path.exists():
+        return
+
+    try:
+        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key:
+                os.environ.setdefault(key, value)
+    except OSError:
+        return
+
+
+_load_local_env_file()
 
 # ============================================================================
 # LOGGING CONFIGURATION
@@ -54,6 +78,26 @@ GEMINI_MODEL_V25 = os.environ.get("GEMINI_MODEL_SECONDARY", "gemini-2.5-flash-pr
 # ============================================================================
 RATE_LIMIT_MAX = int(os.environ.get("RATE_LIMIT_MAX", 6))
 RATE_LIMIT_WINDOW = int(os.environ.get("RATE_LIMIT_WINDOW", 60))
+
+# ============================================================================
+# DASHBOARD API CONFIGURATION
+# ============================================================================
+MTC_DASHBOARD_API_TOKEN = os.environ.get("MTC_DASHBOARD_API_TOKEN", "")
+DASHBOARD_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("DASHBOARD_ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+]
+
+try:
+    MTC_EXPECTED_CLASS_SIZE = int(os.environ.get("MTC_EXPECTED_CLASS_SIZE", 30))
+except (ValueError, TypeError):
+    MTC_EXPECTED_CLASS_SIZE = 30
+
+try:
+    PAPER_CO2_GRAMS_PER_SHEET = float(os.environ.get("PAPER_CO2_GRAMS_PER_SHEET", 4.5))
+except (ValueError, TypeError):
+    PAPER_CO2_GRAMS_PER_SHEET = 4.5
 
 # ============================================================================
 # ADMIN CONFIGURATION

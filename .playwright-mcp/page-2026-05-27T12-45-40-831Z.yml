@@ -1,0 +1,38 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6]:
+          - img [ref=e8]
+          - generic [ref=e11]:
+            - paragraph [ref=e12]: MTC Assistant
+            - paragraph [ref=e13]: Smart Classroom Command Center
+        - generic [ref=e14]:
+          - generic [ref=e15]:
+            - img [ref=e16]
+            - text: Paperless Mission Control
+          - heading "Secure classroom operations for the LINE bot." [level=1] [ref=e18]
+          - paragraph [ref=e19]: Monitor homework, broadcasts, paperless capture, access controls, and system health from one NSC-ready workspace.
+        - generic [ref=e20]:
+          - generic [ref=e21]:
+            - img [ref=e22]
+            - text: Webhook safe
+          - generic [ref=e25]:
+            - img [ref=e26]
+            - text: Token-proxied API
+          - generic [ref=e31]:
+            - img [ref=e32]
+            - text: Paperless metrics
+      - generic [ref=e35]:
+        - img [ref=e37]
+        - paragraph [ref=e41]: Admin access
+        - heading "Open mission control" [level=2] [ref=e42]
+        - paragraph [ref=e43]: "Use the password configured in `DASHBOARD_PASSWORD` to enter the protected dashboard."
+        - generic [ref=e44]: Dashboard password
+        - textbox [ref=e45]: mtc-dashboard-admin
+        - textbox "Dashboard password" [ref=e46]
+        - button "Open dashboard" [ref=e47]:
+          - text: Open dashboard
+          - img [ref=e48]
+  - button "Open Next.js Dev Tools" [ref=e55] [cursor=pointer]:
+    - img [ref=e56]

@@ -4,7 +4,7 @@ MTC Assistant - Handlers Module (IMPROVED UX Edition)
 """
 
 import threading
-from typing import Dict, List, Optional, Union
+from typing import List, Optional, Union
 from flask import request
 
 from linebot.v3 import WebhookHandler
@@ -12,7 +12,17 @@ from linebot.v3.messaging import (
     Configuration, ApiClient, MessagingApi, ReplyMessageRequest, 
     TextMessage, ImageMessage, FlexMessage
 )
-from linebot.v3.webhooks import MessageEvent, TextMessageContent, FollowEvent
+from linebot.v3.webhooks import (
+    AudioMessageContent,
+    FileMessageContent,
+    FollowEvent,
+    ImageMessageContent,
+    LocationMessageContent,
+    MessageEvent,
+    StickerMessageContent,
+    TextMessageContent,
+    VideoMessageContent,
+)
 
 # Import from config
 from mtc_assistant.config import (
@@ -22,11 +32,7 @@ from mtc_assistant.config import (
 
 # Import from features
 from mtc_assistant.features import (
-    get_worksheet_message, get_school_link_message, get_timetable_image_message,
-    get_grade_link_message, get_absence_form_message, get_bio_link_message,
-    get_physic_link_message, get_help_message, get_next_class_message,
-    get_time_until_next_class_message, get_exam_countdown_message,
-    get_music_link_message, get_gemini_response,
+    get_gemini_response,
     get_homeworks_from_db, clear_homework_db,
     get_calculator_response, get_grade_calculator_response
 )
@@ -38,12 +44,12 @@ import mtc_assistant.features as features
 import mtc_assistant.broadcast as broadcast
 
 from mtc_assistant.admin_router import handle_admin_command
+from mtc_assistant.command_router import handle_standard_command
 from mtc_assistant.constants import (
     HOMEWORK_START_COMMANDS,
     HOMEWORK_CANCEL_COMMANDS,
     HOMEWORK_VIEW_COMMANDS,
 )
-from mtc_assistant.flex_messages import get_links_menu_message
 from mtc_assistant.homework_session import (
     has_homework_session,
     start_homework_session,
@@ -78,54 +84,6 @@ def get_line_api() -> Optional[MessagingApi]:
                     logger.error(f"Failed to initialize LINE API client: {e}")
     
     return _line_api_client
-
-# ============================================================================
-# MESSAGE FORMAT HELPERS
-# ============================================================================
-
-def format_success_message(title: str, details: List[str]) -> str:
-    """Format a success message"""
-    message = f"{title}\n\n"
-    for detail in details:
-        message += f"  {detail}\n"
-    return message
-
-def format_info_message(title: str, items: Dict[str, str]) -> str:
-    """Format an informative message"""
-    message = f"{title}\n\n"
-    for key, value in items.items():
-        message += f"{key}: {value}\n"
-    return message
-
-def format_error_message(error: str, suggestion: str = None) -> str:
-    """Format an error message with optional suggestion"""
-    message = f"{error}\n"
-    if suggestion:
-        message += f"\n{suggestion}"
-    return message
-
-# ============================================================================
-# COMMANDS LIST
-# ============================================================================
-
-COMMANDS = [
-    (("ตารางเรียน", "ตารางสอน"), get_timetable_image_message),
-    (("เช็คเวลาเรียน", "เช็คเวลา"), get_time_until_next_class_message),
-    (("ดูงาน",), lambda msg: TextMessage(text=get_homeworks_from_db())),
-    (("ลิงก์ที่สำคัญ", "ลิงก์", "links"), get_links_menu_message),
-    (("ปฏิทินกิจกรรม", "ปฏิทิน"), get_exam_countdown_message),
-    (("ช่วยเหลือ", "คำสั่ง", "help"), get_help_message),
-    (("งาน", "การบ้าน", "ใบงาน"), get_worksheet_message),
-    (("เว็บโรงเรียน", "เว็บ"), get_school_link_message),
-    (("เกรด", "ดูเกรด"), get_grade_link_message),
-    (("ลา",), get_absence_form_message),
-    (("ชีวะ",), get_bio_link_message),
-    (("ฟิสิกส์",), get_physic_link_message),
-    (("คาบต่อไป",), get_next_class_message),
-    (("อีกกี่นาที",), get_time_until_next_class_message),
-    (("สอบ", "วันสอบ"), get_exam_countdown_message),
-    (("เปิดเพลง", "หาเพลง"), get_music_link_message),
-]
 
 # ============================================================================
 # LINE REPLY HELPER
@@ -350,25 +308,7 @@ def handle_message(event):
     # STANDARD COMMANDS
     # ========================================================================
     if not reply_message:
-        for keywords, action in COMMANDS:
-            matched = False
-            for keyword in keywords:
-                if keyword.lower() in user_message_lower:
-                    try:
-                        reply_message = action(user_message)
-                        matched = True
-                        break
-                    except Exception as e:
-                        logger.exception(f"Error: {e}")
-                        reply_message = TextMessage(
-                            text=format_error_message(
-                                "แงงง ระบบขัดข้องนิดหน่อยฮะ 🥺",
-                                "ลองส่งคำสั่งมาใหม่อีกทีน้า"
-                            )
-                        )
-                        break
-            if matched:
-                break
+        reply_message = handle_standard_command(user_message, user_message_lower)
     
     # ========================================================================
     # FALLBACK TO AI
@@ -390,6 +330,23 @@ def handle_message(event):
     except Exception as e:
         logger.exception(f"Failed to send reply: {e}")
 
+@handler.add(MessageEvent, message=AudioMessageContent) if handler else (lambda f: f)
+@handler.add(MessageEvent, message=FileMessageContent) if handler else (lambda f: f)
+@handler.add(MessageEvent, message=ImageMessageContent) if handler else (lambda f: f)
+@handler.add(MessageEvent, message=LocationMessageContent) if handler else (lambda f: f)
+@handler.add(MessageEvent, message=StickerMessageContent) if handler else (lambda f: f)
+@handler.add(MessageEvent, message=VideoMessageContent) if handler else (lambda f: f)
+def handle_non_text_message(event):
+    """Reply safely to supported non-text LINE payloads."""
+    message_type = getattr(getattr(event, "message", None), "type", "unknown")
+    logger.info("Unsupported non-text LINE message received: %s", message_type)
+    reply_to_line(event.reply_token, [TextMessage(
+        text=(
+            "ตอนนี้บอทรองรับคำสั่งแบบข้อความเป็นหลัก\n"
+            "หากต้องการใช้ Paperless Capture AI ให้เปิดผ่าน Dashboard ผู้ดูแลระบบก่อน"
+        )
+    )])
+
 # ============================================================================
 # EXPORTS
 # ============================================================================
@@ -398,5 +355,6 @@ __all__ = [
     'handler',
     'handle_follow',
     'handle_message',
+    'handle_non_text_message',
     'reply_to_line',
 ]
