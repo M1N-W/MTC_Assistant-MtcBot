@@ -31,7 +31,7 @@ services:
     env: node
     plan: starter
     rootDir: dashboard
-    buildCommand: "npm install && npm run build"
+    buildCommand: "npm ci --include=dev && npm run build"
     startCommand: "npm run start"
     healthCheckPath: /api/health
     autoDeploy: true
