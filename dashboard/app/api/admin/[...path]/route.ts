@@ -3,6 +3,8 @@ import { isAuthenticated } from "@/lib/auth";
 
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
+  "content-encoding",
+  "content-length",
   "keep-alive",
   "proxy-authenticate",
   "proxy-authorization",

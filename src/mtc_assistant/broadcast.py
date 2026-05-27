@@ -97,7 +97,7 @@ def track_user(user_id: str, display_name: str = "Unknown"):
 def get_all_users():
     """ดึงรายชื่อ user_id ทั้งหมดจาก Firebase"""
     if not db:
-        logger.error("Firebase not available")
+        logger.warning("Firebase not available for user list; returning an empty user list")
         return []
     
     try:

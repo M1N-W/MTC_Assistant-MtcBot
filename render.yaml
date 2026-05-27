@@ -5,7 +5,7 @@ services:
     env: python
     plan: starter
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "PYTHONPATH=src gunicorn --worker-class gthread --threads 4 --workers 2 --timeout 120 --keep-alive 5 --preload --bind 0.0.0.0:$PORT mtc_assistant.main:app"
+    startCommand: "PYTHONPATH=src gunicorn --worker-class gthread --threads 4 --workers 2 --timeout 120 --keep-alive 5 --bind 0.0.0.0:$PORT mtc_assistant.main:app"
     healthCheckPath: /healthz
     autoDeploy: true
 
@@ -17,6 +17,10 @@ services:
       - key: MTC_DASHBOARD_API_TOKEN
         sync: false
       - key: DASHBOARD_ALLOWED_ORIGINS
+        sync: false
+      - key: FIREBASE_CREDENTIALS_BASE64
+        sync: false
+      - key: FIREBASE_CREDENTIALS_JSON
         sync: false
 
   - type: worker
