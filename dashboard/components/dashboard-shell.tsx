@@ -217,13 +217,27 @@ function validateCaptureFile(file: File | null) {
   return file;
 }
 
+function getPayloadData<T>(payload: unknown, status: number): T {
+  if (typeof payload === "object" && payload !== null && "data" in payload) {
+    const data = (payload as { data?: unknown }).data;
+    if (data !== undefined) {
+      return data as T;
+    }
+  }
+  throw new DashboardApiError(
+    "Dashboard API response did not include a data object. Please refresh the page.",
+    status,
+    "INVALID_API_RESPONSE",
+  );
+}
+
 async function apiGet<T>(path: string): Promise<T> {
   const response = await fetch(`/api/admin/${path}`, { cache: "no-store" });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw getApiError(payload, response.status);
   }
-  return payload.data as T;
+  return getPayloadData<T>(payload, response.status);
 }
 
 async function apiSend<T>(path: string, method: "POST" | "DELETE", body?: unknown): Promise<T> {
@@ -236,7 +250,7 @@ async function apiSend<T>(path: string, method: "POST" | "DELETE", body?: unknow
   if (!response.ok) {
     throw getApiError(payload, response.status);
   }
-  return payload.data as T;
+  return getPayloadData<T>(payload, response.status);
 }
 
 async function apiUpload<T>(path: string, file: File): Promise<T> {
@@ -250,7 +264,7 @@ async function apiUpload<T>(path: string, file: File): Promise<T> {
   if (!response.ok) {
     throw getApiError(payload, response.status);
   }
-  return payload.data as T;
+  return getPayloadData<T>(payload, response.status);
 }
 
 export function DashboardShell() {
