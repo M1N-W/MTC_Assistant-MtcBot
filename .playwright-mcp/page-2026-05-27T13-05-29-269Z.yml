@@ -1,0 +1,20 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - img [ref=e7]
+        - paragraph [ref=e10]: "[ SYSTEM AUTHENTICATION ]"
+        - heading "MTC Assistant" [level=1] [ref=e11]
+        - paragraph [ref=e12]: Secure access to the NSC operations console.
+      - generic [ref=e13]:
+        - generic [ref=e14]:
+          - img [ref=e15]
+          - text: Dashboard password
+        - textbox [ref=e19]: mtc-dashboard-admin
+        - textbox "Dashboard password" [ref=e20]: password
+        - button "Open dashboard" [ref=e21]:
+          - text: Open dashboard
+          - img [ref=e22]
+  - button "Open Next.js Dev Tools" [ref=e29] [cursor=pointer]:
+    - img [ref=e30]
+  - alert [ref=e33]

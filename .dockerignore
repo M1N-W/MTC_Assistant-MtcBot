@@ -10,6 +10,11 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 
+# Node / Next.js dashboard build artifacts
+dashboard/node_modules/
+dashboard/.next/
+dashboard/out/
+
 # Virtual environments
 .venv/
 venv/

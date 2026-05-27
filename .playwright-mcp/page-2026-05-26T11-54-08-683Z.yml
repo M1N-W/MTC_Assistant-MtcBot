@@ -1,0 +1,22 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - img [ref=e7]
+        - generic [ref=e10]:
+          - paragraph [ref=e11]: MTC Assistant
+          - heading "Command center for the LINE bot that runs the classroom." [level=1] [ref=e12]
+          - paragraph [ref=e13]: Monitor usage, homework, broadcasts, blacklist status, and system health from one secured workspace.
+        - generic [ref=e14]:
+          - generic [ref=e15]: Webhook safe
+          - generic [ref=e16]: Token-proxied API
+          - generic [ref=e17]: NSC-ready UX
+      - generic [ref=e18]:
+        - img [ref=e20]
+        - heading "Admin sign in" [level=2] [ref=e24]
+        - paragraph [ref=e25]: "Use the password configured in `DASHBOARD_PASSWORD`."
+        - generic [ref=e26]: Dashboard password
+        - textbox [ref=e27]: mtc-dashboard-admin
+        - textbox "Dashboard password" [ref=e28]: local-password
+        - button "Open dashboard" [ref=e29]
+  - alert [ref=e30]

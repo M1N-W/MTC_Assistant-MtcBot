@@ -48,6 +48,7 @@ from mtc_assistant.handlers import handler
 
 import mtc_assistant.features as features  # Import features module to set global variables
 import mtc_assistant.broadcast as broadcast  # Import broadcast module
+from mtc_assistant.admin_api import create_admin_api_blueprint
 
 # ============================================================================
 # FLASK APP INITIALIZATION
@@ -80,6 +81,41 @@ def _increment_metric(key: str, value: float = 1) -> None:
     """Thread-safe counter increment for _metrics."""
     with _metrics_lock:
         _metrics[key] += value
+
+
+def _metrics_snapshot() -> dict:
+    """Return a thread-safe metrics snapshot for local status and dashboard APIs."""
+    with _metrics_lock:
+        total_requests = _metrics["total_requests"]
+        cache_total = _metrics["cache_hits"] + _metrics["cache_misses"]
+        snapshot = {
+            "uptime_seconds": round(time.time() - _metrics["start_time"], 2),
+            "total_requests": total_requests,
+            "total_errors": _metrics["total_errors"],
+            "error_rate_percent": round((_metrics["total_errors"] / max(total_requests, 1)) * 100, 2),
+            "avg_response_time_ms": round(_metrics["total_response_time"] / max(total_requests, 1), 2),
+            "cache_hits": _metrics["cache_hits"],
+            "cache_misses": _metrics["cache_misses"],
+            "cache_hit_rate_percent": round((_metrics["cache_hits"] / max(cache_total, 1)) * 100, 2),
+        }
+
+    try:
+        from mtc_assistant.rate_limit import get_rate_limit_stats
+        snapshot.update(get_rate_limit_stats())
+    except (ImportError, AttributeError) as e:
+        logger.warning(f"Could not read rate limit stats: {e}")
+
+    return snapshot
+
+
+def _service_snapshot() -> dict:
+    """Return current dependency status without blocking on external probes."""
+    return {
+        "line": bool(ACCESS_TOKEN and CHANNEL_SECRET),
+        "gemini": bool((GEMINI_API_KEY_V3 or GEMINI_API_KEY_V25) and (gemini_client_v3 or gemini_client_v25)),
+        "firebase": bool(db),
+        "broadcast": bool(line_config),
+    }
 
 
 @app.before_request
@@ -238,6 +274,14 @@ if line_config:
     except ImportError:
         logger.warning("⚠️ admin_impersonate.py not found - impersonate feature disabled")
 
+app.register_blueprint(
+    create_admin_api_blueprint(
+        get_db=lambda: db,
+        get_metrics=_metrics_snapshot,
+        get_services=_service_snapshot,
+    )
+)
+
 # ============================================================================
 # FLASK ROUTES
 # ============================================================================
@@ -254,6 +298,11 @@ def callback():
 
     body = request.get_data(as_text=True)
     logger.debug("Request body: %s", body[:200])
+    if not body:
+        logger.error("Empty LINE webhook body.")
+        with _metrics_lock:
+            _metrics["total_errors"] += 1
+        abort(400)
 
     if handler is None:
         logger.error("Webhook handler not configured (missing CHANNEL_SECRET).")
@@ -366,23 +415,7 @@ def healthz():
 @app.route("/metrics", methods=['GET'])
 def metrics():
     """Prometheus-style metrics endpoint"""
-    uptime = time.time() - _metrics["start_time"]
-    avg_response_time = _metrics['total_response_time'] / max(_metrics['total_requests'], 1)
-    error_rate = (_metrics['total_errors'] / max(_metrics['total_requests'], 1)) * 100
-
-    return jsonify({
-        "uptime_seconds": round(uptime, 2),
-        "total_requests": _metrics["total_requests"],
-        "total_errors": _metrics["total_errors"],
-        "error_rate_percent": round(error_rate, 2),
-        "avg_response_time_ms": round(avg_response_time, 2),
-        "cache_hits": _metrics["cache_hits"],
-        "cache_misses": _metrics["cache_misses"],
-        "cache_hit_rate_percent": round(
-            (_metrics["cache_hits"] / max(_metrics["cache_hits"] + _metrics["cache_misses"], 1)) * 100,
-            2
-        )
-    }), 200
+    return jsonify(_metrics_snapshot()), 200
 
 @app.route("/stats", methods=['GET'])
 def stats():

@@ -1,0 +1,453 @@
+# -*- coding: utf-8 -*-
+"""
+Admin API for the MTC Assistant web dashboard.
+
+The LINE webhook remains independent from this blueprint.  Dashboard requests
+must carry a server-side bearer token; the browser never receives that token.
+"""
+
+from __future__ import annotations
+
+import datetime
+import base64
+import binascii
+import threading
+from typing import Any, Callable, Dict, Optional, Tuple
+
+from flask import Blueprint, jsonify, request
+from firebase_admin import firestore
+from werkzeug.exceptions import HTTPException
+
+import mtc_assistant.broadcast as broadcast
+from mtc_assistant.config import (
+    DASHBOARD_ALLOWED_ORIGINS,
+    LOCAL_TZ,
+    MTC_DASHBOARD_API_TOKEN,
+    MTC_EXPECTED_CLASS_SIZE,
+    PAPER_CO2_GRAMS_PER_SHEET,
+    logger,
+)
+from mtc_assistant.paperless_capture import (
+    ALLOWED_IMAGE_MIME_TYPES,
+    MAX_IMAGE_BYTES,
+    PaperlessCaptureError,
+    analyze_classroom_image,
+)
+from mtc_assistant.user_blacklist import get_blacklist_manager
+
+
+DbProvider = Callable[[], Any]
+MetricsProvider = Callable[[], Dict[str, Any]]
+
+
+def create_admin_api_blueprint(
+    get_db: DbProvider,
+    get_metrics: MetricsProvider,
+    get_services: Callable[[], Dict[str, Any]],
+) -> Blueprint:
+    blueprint = Blueprint("admin_api", __name__, url_prefix="/api/admin")
+
+    @blueprint.after_request
+    def add_api_headers(response):
+        origin = request.headers.get("Origin", "")
+        if origin and origin in DASHBOARD_ALLOWED_ORIGINS:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Vary"] = "Origin"
+            response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
+
+    @blueprint.before_request
+    def authenticate_dashboard_request():
+        if request.method == "OPTIONS":
+            return "", 204
+        if not MTC_DASHBOARD_API_TOKEN:
+            return _error("DASHBOARD_NOT_CONFIGURED", "Dashboard API token is not configured.", 503)
+        auth_header = request.headers.get("Authorization", "")
+        expected = f"Bearer {MTC_DASHBOARD_API_TOKEN}"
+        if auth_header != expected:
+            return _error("UNAUTHORIZED", "Missing or invalid dashboard API token.", 401)
+        return None
+
+    @blueprint.errorhandler(Exception)
+    def handle_admin_api_exception(error):
+        if isinstance(error, HTTPException):
+            status = error.code or 500
+            return _error(f"HTTP_{status}", error.description or "Dashboard API request failed.", status)
+        logger.exception("Dashboard API unhandled error: %s", error)
+        return _error("INTERNAL_ERROR", "Dashboard API request failed.", 500)
+
+    @blueprint.get("/overview")
+    def overview():
+        db = get_db()
+        metrics = get_metrics()
+        services = get_services()
+        homework_items = _get_recent_homeworks(db, limit=6)
+        blacklist = get_blacklist_manager().get_all_banned()
+        recent_broadcasts = _get_recent_broadcasts(db, limit=5)
+        sustainability = _build_sustainability_impact(db, metrics)
+
+        return jsonify({
+            "data": {
+                "generated_at": _now_iso(),
+                "services": services,
+                "metrics": metrics,
+                "counts": {
+                    "registered_users": broadcast.get_user_count() if db else 0,
+                    "rate_limit_tracked_users": metrics.get("rate_limit_tracked_users", 0),
+                    "active_homework_preview": len(homework_items),
+                    "banned_users": len(blacklist),
+                    "recent_broadcasts": len(recent_broadcasts),
+                },
+                "sustainability": sustainability,
+                "homework_preview": homework_items,
+                "recent_broadcasts": recent_broadcasts,
+            }
+        }), 200
+
+    @blueprint.get("/sustainability")
+    def sustainability():
+        db = get_db()
+        return jsonify({
+            "data": _build_sustainability_impact(db, get_metrics())
+        }), 200
+
+    @blueprint.post("/paperless-capture")
+    def paperless_capture():
+        image_bytes, mime_type, error = _image_body()
+        if error:
+            return error
+
+        try:
+            analysis = analyze_classroom_image(image_bytes, mime_type)
+        except PaperlessCaptureError as e:
+            return _error("PAPERLESS_CAPTURE_FAILED", str(e), 422)
+        except Exception as e:
+            logger.exception("Paperless capture failed: %s", e)
+            return _error("PAPERLESS_CAPTURE_FAILED", "Could not analyze this image.", 500)
+
+        db = get_db()
+        if db:
+            try:
+                db.collection("paperless_captures").add({
+                    "mime_type": mime_type,
+                    "image_size_bytes": len(image_bytes),
+                    "analysis": analysis,
+                    "created_at": datetime.datetime.now(tz=LOCAL_TZ).isoformat(),
+                    "timestamp": firestore.SERVER_TIMESTAMP,
+                })
+            except Exception as e:
+                logger.warning("Could not save paperless capture history: %s", e)
+
+        return jsonify({
+            "data": {
+                "analysis": analysis,
+                "image_size_bytes": len(image_bytes),
+                "mime_type": mime_type,
+            }
+        }), 200
+
+    @blueprint.get("/users")
+    def users():
+        limit, offset = _pagination(default_limit=50, max_limit=100)
+        user_ids = broadcast.get_all_users()
+        page = user_ids[offset:offset + limit]
+        return jsonify({
+            "data": {
+                "items": [{"user_id": user_id} for user_id in page],
+                "page": {
+                    "limit": limit,
+                    "offset": offset,
+                    "total": len(user_ids),
+                    "has_next": offset + limit < len(user_ids),
+                },
+            }
+        }), 200
+
+    @blueprint.get("/homeworks")
+    def homeworks():
+        db = get_db()
+        if not db:
+            return _error("FIREBASE_UNAVAILABLE", "Firebase is not connected.", 503)
+        limit, _offset = _pagination(default_limit=30, max_limit=100)
+        return jsonify({"data": {"items": _get_recent_homeworks(db, limit=limit)}}), 200
+
+    @blueprint.get("/broadcasts")
+    def broadcasts():
+        db = get_db()
+        if not db:
+            return _error("FIREBASE_UNAVAILABLE", "Firebase is not connected.", 503)
+        limit, _offset = _pagination(default_limit=20, max_limit=50)
+        return jsonify({"data": {"items": _get_recent_broadcasts(db, limit=limit)}}), 200
+
+    @blueprint.post("/broadcasts")
+    def create_broadcast():
+        payload, error = _json_body()
+        if error:
+            return error
+        message = str(payload.get("message", "")).strip()
+        title = str(payload.get("title", "ประกาศจากผู้ดูแล")).strip() or "ประกาศจากผู้ดูแล"
+        if not message:
+            return _error("VALIDATION_ERROR", "message is required.", 422)
+        if len(message) > 1000:
+            return _error("VALIDATION_ERROR", "message must be 1000 characters or fewer.", 422)
+
+        announcement = broadcast.create_announcement(title, message)
+
+        def _send_in_background():
+            result = broadcast.broadcast_message(announcement)
+            broadcast.save_broadcast_history("dashboard", announcement, result)
+            logger.info("Dashboard broadcast complete: %s", result.get("message"))
+
+        threading.Thread(target=_send_in_background, daemon=True).start()
+        return jsonify({
+            "data": {
+                "status": "queued",
+                "queued_at": _now_iso(),
+                "message": "Broadcast queued in background.",
+            }
+        }), 202
+
+    @blueprint.get("/blacklist")
+    def blacklist():
+        manager = get_blacklist_manager()
+        items = [
+            {
+                "user_id": record.user_id,
+                "banned_at": record.banned_at,
+                "banned_by": record.banned_by,
+                "reason": record.reason,
+                "is_permanent": record.is_permanent,
+            }
+            for record in manager.get_all_banned().values()
+        ]
+        return jsonify({"data": {"items": items, "total": len(items)}}), 200
+
+    @blueprint.post("/blacklist")
+    def ban_user():
+        payload, error = _json_body()
+        if error:
+            return error
+        user_id = str(payload.get("user_id", "")).strip()
+        reason = str(payload.get("reason", "Dashboard ban")).strip() or "Dashboard ban"
+        if not user_id:
+            return _error("VALIDATION_ERROR", "user_id is required.", 422)
+        if len(reason) > 240:
+            return _error("VALIDATION_ERROR", "reason must be 240 characters or fewer.", 422)
+
+        success = get_blacklist_manager().ban_user(user_id, "dashboard", reason)
+        if not success:
+            return _error("BLACKLIST_WRITE_FAILED", "Could not ban this user.", 500)
+        return jsonify({"data": {"user_id": user_id, "status": "banned"}}), 201
+
+    @blueprint.delete("/blacklist/<user_id>")
+    def unban_user(user_id: str):
+        success = get_blacklist_manager().unban_user(user_id)
+        if not success:
+            return _error("NOT_FOUND", "User is not currently banned.", 404)
+        return jsonify({"data": {"user_id": user_id, "status": "unbanned"}}), 200
+
+    return blueprint
+
+
+def _error(code: str, message: str, status: int):
+    return jsonify({
+        "error": {
+            "code": code,
+            "message": message,
+            "request_id": request.headers.get("X-Request-ID", ""),
+        }
+    }), status
+
+
+def _json_body() -> Tuple[Dict[str, Any], Optional[Any]]:
+    if not request.is_json:
+        return {}, _error("INVALID_JSON", "Request body must be JSON.", 400)
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return {}, _error("INVALID_JSON", "Request body must be a JSON object.", 400)
+    return payload, None
+
+
+def _image_body() -> Tuple[bytes, str, Optional[Any]]:
+    if request.files:
+        file = request.files.get("image")
+        if not file:
+            return b"", "", _error("VALIDATION_ERROR", "image file is required.", 422)
+        image_bytes = file.stream.read(MAX_IMAGE_BYTES + 1)
+        return _validate_image_payload(image_bytes, file.mimetype or "application/octet-stream")
+
+    payload, error = _json_body()
+    if error:
+        return b"", "", error
+    image_base64 = str(payload.get("image_base64", "")).strip()
+    mime_type = str(payload.get("mime_type", "image/jpeg")).strip() or "image/jpeg"
+    if not image_base64:
+        return b"", "", _error("VALIDATION_ERROR", "image_base64 is required.", 422)
+    if "," in image_base64 and image_base64.lower().startswith("data:"):
+        header, image_base64 = image_base64.split(",", 1)
+        if ";" in header:
+            mime_type = header[5:].split(";", 1)[0] or mime_type
+    if len(image_base64) > _max_base64_length():
+        return b"", "", _error("VALIDATION_ERROR", "Image is larger than 6 MB.", 422)
+    try:
+        image_bytes = base64.b64decode(image_base64, validate=True)
+    except (binascii.Error, ValueError):
+        return b"", "", _error("VALIDATION_ERROR", "image_base64 is invalid.", 422)
+    return _validate_image_payload(image_bytes, mime_type)
+
+
+def _max_base64_length() -> int:
+    return ((MAX_IMAGE_BYTES + 2) // 3) * 4
+
+
+def _validate_image_payload(image_bytes: bytes, declared_mime: str) -> Tuple[bytes, str, Optional[Any]]:
+    mime_type = (declared_mime or "application/octet-stream").split(";", 1)[0].strip().lower()
+    if not image_bytes:
+        return b"", "", _error("VALIDATION_ERROR", "Image content is empty.", 422)
+    if len(image_bytes) > MAX_IMAGE_BYTES:
+        return b"", "", _error("VALIDATION_ERROR", "Image is larger than 6 MB.", 422)
+    if mime_type not in ALLOWED_IMAGE_MIME_TYPES:
+        return b"", "", _error("VALIDATION_ERROR", "Only JPEG, PNG, and WebP images are supported.", 422)
+
+    detected_mime = _detect_image_mime(image_bytes)
+    if detected_mime is None:
+        return b"", "", _error("VALIDATION_ERROR", "Image file signature is invalid.", 422)
+    if detected_mime != mime_type:
+        return b"", "", _error("VALIDATION_ERROR", "Image MIME type does not match its file signature.", 422)
+    return image_bytes, mime_type, None
+
+
+def _detect_image_mime(image_bytes: bytes) -> Optional[str]:
+    if image_bytes.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if image_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if len(image_bytes) >= 12 and image_bytes[:4] == b"RIFF" and image_bytes[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+def _pagination(default_limit: int, max_limit: int) -> Tuple[int, int]:
+    try:
+        limit = int(request.args.get("limit", default_limit))
+        offset = int(request.args.get("offset", 0))
+    except (TypeError, ValueError):
+        return default_limit, 0
+    limit = max(1, min(limit, max_limit))
+    offset = max(0, offset)
+    return limit, offset
+
+
+def _build_sustainability_impact(db, metrics: Dict[str, Any]) -> Dict[str, Any]:
+    active_students = broadcast.get_user_count() if db else 0
+    homework_count = _count_collection(db, "homeworks")
+    broadcast_count, broadcast_recipients = _broadcast_totals(db)
+    automated_request_count = int(metrics.get("total_requests", 0) or 0)
+
+    paper_saved_sheets = (homework_count + broadcast_count) * active_students
+    admin_minutes_saved = (
+        automated_request_count * 1.0
+        + homework_count * 3.0
+        + broadcast_count * max(active_students - 1, 0) * 0.5
+    )
+    equal_access_rate = 0.0
+    if MTC_EXPECTED_CLASS_SIZE > 0:
+        equal_access_rate = min(100.0, (active_students / MTC_EXPECTED_CLASS_SIZE) * 100)
+
+    return {
+        "active_students": active_students,
+        "expected_class_size": MTC_EXPECTED_CLASS_SIZE,
+        "homework_count": homework_count,
+        "broadcast_count": broadcast_count,
+        "broadcast_recipients": broadcast_recipients,
+        "automated_request_count": automated_request_count,
+        "paper_saved_sheets": int(paper_saved_sheets),
+        "admin_minutes_saved": round(admin_minutes_saved, 1),
+        "admin_hours_saved": round(admin_minutes_saved / 60, 2),
+        "co2_saved_grams": round(paper_saved_sheets * PAPER_CO2_GRAMS_PER_SHEET, 1),
+        "equal_access_rate_percent": round(equal_access_rate, 1),
+        "assumptions": {
+            "paper_factor": "1 sheet per homework or broadcast per active student",
+            "standard_command_minutes_saved": 1.0,
+            "homework_entry_minutes_saved": 3.0,
+            "broadcast_resend_minutes_saved_per_student": 0.5,
+            "co2_grams_per_sheet": PAPER_CO2_GRAMS_PER_SHEET,
+        },
+    }
+
+
+def _count_collection(db, collection_name: str) -> int:
+    if not db:
+        return 0
+    try:
+        return sum(1 for _ in db.collection(collection_name).stream())
+    except Exception as e:
+        logger.warning("Could not count %s: %s", collection_name, e)
+        return 0
+
+
+def _broadcast_totals(db) -> Tuple[int, int]:
+    if not db:
+        return 0, 0
+    try:
+        total = 0
+        recipients = 0
+        for doc in db.collection("broadcast_history").stream():
+            data = doc.to_dict() or {}
+            total += 1
+            recipients += int(data.get("sent_count", 0) or 0)
+        return total, recipients
+    except Exception as e:
+        logger.warning("Could not count broadcast history: %s", e)
+        return 0, 0
+
+
+def _serialize_doc(doc) -> Dict[str, Any]:
+    data = doc.to_dict() or {}
+    data["id"] = doc.id
+    return {key: _json_safe(value) for key, value in data.items()}
+
+
+def _json_safe(value: Any) -> Any:
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    return value
+
+
+def _get_recent_homeworks(db, limit: int) -> list:
+    if not db:
+        return []
+    try:
+        docs = db.collection("homeworks").order_by(
+            "created_at",
+            direction=firestore.Query.DESCENDING,
+        ).limit(limit).stream()
+        return [_serialize_doc(doc) for doc in docs]
+    except Exception as e:
+        logger.error("Dashboard homework query failed: %s", e)
+        return []
+
+
+def _get_recent_broadcasts(db, limit: int) -> list:
+    if not db:
+        return []
+    try:
+        docs = db.collection("broadcast_history").order_by(
+            "timestamp",
+            direction=firestore.Query.DESCENDING,
+        ).limit(limit).stream()
+        return [_serialize_doc(doc) for doc in docs]
+    except Exception as e:
+        logger.error("Dashboard broadcast query failed: %s", e)
+        return []
+
+
+def _now_iso() -> str:
+    return datetime.datetime.now(tz=LOCAL_TZ).isoformat()

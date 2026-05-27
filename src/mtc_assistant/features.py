@@ -451,6 +451,22 @@ def _safe_parse_gemini_response(response) -> str:
 class GeminiTimeoutError(Exception):
     pass
 
+def is_gemini_quota_error(error: Exception) -> bool:
+    """Return True for quota/rate-limit style Gemini failures."""
+    error_text = str(error).lower()
+    return any(
+        token in error_text
+        for token in (
+            "429",
+            "quota",
+            "rate limit",
+            "rate_limit",
+            "resource exhausted",
+            "resource_exhausted",
+            "too many requests",
+        )
+    )
+
 def _generate_content_with_timeout(client, model: str, contents: str, config=None, timeout_seconds: float = 15):
     result = {"response": None, "error": None}
 
@@ -522,6 +538,7 @@ def get_gemini_response(prompt: str) -> str:
         return "AI ของเรากำลังมึนตึ้บ ขอเวลาตั้งสติแป๊บนึงนะ 😵‍💫 ลองทักมาใหม่นะครับ!"
     except Exception as e:
         logger.error("Gemini Generate Error: %s", e)
+        quota_limited = is_gemini_quota_error(e)
         
         if client_to_use == gemini_client_primary and gemini_client_fallback:
             try:
@@ -541,7 +558,10 @@ def get_gemini_response(prompt: str) -> str:
                 logger.warning("Fallback Gemini API also timed out")
             except Exception as e2:
                 logger.error("Fallback also failed: %s", e2)
+                quota_limited = quota_limited or is_gemini_quota_error(e2)
         
+        if quota_limited:
+            return "ตอนนี้โควตา AI ถูกใช้งานมากเกินไปชั่วคราว ลองใช้คำสั่งหลักของบอทก่อน หรือทักมาใหม่อีกครั้งในภายหลังนะ"
         return MESSAGES["AI_ERROR"]
 
 # ============================================================================
@@ -560,7 +580,7 @@ def get_calculator_response(user_message: str):
         
         if not expression:
             return TextMessage(
-                text="บอกสมการมาด้วยนะ\nเช่น คำนวณ 2+2 หรือ คำนวณ sqrt(16)"
+                text="บอกสมการมาด้วยนะ\nเช่น คำนวณ 2+2 หรือ คำนวณ √16"
             )
         
         result = smart_calculate(expression)

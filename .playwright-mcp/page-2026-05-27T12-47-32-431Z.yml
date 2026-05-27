@@ -1,0 +1,143 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e3]:
+      - complementary [ref=e4]:
+        - generic [ref=e5]:
+          - img [ref=e7]
+          - generic [ref=e10]:
+            - paragraph [ref=e11]: MTC Assistant
+            - paragraph [ref=e12]: NSC Console
+        - navigation [ref=e13]:
+          - button "Overview" [ref=e14]:
+            - img [ref=e15]
+            - generic [ref=e18]: Overview
+          - button "Users" [ref=e19]:
+            - img [ref=e20]
+            - generic [ref=e23]: Users
+          - button "Homework" [ref=e24]:
+            - img [ref=e25]
+            - generic [ref=e28]: Homework
+          - button "Broadcast" [ref=e29]:
+            - img [ref=e30]
+            - generic [ref=e32]: Broadcast
+          - button "Blacklist" [ref=e33]:
+            - img [ref=e34]
+            - generic [ref=e36]: Blacklist
+          - button "System" [ref=e37]:
+            - img [ref=e38]
+            - generic [ref=e45]: System
+        - generic [ref=e46]:
+          - generic [ref=e47]:
+            - img [ref=e48]
+            - text: Impact Lens
+          - paragraph [ref=e51]: Paperless capture, digital notices, and classroom access in one secured workspace.
+        - button "Sign out" [ref=e52]:
+          - img [ref=e53]
+          - text: Sign out
+      - generic [ref=e56]:
+        - generic [ref=e57]:
+          - generic [ref=e58]:
+            - generic [ref=e59]: Smart Classroom Command Center
+            - heading "Live operations" [level=1] [ref=e61]
+            - paragraph [ref=e62]: Monitor LINE bot health, paperless workflows, classroom notices, and access controls without touching webhook delivery.
+          - generic [ref=e63]:
+            - generic [ref=e64]:
+              - img [ref=e65]
+              - text: Token-proxied API
+            - button "Refresh" [ref=e70]:
+              - img [ref=e71]
+              - text: Refresh
+        - generic [ref=e76]:
+          - generic [ref=e78]:
+            - paragraph [ref=e80]: Registered users
+            - img [ref=e83]
+          - generic [ref=e94]:
+            - paragraph [ref=e96]: Total requests
+            - img [ref=e99]
+          - generic [ref=e109]:
+            - paragraph [ref=e111]: Avg response
+            - img [ref=e114]
+          - generic [ref=e126]:
+            - paragraph [ref=e128]: Banned users
+            - img [ref=e131]
+        - generic [ref=e140]:
+          - generic [ref=e142]:
+            - paragraph [ref=e144]: Sheets saved
+            - img [ref=e147]
+          - generic [ref=e162]:
+            - paragraph [ref=e164]: Admin hours saved
+            - img [ref=e167]
+          - generic [ref=e178]:
+            - paragraph [ref=e180]: Equal access
+            - img [ref=e183]
+          - generic [ref=e195]:
+            - paragraph [ref=e197]: Digital notices
+            - img [ref=e200]
+        - generic [ref=e212]:
+          - generic [ref=e214]:
+            - generic [ref=e215]:
+              - img [ref=e217]
+              - heading "Sustainability impact" [level=2] [ref=e220]
+            - generic [ref=e221]: Conservative classroom estimate
+          - generic [ref=e228]:
+            - generic [ref=e229]:
+              - generic [ref=e230]:
+                - img [ref=e232]
+                - heading "Paperless Capture AI" [level=2] [ref=e239]
+              - generic [ref=e240]: Gemini Vision PoC
+            - generic [ref=e241]:
+              - generic [ref=e242]: Classroom image
+              - generic [ref=e243] [cursor=pointer]:
+                - img [ref=e245]
+                - generic [ref=e248]:
+                  - generic [ref=e249]: Upload board, worksheet, or class notice
+                  - generic [ref=e250]: PNG, JPEG, or WEBP. The analysis stays behind the admin API.
+              - button "Classroom image Upload board, worksheet, or class notice PNG, JPEG, or WEBP. The analysis stays behind the admin API." [ref=e251]
+              - button "Analyze image" [ref=e252]:
+                - img [ref=e253]
+                - text: Analyze image
+        - generic [ref=e255]:
+          - generic [ref=e257]:
+            - generic [ref=e258]:
+              - img [ref=e260]
+              - heading "Traffic shape" [level=2] [ref=e263]
+            - generic [ref=e264]: Loading
+          - generic [ref=e269]:
+            - img [ref=e271]
+            - heading "Service status" [level=2] [ref=e275]
+        - generic [ref=e281]:
+          - generic [ref=e284]:
+            - img [ref=e286]
+            - heading "Recent homework" [level=2] [ref=e289]
+          - generic [ref=e290]:
+            - generic [ref=e292]:
+              - img [ref=e294]
+              - heading "Broadcast console" [level=2] [ref=e296]
+            - generic [ref=e297]:
+              - generic [ref=e298]: Message
+              - textbox "Message" [ref=e299]
+              - button "Queue broadcast" [ref=e300]:
+                - img [ref=e301]
+                - text: Queue broadcast
+        - generic [ref=e304]:
+          - generic [ref=e305]:
+            - generic [ref=e307]:
+              - img [ref=e309]
+              - heading "Users" [level=2] [ref=e314]
+            - generic [ref=e316]:
+              - img [ref=e317]
+              - textbox "Search users" [ref=e320]
+          - generic [ref=e328]:
+            - generic [ref=e330]:
+              - img [ref=e332]
+              - heading "Blacklist control" [level=2] [ref=e334]
+            - generic [ref=e335]:
+              - generic [ref=e336]: LINE user ID
+              - textbox "LINE user ID" [ref=e337]
+              - generic [ref=e338]: Reason
+              - textbox "Reason" [ref=e339]
+              - button "Ban user" [ref=e340]:
+                - img [ref=e341]
+                - text: Ban user
+  - button "Open Next.js Dev Tools" [ref=e353] [cursor=pointer]:
+    - img [ref=e354]

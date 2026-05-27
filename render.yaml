@@ -14,6 +14,10 @@ services:
         value: "false"
       - key: PYTHON_VERSION
         value: "3.11.0"
+      - key: MTC_DASHBOARD_API_TOKEN
+        sync: false
+      - key: DASHBOARD_ALLOWED_ORIGINS
+        sync: false
 
   - type: worker
     name: mtc-cleanup
@@ -21,3 +25,24 @@ services:
     plan: starter
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python -c \"import time; [time.sleep(3600) for _ in iter(int, 1)]\""
+
+  - type: web
+    name: mtc-dashboard
+    env: node
+    plan: starter
+    rootDir: dashboard
+    buildCommand: "npm install && npm run build"
+    startCommand: "npm run start"
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: "production"
+      - key: MTC_BOT_API_BASE_URL
+        sync: false
+      - key: MTC_DASHBOARD_API_TOKEN
+        sync: false
+      - key: DASHBOARD_PASSWORD
+        sync: false
+      - key: DASHBOARD_SESSION_SECRET
+        sync: false
