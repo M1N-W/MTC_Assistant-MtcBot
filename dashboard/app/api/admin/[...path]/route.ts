@@ -81,10 +81,22 @@ async function proxy(request: NextRequest, context: RouteContext) {
   });
   responseHeaders.set("Cache-Control", "no-store");
 
-  return new Response(await upstream.text(), {
-    status: upstream.status,
-    headers: responseHeaders,
-  });
+  const contentType = upstream.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    const payload = await upstream.json().catch(() => null);
+    return Response.json(
+      payload ?? { error: { code: "INVALID_UPSTREAM_JSON", message: "Bot API returned invalid JSON." } },
+      {
+        status: payload === null ? 502 : upstream.status,
+        headers: responseHeaders,
+      },
+    );
+  }
+
+  return Response.json(
+    { error: { code: "INVALID_UPSTREAM_RESPONSE", message: "Bot API did not return JSON." } },
+    { status: 502, headers: responseHeaders },
+  );
 }
 
 export async function GET(request: NextRequest, context: RouteContext) {
