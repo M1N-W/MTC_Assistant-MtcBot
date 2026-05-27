@@ -124,6 +124,8 @@ def before_request():
     g.start_time = time.time()
     with _metrics_lock:
         _metrics["total_requests"] += 1
+    if request.path == "/healthz" or request.path == "/callback" or request.path.startswith("/api/admin/"):
+        _ensure_firebase_connected()
 
 
 @app.after_request
@@ -144,13 +146,13 @@ def after_request(response):
 # ============================================================================
 # FIREBASE INITIALIZATION (lazy + reconnect-safe)
 # ============================================================================
-# We deliberately keep startup non-blocking. A corrupted gRPC SSL channel
-# from a previous deploy (exit code 139 / TSI_DATA_CORRUPTED) is cleared by
-# forcing a full SDK re-init with delete_app + initialize_app, which opens a
-# fresh TCP connection. The eager connect runs in a background daemon thread
-# so the Flask app is ready to serve /healthz immediately.
+# Firebase is connected lazily inside the active worker process. This avoids
+# inheriting a Firestore client or a locked thread state from Gunicorn preload.
 db = None
 _db_lock = threading.Lock()
+_firebase_owner_pid = None
+_firebase_last_attempt = 0.0
+_FIREBASE_RETRY_SECONDS = 30.0
 
 def _load_firebase_credentials():
     """
@@ -183,7 +185,7 @@ def _load_firebase_credentials():
 
 def _connect_firebase() -> bool:
     """Init (or re-init) Firebase Admin SDK. Safe to call multiple times."""
-    global db
+    global db, _firebase_owner_pid
     try:
         cred = _load_firebase_credentials()
         if cred is None:
@@ -206,6 +208,7 @@ def _connect_firebase() -> bool:
         list(new_db.collection("health_check").limit(1).stream())
 
         db = new_db
+        _firebase_owner_pid = os.getpid()
         features.set_database(db)
         broadcast.set_database(db)
 
@@ -221,13 +224,30 @@ def _connect_firebase() -> bool:
     except Exception as e:
         logger.error(f"❌ Firebase connect failed: {e}")
         db = None
+        _firebase_owner_pid = None
         return False
 
-def _eager_firebase_connect():
-    with _db_lock:
-        _connect_firebase()
+def _ensure_firebase_connected(force: bool = False):
+    """Connect Firebase inside the active worker process when it is needed."""
+    global _firebase_last_attempt
+    if db and _firebase_owner_pid == os.getpid():
+        return db
 
-threading.Thread(target=_eager_firebase_connect, daemon=True).start()
+    now = time.time()
+    if not force and now - _firebase_last_attempt < _FIREBASE_RETRY_SECONDS:
+        return db
+
+    if not _db_lock.acquire(blocking=False):
+        return db
+
+    try:
+        if db and _firebase_owner_pid == os.getpid():
+            return db
+        _firebase_last_attempt = now
+        _connect_firebase()
+        return db
+    finally:
+        _db_lock.release()
 
 # ============================================================================
 # GEMINI AI INITIALIZATION (google-genai client)
@@ -276,7 +296,7 @@ if line_config:
 
 app.register_blueprint(
     create_admin_api_blueprint(
-        get_db=lambda: db,
+        get_db=_ensure_firebase_connected,
         get_metrics=_metrics_snapshot,
         get_services=_service_snapshot,
     )
@@ -356,8 +376,9 @@ def home():
 
 @app.route("/healthz", methods=['GET'])
 def healthz():
-    """Fast health check — non-blocking Firebase probe via daemon thread."""
+    """Health check with worker-safe Firebase reconnect and a bounded probe."""
     start_time = time.time()
+    _ensure_firebase_connected()
 
     services_status = {
         "line": bool(ACCESS_TOKEN and CHANNEL_SECRET),
@@ -365,11 +386,6 @@ def healthz():
         "firebase": bool(db),
         "broadcast": bool(line_config),
     }
-
-    # If Firebase is not connected yet, try reconnecting in background.
-    if not db:
-        threading.Thread(target=lambda: _db_lock.locked() or threading.Thread(
-            target=_eager_firebase_connect, daemon=True).start(), daemon=True).start()
 
     # Probe Firebase with a hard 3-second timeout using a daemon thread.
     # NEVER use signal.SIGALRM here — it only works on the main OS thread.
