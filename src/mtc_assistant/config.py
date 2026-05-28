@@ -102,8 +102,7 @@ except (ValueError, TypeError):
 # ============================================================================
 # ADMIN CONFIGURATION
 # ============================================================================
-# ใส่ LINE User ID ของคุณที่นี่ (หาได้จาก log เมื่อส่งข้อความ)
-# หรือตั้งค่าใน environment variable
+# LINE User ID ตั้งค่าใน environment variable
 ADMIN_USER_IDS = [
     uid.strip()
     for uid in os.environ.get('ADMIN_USER_IDS', '').split(',')
