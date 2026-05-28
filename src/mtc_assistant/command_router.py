@@ -43,6 +43,8 @@ COMMANDS = [
     (("เปิดเพลง", "หาเพลง"), get_music_link_message),
 ]
 
+BROAD_EXACT_KEYWORDS = {"งาน", "การบ้าน", "ใบงาน"}
+
 
 def format_error_message(error: str, suggestion: str = None) -> str:
     message = f"{error}\n"
@@ -58,7 +60,13 @@ def handle_standard_command(user_message: str, user_message_lower: str) -> Optio
     for keywords, action in COMMANDS:
         matched = False
         for keyword in keywords:
-            if keyword.lower() in user_message_lower:
+            keyword_lower = keyword.lower()
+            is_match = (
+                user_message_lower == keyword_lower
+                if keyword_lower in BROAD_EXACT_KEYWORDS
+                else keyword_lower in user_message_lower
+            )
+            if is_match:
                 try:
                     reply_message = action(user_message)
                     matched = True

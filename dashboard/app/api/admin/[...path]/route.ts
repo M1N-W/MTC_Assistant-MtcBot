@@ -37,6 +37,7 @@ async function proxy(request: NextRequest, context: RouteContext) {
 
   const { path } = await context.params;
   const upstreamUrl = new URL(`/api/admin/${path.join("/")}`, apiBase);
+  const upstreamTimeoutMs = path.join("/") === "paperless-capture" ? 35_000 : 8_000;
   request.nextUrl.searchParams.forEach((value, key) => upstreamUrl.searchParams.set(key, value));
 
   const headers = new Headers();
@@ -59,7 +60,7 @@ async function proxy(request: NextRequest, context: RouteContext) {
   try {
     upstream = await fetch(upstreamUrl, {
       ...init,
-      signal: AbortSignal.timeout(8_000),
+      signal: AbortSignal.timeout(upstreamTimeoutMs),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown network error";
