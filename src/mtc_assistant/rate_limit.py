@@ -65,10 +65,8 @@ def is_rate_limited(user_id: str) -> bool:
 
         history = _user_message_history.get(user_id, [])
         recent = [t for t in history if now_ts - t < RATE_LIMIT_WINDOW]
-
-        if not recent:
-            _user_message_history.pop(user_id, None)
-            return False
+        recent.append(now_ts)
+        _user_message_history[user_id] = recent
 
         if len(recent) > RATE_LIMIT_MAX * 3:
             _banned_users[user_id] = now_ts + 300
@@ -78,9 +76,6 @@ def is_rate_limited(user_id: str) -> bool:
         if len(recent) > RATE_LIMIT_MAX * 2:
             logger.warning(f"User {user_id} in extended cooldown")
             return True
-
-        recent.append(now_ts)
-        _user_message_history[user_id] = recent
 
         if len(recent) > RATE_LIMIT_MAX:
             logger.info(f"User {user_id} rate limited")
