@@ -249,6 +249,11 @@ def _ensure_firebase_connected(force: bool = False):
     finally:
         _db_lock.release()
 
+
+def _eager_firebase_connect():
+    """Reconnect Firebase in a background health-check recovery thread."""
+    _ensure_firebase_connected(force=True)
+
 # ============================================================================
 # GEMINI AI INITIALIZATION (google-genai client)
 # ============================================================================
