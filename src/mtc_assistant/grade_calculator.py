@@ -314,25 +314,25 @@ def format_gpa_result(gpa: float, details: Dict) -> str:
     if "error" in details:
         return details['error']
     
-    message = f"GPA ของคุณ\n\n"
+    message = "GPA ของคุณ\n\n"
     message += f"GPA: {gpa:.2f}\n"
     message += f"จำนวนวิชา: {details['subject_count']} วิชา\n"
     message += f"หน่วยกิตรวม: {details['total_credits']:.1f} หน่วยกิต\n"
     
     # Grade interpretation
     if gpa >= 3.5:
-        message += f"\nยอดเยี่ยมมากเลย"
+        message += "\nยอดเยี่ยมมากเลย"
     elif gpa >= 3.0:
-        message += f"\nดีมาก พยายามต่อไปนะ"
+        message += "\nดีมาก พยายามต่อไปนะ"
     elif gpa >= 2.5:
-        message += f"\nดี ยังมีที่พัฒนาได้อีก"
+        message += "\nดี ๆ ยังมีส่วนที่พัฒนาได้อีกนะ"
     elif gpa >= 2.0:
-        message += f"\nพอใช้ได้ ลองตั้งใจเรียนมากขึ้นนะ"
+        message += "\nพอใช้ได้ ลองตั้งใจเรียนมากขึ้นนะ"
     else:
-        message += f"\nเทอมหน้าสู้ใหม่ได้เลย"
+        message += "\nเทอมหน้าสู้ใหม่ได้เลย"
     
     if details.get("invalid_subjects"):
-        message += f"\n\nวิชาที่ข้อมูลไม่ถูกต้อง:\n"
+        message += "\n\nวิชาที่ข้อมูลไม่ถูกต้อง:\n"
         for subj in details["invalid_subjects"]:
             message += f"  {subj}\n"
     
@@ -349,9 +349,9 @@ def format_score_to_grade(score: float, grade: str, gpa: float) -> str:
     elif gpa >= 3.0:
         message += "ดีมาก"
     elif gpa >= 2.5:
-        message += "ดี"
+        message += "ดี ๆ ยังมีส่วนที่พัฒนาได้อีกนะ"
     elif gpa >= 2.0:
-        message += "พอใช้ได้"
+        message += "พอใช้ได้ ลองตั้งใจเรียนมากขึ้นนะ"
     else:
         message += "เทอมหน้าสู้ใหม่ได้เลย"
     
