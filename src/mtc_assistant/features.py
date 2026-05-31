@@ -18,10 +18,16 @@ from linebot.v3.messaging import TextMessage, ImageMessage
 # Import from config
 from mtc_assistant.config import (
     logger, LOCAL_TZ, SCHEDULE, EXAM_DATES, MESSAGES,
-    WORKSHEET_LINK, SCHOOL_LINK, GRADE_LINK,
-    ABSENCE_LINK, Bio_LINK, Physic_LINK, LINE_SAFE_TRUNCATE
+    Bio_LINK, Physic_LINK, LINE_SAFE_TRUNCATE
 )
 from mtc_assistant.firestore_paths import class_collection, root_collection
+from mtc_assistant.links_service import (
+    ABSENCE_FORM_URL,
+    GRADE_URL,
+    SCHOOL_URL,
+    WORKSHEET_URL,
+    get_links_config,
+)
 from mtc_assistant.timetable_service import get_next_class_text, get_timetable_image_url, get_timetable_status_text
 
 # ============================================================================
@@ -192,16 +198,19 @@ def clear_homework_db(class_context=None) -> str:
 # BASIC COMMAND FUNCTIONS
 # ============================================================================
 
-def get_worksheet_message(user_message: str = "") -> TextMessage:
+def get_worksheet_message(user_message: str = "", class_context=None) -> TextMessage:
     """ส่งลิงก์ใบงาน"""
+    worksheet_url = get_links_config(db, class_context).get(WORKSHEET_URL)
+    if not worksheet_url:
+        return TextMessage(text="ลิงก์ใบงานของห้องนี้ยังไม่ได้ตั้งค่า")
     return TextMessage(
-        text=f"ตารางงานอยู่ที่นี่เลย\n{WORKSHEET_LINK}"
+        text=f"ตารางงานอยู่ที่นี่เลย\n{worksheet_url}"
     )
 
-def get_school_link_message(user_message: str = "") -> TextMessage:
+def get_school_link_message(user_message: str = "", class_context=None) -> TextMessage:
     """ส่งลิงก์เว็บโรงเรียน"""
     return TextMessage(
-        text=f"เว็บไซต์โรงเรียนอยู่ที่นี่\n{SCHOOL_LINK}"
+        text=f"เว็บไซต์โรงเรียนอยู่ที่นี่\n{get_links_config(db, class_context)[SCHOOL_URL]}"
     )
 
 def get_timetable_image_message(user_message: str = "", class_context=None) -> ImageMessage:
@@ -209,26 +218,30 @@ def get_timetable_image_message(user_message: str = "", class_context=None) -> I
     image_url = get_timetable_image_url(db, class_context)
     return ImageMessage(original_content_url=image_url, preview_image_url=image_url)
 
-def get_grade_link_message(user_message: str = "") -> TextMessage:
+def get_grade_link_message(user_message: str = "", class_context=None) -> TextMessage:
     """ส่งลิงก์เช็คเกรด"""
     return TextMessage(
-        text=f"เช็คเกรดได้ที่นี่เลย\n{GRADE_LINK}"
+        text=f"เช็คเกรดได้ที่นี่เลย\n{get_links_config(db, class_context)[GRADE_URL]}"
     )
 
-def get_absence_form_message(user_message: str = "") -> TextMessage:
+def get_absence_form_message(user_message: str = "", class_context=None) -> TextMessage:
     """ส่งลิงก์แบบฟอร์มลา"""
     return TextMessage(
-        text=f"แบบฟอร์มลาออนไลน์อยู่ที่นี่\n{ABSENCE_LINK}"
+        text=f"แบบฟอร์มลาออนไลน์อยู่ที่นี่\n{get_links_config(db, class_context)[ABSENCE_FORM_URL]}"
     )
 
-def get_bio_link_message(user_message: str = "") -> TextMessage:
+def get_bio_link_message(user_message: str = "", class_context=None) -> TextMessage:
     """ส่งลิงก์เฉลยชีวะ"""
+    if class_context and not getattr(class_context, "is_legacy_fallback", False):
+        return TextMessage(text="ลิงก์เฉลยชีวะของห้องนี้ยังไม่ได้ตั้งค่า")
     return TextMessage(
         text=f"เฉลยชีววิทยาอยู่ที่นี่\n{Bio_LINK}"
     )
 
-def get_physic_link_message(user_message: str = "") -> TextMessage:
+def get_physic_link_message(user_message: str = "", class_context=None) -> TextMessage:
     """ส่งลิงก์เฉลยฟิสิกส์"""
+    if class_context and not getattr(class_context, "is_legacy_fallback", False):
+        return TextMessage(text="ลิงก์เฉลยฟิสิกส์ของห้องนี้ยังไม่ได้ตั้งค่า")
     return TextMessage(
         text=f"เฉลยฟิสิกส์อยู่ที่นี่\n{Physic_LINK}"
     )

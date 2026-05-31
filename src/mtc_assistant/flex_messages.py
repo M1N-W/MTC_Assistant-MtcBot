@@ -5,11 +5,19 @@ MTC Assistant - Flex Message builders
 
 from linebot.v3.messaging import FlexMessage, FlexContainer
 
-from mtc_assistant.config import SCHOOL_LINK, GRADE_LINK, ABSENCE_LINK, Bio_LINK, Physic_LINK
+from mtc_assistant.config import Bio_LINK, Physic_LINK
+from mtc_assistant.links_service import (
+    ABSENCE_FORM_URL,
+    GRADE_URL,
+    SCHOOL_URL,
+    get_links_config,
+)
 
 
-def get_links_menu_message(user_message: str = "") -> FlexMessage:
+def get_links_menu_message(user_message: str = "", class_context=None, db=None) -> FlexMessage:
     """แสดงเมนูลิงก์ทั้งหมดด้วย Flex Message"""
+    links = get_links_config(db, class_context)
+    is_legacy = not class_context or getattr(class_context, "is_legacy_fallback", False)
     flex_content = {
         "type": "bubble",
         "size": "mega",
@@ -78,7 +86,7 @@ def get_links_menu_message(user_message: str = "") -> FlexMessage:
                                     "action": {
                                         "type": "uri",
                                         "label": "🏫 เว็บโรงเรียน",
-                                        "uri": SCHOOL_LINK
+                                        "uri": links[SCHOOL_URL]
                                     },
                                     "style": "primary",
                                     "color": "#00C300",
@@ -89,7 +97,7 @@ def get_links_menu_message(user_message: str = "") -> FlexMessage:
                                     "action": {
                                         "type": "uri",
                                         "label": "📊 ระบบเช็คเกรด",
-                                        "uri": GRADE_LINK
+                                        "uri": links[GRADE_URL]
                                     },
                                     "style": "primary",
                                     "color": "#3B82F6",
@@ -101,7 +109,7 @@ def get_links_menu_message(user_message: str = "") -> FlexMessage:
                                     "action": {
                                         "type": "uri",
                                         "label": "📝 แบบฟอร์มลาออนไลน์",
-                                        "uri": ABSENCE_LINK
+                                        "uri": links[ABSENCE_FORM_URL]
                                     },
                                     "style": "primary",
                                     "color": "#F59E0B",
@@ -136,9 +144,9 @@ def get_links_menu_message(user_message: str = "") -> FlexMessage:
                                 {
                                     "type": "button",
                                     "action": {
-                                        "type": "uri",
+                                        "type": "uri" if is_legacy else "message",
                                         "label": "🧬 ชีววิทยา",
-                                        "uri": Bio_LINK
+                                        **({"uri": Bio_LINK} if is_legacy else {"text": "ชีวะ"})
                                     },
                                     "style": "primary",
                                     "color": "#10B981",
@@ -148,9 +156,9 @@ def get_links_menu_message(user_message: str = "") -> FlexMessage:
                                 {
                                     "type": "button",
                                     "action": {
-                                        "type": "uri",
+                                        "type": "uri" if is_legacy else "message",
                                         "label": "⚛️ ฟิสิกส์",
-                                        "uri": Physic_LINK
+                                        **({"uri": Physic_LINK} if is_legacy else {"text": "ฟิสิกส์"})
                                     },
                                     "style": "primary",
                                     "color": "#8B5CF6",

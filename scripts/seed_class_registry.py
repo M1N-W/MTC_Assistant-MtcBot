@@ -25,8 +25,22 @@ if str(SRC) not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-from mtc_assistant.config import FIREBASE_KEY_PATH, LOCAL_TZ, SCHEDULE  # noqa: E402
+from mtc_assistant.config import (  # noqa: E402
+    ABSENCE_LINK,
+    FIREBASE_KEY_PATH,
+    GRADE_LINK,
+    LOCAL_TZ,
+    SCHOOL_LINK,
+    SCHEDULE,
+    WORKSHEET_LINK,
+)
 from mtc_assistant.invite_codes import is_valid_class_id, is_valid_invite_code  # noqa: E402
+from mtc_assistant.links_service import (  # noqa: E402
+    ABSENCE_FORM_URL,
+    GRADE_URL,
+    SCHOOL_URL,
+    WORKSHEET_URL,
+)
 from mtc_assistant.timetable_service import build_timetable_config  # noqa: E402
 
 
@@ -89,6 +103,19 @@ TIMETABLE_IMAGE_URLS = {
     "mtc12": "https://img2.pic.in.th/186308.jpg",
     "mtc13": "https://img2.pic.in.th/SaveClip.App_702397967_18144615751449592_1572400629043110676_n.jpg",
 }
+LINK_SEEDS = {
+    "mtc12": {
+        WORKSHEET_URL: WORKSHEET_LINK,
+        SCHOOL_URL: SCHOOL_LINK,
+        GRADE_URL: GRADE_LINK,
+        ABSENCE_FORM_URL: ABSENCE_LINK,
+    },
+    "mtc13": {
+        SCHOOL_URL: SCHOOL_LINK,
+        GRADE_URL: GRADE_LINK,
+        ABSENCE_FORM_URL: ABSENCE_LINK,
+    },
+}
 CLASS_SEEDS = {
     "mtc12": {
         "display_name": "MTC12",
@@ -147,6 +174,10 @@ def build_seed_operations(invite_args: list[str] | None = None) -> list[SeedOper
             SeedOperation(
                 f"classes/{class_id}/terms/{seed['active_term_id']}/config/timetable",
                 build_timetable_config(TIMETABLE_SEEDS[class_id], image_url=TIMETABLE_IMAGE_URLS.get(class_id)),
+            ),
+            SeedOperation(
+                f"classes/{class_id}/terms/{seed['active_term_id']}/config/links",
+                LINK_SEEDS[class_id],
             ),
         ])
 

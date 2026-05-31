@@ -4,6 +4,7 @@ from typing import Optional
 
 from linebot.v3.messaging import TextMessage
 
+from mtc_assistant import features as feature_module
 from mtc_assistant.config import logger
 from mtc_assistant.classroom_knowledge import answer_classroom_question
 from mtc_assistant.features import (
@@ -28,7 +29,10 @@ COMMANDS = [
     (("ตารางเรียน", "ตารางสอน"), get_timetable_image_message),
     (("เช็คเวลาเรียน", "เช็คเวลา"), get_time_until_next_class_message),
     (("ดูงาน",), lambda msg, class_context=None: TextMessage(text=get_homeworks_from_db(class_context))),
-    (("ลิงก์ที่สำคัญ", "ลิงก์", "links"), get_links_menu_message),
+    (
+        ("ลิงก์ที่สำคัญ", "ลิงก์", "links"),
+        lambda msg, class_context=None: get_links_menu_message(msg, class_context, feature_module.db),
+    ),
     (("ปฏิทินกิจกรรม", "ปฏิทิน"), get_exam_countdown_message),
     (("ช่วยเหลือ", "คำสั่ง", "help"), get_help_message),
     (("งาน", "การบ้าน", "ใบงาน"), get_worksheet_message),
