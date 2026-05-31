@@ -35,6 +35,16 @@ class SeedClassRegistryTest(unittest.TestCase):
         )
         self.assertTrue(all(isinstance(key, str) for key in timetable["days"]))
 
+    def test_mtc12_timetable_seed_includes_image_url(self):
+        operations = build_seed_operations()
+        timetable = next(
+            operation.data
+            for operation in operations
+            if operation.path == "classes/mtc12/terms/2569-t1/config/timetable"
+        )
+
+        self.assertEqual("https://img2.pic.in.th/186308.jpg", timetable["image_url"])
+
     def test_invites_are_only_seeded_from_explicit_cli_input(self):
         default_operations = build_seed_operations()
         invited_operations = build_seed_operations(["mtc13=TEST_MTC13"])

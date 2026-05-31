@@ -86,6 +86,7 @@ TIMETABLE_SEEDS = {
     "mtc13": MTC13_SCHEDULE,
 }
 TIMETABLE_IMAGE_URLS = {
+    "mtc12": "https://img2.pic.in.th/186308.jpg",
     "mtc13": "https://img2.pic.in.th/SaveClip.App_702397967_18144615751449592_1572400629043110676_n.jpg",
 }
 CLASS_SEEDS = {
