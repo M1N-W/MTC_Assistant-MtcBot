@@ -22,14 +22,15 @@ def has_homework_session(user_id: str) -> bool:
     return user_id in _homework_sessions
 
 
-def start_homework_session(user_id: str) -> tuple:
+def start_homework_session(user_id: str, class_context=None) -> tuple:
     """Start interactive homework creation session"""
     with _homework_sessions_lock:
         _homework_sessions[user_id] = {
             "step": "subject",
             "subject": None,
             "detail": None,
-            "due_date": None
+            "due_date": None,
+            "class_context": class_context,
         }
 
     quick_reply = build_subject_quick_reply()
@@ -84,7 +85,7 @@ def handle_homework_session(user_id: str, user_message: str) -> Union[TextMessag
         detail = session["detail"]
         due_date = session["due_date"]
 
-        result = add_homework_to_db(subject, detail, due_date)
+        result = add_homework_to_db(subject, detail, due_date, class_context=session.get("class_context"))
 
         # Clear session
         del _homework_sessions[user_id]

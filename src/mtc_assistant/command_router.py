@@ -27,7 +27,7 @@ from mtc_assistant.flex_messages import get_links_menu_message
 COMMANDS = [
     (("ตารางเรียน", "ตารางสอน"), get_timetable_image_message),
     (("เช็คเวลาเรียน", "เช็คเวลา"), get_time_until_next_class_message),
-    (("ดูงาน",), lambda msg: TextMessage(text=get_homeworks_from_db())),
+    (("ดูงาน",), lambda msg, class_context=None: TextMessage(text=get_homeworks_from_db(class_context))),
     (("ลิงก์ที่สำคัญ", "ลิงก์", "links"), get_links_menu_message),
     (("ปฏิทินกิจกรรม", "ปฏิทิน"), get_exam_countdown_message),
     (("ช่วยเหลือ", "คำสั่ง", "help"), get_help_message),
@@ -53,7 +53,14 @@ def format_error_message(error: str, suggestion: str = None) -> str:
     return message
 
 
-def handle_standard_command(user_message: str, user_message_lower: str) -> Optional[TextMessage]:
+def _call_action(action, user_message: str, class_context=None):
+    try:
+        return action(user_message, class_context)
+    except TypeError:
+        return action(user_message)
+
+
+def handle_standard_command(user_message: str, user_message_lower: str, class_context=None) -> Optional[TextMessage]:
     if user_message_lower.startswith(("ถามเอกสาร", "ค้นเอกสาร", "rag")):
         return TextMessage(text=answer_classroom_question(user_message))
 
@@ -68,7 +75,7 @@ def handle_standard_command(user_message: str, user_message_lower: str) -> Optio
             )
             if is_match:
                 try:
-                    reply_message = action(user_message)
+                    reply_message = _call_action(action, user_message, class_context)
                     matched = True
                     break
                 except Exception as e:

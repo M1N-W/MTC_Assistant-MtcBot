@@ -5,7 +5,6 @@ Contains all feature functions with beautiful, concise messages
 """
 
 import datetime
-import math
 import re
 import threading
 import urllib.parse
@@ -19,9 +18,11 @@ from linebot.v3.messaging import TextMessage, ImageMessage
 # Import from config
 from mtc_assistant.config import (
     logger, LOCAL_TZ, SCHEDULE, EXAM_DATES, MESSAGES,
-    WORKSHEET_LINK, SCHOOL_LINK, TIMETABLE_IMG, GRADE_LINK,
+    WORKSHEET_LINK, SCHOOL_LINK, GRADE_LINK,
     ABSENCE_LINK, Bio_LINK, Physic_LINK, LINE_SAFE_TRUNCATE
 )
+from mtc_assistant.firestore_paths import class_collection, root_collection
+from mtc_assistant.timetable_service import get_next_class_text, get_timetable_image_url, get_timetable_status_text
 
 # ============================================================================
 # GLOBAL VARIABLES (will be set by main.py)
@@ -99,18 +100,25 @@ def set_gemini_models(
 # DATABASE FUNCTIONS
 # ============================================================================
 
-def add_homework_to_db(subject: str, detail: str, due_date: str = "ไม่ระบุ") -> str:
+def _homework_collection(class_context=None):
+    if class_context and not getattr(class_context, "is_legacy_fallback", False):
+        return class_collection(db, class_context.class_id, "homeworks")
+    return root_collection(db, "homeworks")
+
+
+def add_homework_to_db(subject: str, detail: str, due_date: str = "ไม่ระบุ", class_context=None) -> str:
     """เพิ่มการบ้านเข้า Firebase"""
     if not db:
         return "แงงง ระบบขัดข้องนิดหน่อยฮะ 🥺 ลองส่งคำสั่งมาใหม่อีกทีน้า"
     
     try:
         from firebase_admin import firestore
-        doc_ref = db.collection('homeworks').document()
+        doc_ref = _homework_collection(class_context).document()
         doc_ref.set({
             'subject': subject,
             'detail': detail,
             'due_date': due_date,
+            'class_id': getattr(class_context, "class_id", None),
             'timestamp': firestore.SERVER_TIMESTAMP,
             'created_at': datetime.datetime.now(tz=LOCAL_TZ).strftime("%Y-%m-%d %H:%M:%S")
         })
@@ -119,14 +127,14 @@ def add_homework_to_db(subject: str, detail: str, due_date: str = "ไม่ร�
         logger.error(f"DB Add Error: {e}")
         return "บันทึกไม่ได้อ่ะฮะ 😓 ลองส่งใหม่อีกทีน้า"
 
-def get_homeworks_from_db() -> str:
+def get_homeworks_from_db(class_context=None) -> str:
     """ดึงการบ้านทั้งหมดจาก Firebase (optimized with limit)"""
     if not db:
         return "แงงง ระบบขัดข้องนิดหน่อยฮะ 🥺 ลองส่งคำสั่งมาใหม่อีกทีน้า"
     
     try:
         # Limit to prevent memory issues
-        docs = list(db.collection('homeworks').order_by('created_at', direction=firestore.Query.DESCENDING).limit(20).stream())
+        docs = list(_homework_collection(class_context).order_by('created_at', direction=firestore.Query.DESCENDING).limit(20).stream())
         
         if not docs:
             return "ไม่มีการบ้านที่กำหนดไว้"
@@ -142,7 +150,7 @@ def get_homeworks_from_db() -> str:
             homework_list.append(f"📚 {subject}\n📝 {detail}\n🗓️ {due_date}")
         
         if homework_list:
-            return "การบ้านที่ต้องทำ:\n\n" + "\n\n".join(homework_list[:10])  # Show max 10 items
+            return "การบ้านที่ต้องทำ :\n\n" + "\n\n".join(homework_list[:10])  # Show max 10 items
         else:
             return "ไม่มีการบ้านที่กำหนดไว้"
             
@@ -150,7 +158,7 @@ def get_homeworks_from_db() -> str:
         logger.error(f"DB Get Error: {e}")
         return "ดึงข้อมูลไม่ได้ฮะ 😵‍💫 ลองส่งใหม่อีกทีน้า"
 
-def clear_homework_db() -> str:
+def clear_homework_db(class_context=None) -> str:
     """ลบการบ้านทั้งหมดใน Firebase (optimized with batch limits)"""
     if not db:
         return "แงงง ระบบขัดข้องนิดหน่อยฮะ 🥺 ลองส่งคำสั่งมาใหม่อีกทีน้า"
@@ -161,7 +169,7 @@ def clear_homework_db() -> str:
         batch_size = 500  # Firebase batch limit
         
         while True:
-            docs = list(db.collection('homeworks').limit(batch_size).stream())
+            docs = list(_homework_collection(class_context).limit(batch_size).stream())
             if not docs:
                 break
                 
@@ -196,9 +204,10 @@ def get_school_link_message(user_message: str = "") -> TextMessage:
         text=f"เว็บไซต์โรงเรียนอยู่ที่นี่\n{SCHOOL_LINK}"
     )
 
-def get_timetable_image_message(user_message: str = "") -> ImageMessage:
+def get_timetable_image_message(user_message: str = "", class_context=None) -> ImageMessage:
     """ส่งรูปตารางเรียน"""
-    return ImageMessage(original_content_url=TIMETABLE_IMG, preview_image_url=TIMETABLE_IMG)
+    image_url = get_timetable_image_url(db, class_context)
+    return ImageMessage(original_content_url=image_url, preview_image_url=image_url)
 
 def get_grade_link_message(user_message: str = "") -> TextMessage:
     """ส่งลิงก์เช็คเกรด"""
@@ -250,108 +259,13 @@ def get_help_message(user_message: str = "") -> TextMessage:
 # SCHEDULE FUNCTIONS
 # ============================================================================
 
-def get_next_class_message(user_message: str = "") -> TextMessage:
+def get_next_class_message(user_message: str = "", class_context=None) -> TextMessage:
     """แสดงคาบเรียนถัดไป"""
-    now = datetime.datetime.now(LOCAL_TZ)
-    day_idx = now.weekday()
-    
-    if day_idx not in SCHEDULE:
-        return TextMessage(
-            text="วันนี้หยุด ไม่มีเรียนนะ พักให้เต็มที่เลย"
-        )
-    
-    current_time = now.time()
-    periods = SCHEDULE[day_idx]
-    
-    for period in periods:
-        start_time = datetime.datetime.strptime(period["start"], "%H:%M").time()
-        end_time = datetime.datetime.strptime(period["end"], "%H:%M").time()
-        
-        if current_time < start_time:
-            return TextMessage(
-                text=f"คาบต่อไป\n\n"
-                     f"{period['subject']}\n"
-                     f"ห้อง {period['room']}\n"
-                     f"{period['start']} - {period['end']}"
-            )
-        
-        if start_time <= current_time < end_time:
-            return TextMessage(
-                text=f"กำลังเรียนอยู่\n\n"
-                     f"{period['subject']}\n"
-                     f"ห้อง {period['room']}\n"
-                     f"จนถึง {period['end']}"
-            )
-    
-    return TextMessage(
-        text="หมดคาบแล้วสำหรับวันนี้ กลับบ้านได้เลย"
-    )
+    return TextMessage(text=get_next_class_text(db, class_context))
 
-def get_time_until_next_class_message(user_message: str = "") -> TextMessage:
+def get_time_until_next_class_message(user_message: str = "", class_context=None) -> TextMessage:
     """คำนวณเวลาเหลือก่อนคาบถัดไป"""
-    now = datetime.datetime.now(LOCAL_TZ)
-    day_idx = now.weekday()
-    
-    if day_idx not in SCHEDULE:
-        return TextMessage(
-            text="วันนี้หยุด ไม่มีเรียนนะ"
-        )
-    
-    current_time = now.time()
-    periods = SCHEDULE[day_idx]
-    
-    current_index = None
-    for idx, period in enumerate(periods):
-        start_t = datetime.datetime.strptime(period["start"], "%H:%M").time()
-        end_t = datetime.datetime.strptime(period["end"], "%H:%M").time()
-        if start_t <= current_time < end_t:
-            current_index = idx
-            break
-    
-    target = None
-    if current_index is None:
-        for period in periods:
-            start_t = datetime.datetime.strptime(period["start"], "%H:%M").time()
-            if current_time < start_t:
-                target = period
-                break
-        
-        if target is None:
-            return TextMessage(
-                text="วันนี้หมดคาบแล้วนะ"
-            )
-    else:
-        current_subject = periods[current_index]["subject"]
-        for idx in range(current_index + 1, len(periods)):
-            if periods[idx]["subject"] != current_subject:
-                target = periods[idx]
-                break
-        
-        if target is None:
-            return TextMessage(
-                text="คาบนี้คาบสุดท้ายของวันแล้ว"
-            )
-    
-    target_start_time = datetime.datetime.strptime(target["start"], "%H:%M").time()
-    target_dt = datetime.datetime.combine(now.date(), target_start_time).replace(tzinfo=LOCAL_TZ)
-    delta_seconds = (target_dt - now).total_seconds()
-    minutes_left = max(0, math.ceil(delta_seconds / 60))
-    
-    if minutes_left == 0:
-        time_text = "น้อยกว่า 1 นาที"
-    elif minutes_left <= 5:
-        time_text = f"{minutes_left} นาที"
-    elif minutes_left <= 15:
-        time_text = f"{minutes_left} นาที"
-    else:
-        time_text = f"{minutes_left} นาที"
-    
-    return TextMessage(
-        text=f"อีก {time_text}\n\n"
-             f"คาบถัดไป\n"
-             f"{target['subject']}\n"
-             f"{target['room']}"
-    )
+    return TextMessage(text=get_timetable_status_text(db, class_context))
 
 # ============================================================================
 # EXAM COUNTDOWN
@@ -568,7 +482,7 @@ def get_gemini_response(prompt: str) -> str:
 # CALCULATOR & GRADE CALCULATOR
 # ============================================================================
 
-def get_calculator_response(user_message: str):
+def get_calculator_response(user_message: str, user_id: str = "global"):
     try:
         from mtc_assistant.smart_calc import smart_calculate
         
@@ -583,7 +497,7 @@ def get_calculator_response(user_message: str):
                 text="บอกสมการมาด้วยนะ\nเช่น คำนวณ 2+2 หรือ คำนวณ √16"
             )
         
-        result = smart_calculate(expression)
+        result = smart_calculate(expression, user_id or "global")
         
         # Format result nicely
         if result.startswith("Result:"):

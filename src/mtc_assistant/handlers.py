@@ -34,7 +34,8 @@ from mtc_assistant.config import (
 from mtc_assistant.features import (
     get_gemini_response,
     get_homeworks_from_db, clear_homework_db,
-    get_calculator_response, get_grade_calculator_response
+    get_calculator_response, get_grade_calculator_response,
+    get_help_message,
 )
 
 # Import features module to access db
@@ -44,6 +45,7 @@ import mtc_assistant.features as features
 import mtc_assistant.broadcast as broadcast
 
 from mtc_assistant.admin_router import handle_admin_command
+from mtc_assistant.class_context import onboarding_prompt, resolve_line_class_context
 from mtc_assistant.command_router import handle_standard_command
 from mtc_assistant.constants import (
     HOMEWORK_START_COMMANDS,
@@ -57,6 +59,7 @@ from mtc_assistant.homework_session import (
     cancel_homework_session,
 )
 from mtc_assistant.rate_limit import is_rate_limited
+from mtc_assistant.invite_codes import is_join_command, join_class_with_invite
 
 # ============================================================================
 # LINE BOT CONFIGURATION
@@ -114,9 +117,8 @@ def handle_follow(event):
     """Handle user following"""
     welcome_message = TextMessage(
         text="ยินดีต้อนรับสู่ MTC Assistant\n\n"
-             "บอทช่วยงานห้อง MTC สร้างโดยนักเรียน MTC12\n\n"
-             "พิมพ์ 'help' เพื่อดูคำสั่งทั้งหมด\n"
-             "หรือถามอะไรก็ได้เลย"
+             "พิมพ์ JOIN <code> หรือ เข้าห้อง <code> เพื่อเข้าห้องของตัวเอง\n"
+             "ถ้าไม่มีโค้ด ให้ติดต่อแอดมินห้อง"
     )
     try:
         reply_to_line(event.reply_token, [welcome_message])
@@ -143,7 +145,8 @@ def handle_message(event):
     if not user_id:
         user_id = f"anon-{request.remote_addr or 'unknown'}"
     
-    logger.info("Message from %s: %s", user_id, user_message[:100])
+    logged_message = "[join command redacted]" if is_join_command(user_message) else user_message[:100]
+    logger.info("Message from %s: %s", user_id, logged_message)
     
     # ========================================================================
     # CHECK BLACKLIST (CRITICAL - FIRST CHECK!)
@@ -160,18 +163,6 @@ def handle_message(event):
     except Exception as e:
         logger.error(f"Blacklist check error: {e}")
     
-    # Track user for broadcast & impersonate
-    try:
-        broadcast.track_user(user_id)
-        
-        try:
-            from mtc_assistant.admin_impersonate import track_user_activity
-            track_user_activity(user_id)
-        except ImportError:
-            pass
-    except Exception as e:
-        logger.error(f"Failed to track user: {e}")
-    
     # Check rate limit
     if is_rate_limited(user_id):
         reply_to_line(event.reply_token, [TextMessage(
@@ -181,6 +172,36 @@ def handle_message(event):
     
     user_message_lower = user_message.lower()
     reply_message = None
+    db = features.db
+
+    # ========================================================================
+    # CLASS ONBOARDING
+    # ========================================================================
+    if is_join_command(user_message):
+        result = join_class_with_invite(db, user_id, user_message)
+        reply_to_line(event.reply_token, [TextMessage(text=result.message)])
+        return
+
+    class_context = resolve_line_class_context(db, user_id)
+    if class_context is None:
+        if user_message_lower in ("help", "ช่วยเหลือ", "คำสั่ง"):
+            reply_to_line(event.reply_token, [get_help_message(user_message)])
+            return
+        reply_to_line(event.reply_token, [TextMessage(text=onboarding_prompt())])
+        return
+
+    # Track user for broadcast & impersonate after class resolution so brand-new
+    # users are not mistaken for legacy MTC12 users during migration.
+    try:
+        broadcast.track_user(user_id, class_context=class_context)
+
+        try:
+            from mtc_assistant.admin_impersonate import track_user_activity
+            track_user_activity(user_id)
+        except ImportError:
+            pass
+    except Exception as e:
+        logger.error(f"Failed to track user: {e}")
     
     # ========================================================================
     # INTERACTIVE HOMEWORK SYSTEM
@@ -188,7 +209,7 @@ def handle_message(event):
     
     # Start homework session
     if user_message in HOMEWORK_START_COMMANDS:
-        message, quick_reply = start_homework_session(user_id)
+        message, quick_reply = start_homework_session(user_id, class_context=class_context)
         reply_to_line(event.reply_token, [message])
         return
     
@@ -207,7 +228,7 @@ def handle_message(event):
     
     # View homework
     if user_message in HOMEWORK_VIEW_COMMANDS:
-        hw_text = get_homeworks_from_db()
+        hw_text = get_homeworks_from_db(class_context)
         reply_to_line(event.reply_token, [TextMessage(text=hw_text)])
         return
     
@@ -232,7 +253,6 @@ def handle_message(event):
                 handle_exam_stats
             )
             
-            db = features.db
             exam_mgr = get_session_manager(db)
             
             # Check if in exam session
@@ -288,7 +308,7 @@ def handle_message(event):
     # ========================================================================
     if not reply_message and any(kw in user_message_lower for kw in ['กินอะไรดี', 'กินไร', 'แนะนำอาหาร']):
         try:
-            from food_randomizer import handle_food_randomizer_command
+            from mtc_assistant.food_randomizer import handle_food_randomizer_command
             reply_message = handle_food_randomizer_command(user_message)
         except ImportError:
             pass
@@ -302,13 +322,13 @@ def handle_message(event):
         if 'เกรด' in user_message_lower or 'gpa' in user_message_lower:
             reply_message = get_grade_calculator_response(user_message, user_id)
         else:
-            reply_message = get_calculator_response(user_message)
+            reply_message = get_calculator_response(user_message, user_id)
     
     # ========================================================================
     # STANDARD COMMANDS
     # ========================================================================
     if not reply_message:
-        reply_message = handle_standard_command(user_message, user_message_lower)
+        reply_message = handle_standard_command(user_message, user_message_lower, class_context=class_context)
     
     # ========================================================================
     # FALLBACK TO AI

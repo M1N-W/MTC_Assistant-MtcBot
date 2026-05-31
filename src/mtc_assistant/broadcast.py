@@ -7,12 +7,21 @@ MTC Assistant - Broadcast Module
 import datetime  # FIXED: Added missing import for broadcast_homework_reminder
 import time
 
-from linebot.v3.messaging import (
-    ApiClient, MessagingApi, Configuration,
-    BroadcastRequest, TextMessage, PushMessageRequest
-)
-from mtc_assistant.config import logger, ACCESS_TOKEN
+try:  # pragma: no cover
+    from linebot.v3.messaging import (
+        ApiClient, MessagingApi, Configuration,
+        TextMessage, PushMessageRequest
+    )
+except Exception:  # fallback for static analysis or missing package
+    # Provide minimal stubs so linters/type-checkers won't fail.
+    ApiClient = object  # type: ignore
+    MessagingApi = object  # type: ignore
+    Configuration = object  # type: ignore
+    TextMessage = object  # type: ignore
+    PushMessageRequest = object  # type: ignore
+from mtc_assistant.config import logger
 from firebase_admin import firestore
+from mtc_assistant.firestore_paths import class_collection
 
 # Global variables with memory management
 db = None
@@ -49,7 +58,7 @@ def set_line_api(config: Configuration):
 # USER TRACKING
 # ============================================================================
 
-def track_user(user_id: str, display_name: str = "Unknown"):
+def track_user(user_id: str, display_name: str = "Unknown", class_context=None):
     """
     บันทึก user_id เข้า Firebase เพื่อส่ง broadcast
     เรียกฟังก์ชันนี้ทุกครั้งที่มีคนส่งข้อความ
@@ -75,12 +84,31 @@ def track_user(user_id: str, display_name: str = "Unknown"):
         # Clean cache if it gets too large
         cleanup_user_cache()
 
-        db.collection('users').document(user_id).set({
+        active_class_id = getattr(class_context, "class_id", None)
+        root_payload = {
             'user_id': user_id,
             'display_name': display_name,
             'last_seen': firestore.SERVER_TIMESTAMP,
             'is_active': True,
-        }, merge=True)
+        }
+        if active_class_id:
+            root_payload.update({
+                'active_class_id': active_class_id,
+                'class_ids': firestore.ArrayUnion([active_class_id]),
+                'status': 'active',
+                'last_seen_at': firestore.SERVER_TIMESTAMP,
+            })
+
+        db.collection('users').document(user_id).set(root_payload, merge=True)
+
+        if active_class_id and not getattr(class_context, "is_legacy_fallback", False):
+            class_collection(db, active_class_id, "users").document(user_id).set({
+                'user_id': user_id,
+                'display_name': display_name,
+                'role': getattr(class_context, "role", "student"),
+                'status': 'active',
+                'last_seen_at': firestore.SERVER_TIMESTAMP,
+            }, merge=True)
 
         if is_new_user:
             db.collection('meta').document('stats').set(
