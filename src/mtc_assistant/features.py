@@ -28,12 +28,14 @@ from mtc_assistant.links_service import (
     WORKSHEET_URL,
     get_links_config,
 )
+from mtc_assistant.learning_resources_service import get_learning_resources
 from mtc_assistant.timetable_service import get_next_class_text, get_timetable_image_url, get_timetable_status_text
 
 # ============================================================================
 # GLOBAL VARIABLES (will be set by main.py)
 # ============================================================================
 db = None  # Firebase database instance
+SOLUTION_RESOURCE_DISPLAY_LIMIT = 10
 
 # Gemini AI clients and models
 gemini_client_primary = None
@@ -237,10 +239,27 @@ def _allows_legacy_solution_links(class_context) -> bool:
         or getattr(class_context, "class_id", None) == "mtc12"
     )
 
+def _get_learning_resource_message(subject_id: str, unavailable_label: str, class_context=None) -> TextMessage:
+    resources = get_learning_resources(
+        db,
+        class_context,
+        section="textbook_solutions",
+        subject_id=subject_id,
+        limit=SOLUTION_RESOURCE_DISPLAY_LIMIT,
+    )
+    if not resources:
+        return TextMessage(text=f"ลิงก์เฉลย{unavailable_label}ของห้องนี้ยังไม่ได้ตั้งค่า")
+
+    lines = [f"{resource['title']}\n{resource['url']}" for resource in resources]
+    text = "\n\n".join(lines)
+    if len(text) > LINE_SAFE_TRUNCATE:
+        text = text[:LINE_SAFE_TRUNCATE] + "...\n\n(ข้อความยาวเกินไป ตัดบางส่วน)"
+    return TextMessage(text=text)
+
 def get_bio_link_message(user_message: str = "", class_context=None) -> TextMessage:
     """ส่งลิงก์เฉลยชีวะ"""
     if not _allows_legacy_solution_links(class_context):
-        return TextMessage(text="ลิงก์เฉลยชีวะของห้องนี้ยังไม่ได้ตั้งค่า")
+        return _get_learning_resource_message("biology", "ชีวะ", class_context)
     return TextMessage(
         text=f"เฉลยชีววิทยาอยู่ที่นี่\n{Bio_LINK}"
     )
@@ -248,7 +267,7 @@ def get_bio_link_message(user_message: str = "", class_context=None) -> TextMess
 def get_physic_link_message(user_message: str = "", class_context=None) -> TextMessage:
     """ส่งลิงก์เฉลยฟิสิกส์"""
     if not _allows_legacy_solution_links(class_context):
-        return TextMessage(text="ลิงก์เฉลยฟิสิกส์ของห้องนี้ยังไม่ได้ตั้งค่า")
+        return _get_learning_resource_message("physics", "ฟิสิกส์", class_context)
     return TextMessage(
         text=f"เฉลยฟิสิกส์อยู่ที่นี่\n{Physic_LINK}"
     )
