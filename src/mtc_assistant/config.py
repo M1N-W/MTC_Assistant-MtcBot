@@ -130,6 +130,8 @@ GRADE_LINK = "http://www.dograde2.online/bjrb/"
 ABSENCE_LINK = "https://forms.gle/WjCBTYNxEeCpHShr9"
 Bio_LINK = "https://drive.google.com/file/d/1zd5NND3612JOym6HSzKZnqAS42TH9gmh/view?usp=sharing"
 Physic_LINK = "https://drive.google.com/file/d/15oSPs3jFYpvJRUkFqrCSpETGwOoK0Qpv/view?usp=sharing"
+MTC67_VIDEO_URL = os.environ.get("MTC67_VIDEO_URL", "")
+MTC67_PREVIEW_IMAGE_URL = os.environ.get("MTC67_PREVIEW_IMAGE_URL", "")
 
 # ============================================================================
 # MESSAGES

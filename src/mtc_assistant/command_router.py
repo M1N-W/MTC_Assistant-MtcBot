@@ -21,6 +21,7 @@ from mtc_assistant.features import (
     get_exam_countdown_message,
     get_music_link_message,
     get_homeworks_from_db,
+    get_mtc67_video_message,
 )
 from mtc_assistant.flex_messages import get_links_menu_message
 
@@ -48,6 +49,7 @@ COMMANDS = [
 ]
 
 BROAD_EXACT_KEYWORDS = {"งาน", "การบ้าน", "ใบงาน"}
+MTC67_EXACT_COMMANDS = {"67", "mtc67"}
 
 
 def format_error_message(error: str, suggestion: str = None) -> str:
@@ -65,6 +67,9 @@ def _call_action(action, user_message: str, class_context=None):
 
 
 def handle_standard_command(user_message: str, user_message_lower: str, class_context=None) -> Optional[TextMessage]:
+    if user_message.lower() in MTC67_EXACT_COMMANDS:
+        return get_mtc67_video_message(user_message, class_context)
+
     if user_message_lower.startswith(("ถามเอกสาร", "ค้นเอกสาร", "rag")):
         return TextMessage(text=answer_classroom_question(user_message))
 

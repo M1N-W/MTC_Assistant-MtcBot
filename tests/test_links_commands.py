@@ -1,5 +1,7 @@
 import unittest
 
+from linebot.v3.messaging import TextMessage, VideoMessage
+
 from mtc_assistant import features
 from mtc_assistant.class_context import ClassContext
 from mtc_assistant.command_router import handle_standard_command
@@ -96,6 +98,8 @@ def valid_resource(title, url, **overrides):
 class LinksCommandTest(unittest.TestCase):
     def setUp(self):
         self.original_db = features.db
+        self.original_mtc67_video_url = getattr(features, "MTC67_VIDEO_URL", "")
+        self.original_mtc67_preview_image_url = getattr(features, "MTC67_PREVIEW_IMAGE_URL", "")
         self.db = FakeDb()
         self.db.store["system/class_registry/mtc13/main"] = {
             "display_name": "MTC13",
@@ -113,6 +117,64 @@ class LinksCommandTest(unittest.TestCase):
 
     def tearDown(self):
         features.db = self.original_db
+        if hasattr(features, "MTC67_VIDEO_URL"):
+            features.MTC67_VIDEO_URL = self.original_mtc67_video_url
+        if hasattr(features, "MTC67_PREVIEW_IMAGE_URL"):
+            features.MTC67_PREVIEW_IMAGE_URL = self.original_mtc67_preview_image_url
+
+    def configure_mtc67_urls(self, video_url="https://example.com/mtc67.mp4", preview_url="https://example.com/mtc67.jpg"):
+        features.MTC67_VIDEO_URL = video_url
+        features.MTC67_PREVIEW_IMAGE_URL = preview_url
+
+    def test_mtc67_exact_numeric_command_returns_video_message(self):
+        self.configure_mtc67_urls()
+
+        message = handle_standard_command("67", "67", self.context)
+
+        self.assertIsInstance(message, VideoMessage)
+        self.assertEqual("https://example.com/mtc67.mp4", message.original_content_url)
+        self.assertEqual("https://example.com/mtc67.jpg", message.preview_image_url)
+
+    def test_mtc67_exact_text_commands_return_video_message_case_insensitively(self):
+        self.configure_mtc67_urls()
+
+        lower_message = handle_standard_command("mtc67", "mtc67", self.context)
+        upper_message = handle_standard_command("MTC67", "mtc67", self.context)
+
+        self.assertIsInstance(lower_message, VideoMessage)
+        self.assertIsInstance(upper_message, VideoMessage)
+        self.assertEqual("https://example.com/mtc67.mp4", lower_message.original_content_url)
+        self.assertEqual("https://example.com/mtc67.mp4", upper_message.original_content_url)
+
+    def test_mtc67_does_not_trigger_from_longer_messages(self):
+        self.configure_mtc67_urls()
+
+        cases = ["วันนี้ 67 มาก", "abc67", "mtc678", "67 test", " 67 "]
+
+        for text in cases:
+            with self.subTest(text=text):
+                message = handle_standard_command(text, text.lower(), self.context)
+                self.assertIsNone(message)
+
+    def test_mtc67_missing_media_url_returns_friendly_text_message(self):
+        for video_url, preview_url in [
+            ("", "https://example.com/mtc67.jpg"),
+            ("https://example.com/mtc67.mp4", ""),
+        ]:
+            with self.subTest(video_url=video_url, preview_url=preview_url):
+                self.configure_mtc67_urls(video_url, preview_url)
+
+                message = handle_standard_command("67", "67", self.context)
+
+                self.assertIsInstance(message, TextMessage)
+                self.assertEqual("MTC67 ยังไม่พร้อมใช้งานตอนนี้", message.text)
+
+    def test_mtc67_hidden_command_is_not_in_help_text(self):
+        message = handle_standard_command("help", "help", self.context)
+
+        self.assertNotIn("MTC67", message.text)
+        self.assertNotIn("mtc67", message.text)
+        self.assertNotIn("  67", message.text)
 
     def test_link_text_commands_use_class_aware_values(self):
         cases = {

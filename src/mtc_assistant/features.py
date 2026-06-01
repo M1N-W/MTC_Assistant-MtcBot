@@ -13,12 +13,13 @@ from google import genai
 from google.genai import types
 from firebase_admin import firestore
 
-from linebot.v3.messaging import TextMessage, ImageMessage
+from linebot.v3.messaging import TextMessage, ImageMessage, VideoMessage
 
 # Import from config
 from mtc_assistant.config import (
     logger, LOCAL_TZ, SCHEDULE, EXAM_DATES, MESSAGES,
-    Bio_LINK, Physic_LINK, LINE_SAFE_TRUNCATE
+    Bio_LINK, Physic_LINK, LINE_SAFE_TRUNCATE,
+    MTC67_VIDEO_URL, MTC67_PREVIEW_IMAGE_URL,
 )
 from mtc_assistant.firestore_paths import class_collection, root_collection
 from mtc_assistant.links_service import (
@@ -230,6 +231,15 @@ def get_absence_form_message(user_message: str = "", class_context=None) -> Text
     """ส่งลิงก์แบบฟอร์มลา"""
     return TextMessage(
         text=f"แบบฟอร์มลาออนไลน์อยู่ที่นี่\n{get_links_config(db, class_context)[ABSENCE_FORM_URL]}"
+    )
+
+def get_mtc67_video_message(user_message: str = "", class_context=None):
+    """ส่งคลิป MTC67 easter egg แบบซ่อน"""
+    if not MTC67_VIDEO_URL or not MTC67_PREVIEW_IMAGE_URL:
+        return TextMessage(text="MTC67 ยังไม่พร้อมใช้งานตอนนี้")
+    return VideoMessage(
+        original_content_url=MTC67_VIDEO_URL,
+        preview_image_url=MTC67_PREVIEW_IMAGE_URL,
     )
 
 def _allows_legacy_solution_links(class_context) -> bool:
