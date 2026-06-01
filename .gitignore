@@ -44,3 +44,7 @@ Thumbs.db
 
 # Local Codex files
 .codex/
+
+# Local agent and Firebase CLI files
+.agents/
+.firebase/
