@@ -14,10 +14,18 @@ from mtc_assistant.links_service import (
 )
 
 
+def _allows_legacy_solution_links(class_context) -> bool:
+    return (
+        not class_context
+        or getattr(class_context, "is_legacy_fallback", False)
+        or getattr(class_context, "class_id", None) == "mtc12"
+    )
+
+
 def get_links_menu_message(user_message: str = "", class_context=None, db=None) -> FlexMessage:
     """แสดงเมนูลิงก์ทั้งหมดด้วย Flex Message"""
     links = get_links_config(db, class_context)
-    is_legacy = not class_context or getattr(class_context, "is_legacy_fallback", False)
+    allows_solution_links = _allows_legacy_solution_links(class_context)
     flex_content = {
         "type": "bubble",
         "size": "mega",
@@ -144,9 +152,9 @@ def get_links_menu_message(user_message: str = "", class_context=None, db=None) 
                                 {
                                     "type": "button",
                                     "action": {
-                                        "type": "uri" if is_legacy else "message",
+                                        "type": "uri" if allows_solution_links else "message",
                                         "label": "🧬 ชีววิทยา",
-                                        **({"uri": Bio_LINK} if is_legacy else {"text": "ชีวะ"})
+                                        **({"uri": Bio_LINK} if allows_solution_links else {"text": "ชีวะ"})
                                     },
                                     "style": "primary",
                                     "color": "#10B981",
@@ -156,9 +164,9 @@ def get_links_menu_message(user_message: str = "", class_context=None, db=None) 
                                 {
                                     "type": "button",
                                     "action": {
-                                        "type": "uri" if is_legacy else "message",
+                                        "type": "uri" if allows_solution_links else "message",
                                         "label": "⚛️ ฟิสิกส์",
-                                        **({"uri": Physic_LINK} if is_legacy else {"text": "ฟิสิกส์"})
+                                        **({"uri": Physic_LINK} if allows_solution_links else {"text": "ฟิสิกส์"})
                                     },
                                     "style": "primary",
                                     "color": "#8B5CF6",

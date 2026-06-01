@@ -230,9 +230,16 @@ def get_absence_form_message(user_message: str = "", class_context=None) -> Text
         text=f"แบบฟอร์มลาออนไลน์อยู่ที่นี่\n{get_links_config(db, class_context)[ABSENCE_FORM_URL]}"
     )
 
+def _allows_legacy_solution_links(class_context) -> bool:
+    return (
+        not class_context
+        or getattr(class_context, "is_legacy_fallback", False)
+        or getattr(class_context, "class_id", None) == "mtc12"
+    )
+
 def get_bio_link_message(user_message: str = "", class_context=None) -> TextMessage:
     """ส่งลิงก์เฉลยชีวะ"""
-    if class_context and not getattr(class_context, "is_legacy_fallback", False):
+    if not _allows_legacy_solution_links(class_context):
         return TextMessage(text="ลิงก์เฉลยชีวะของห้องนี้ยังไม่ได้ตั้งค่า")
     return TextMessage(
         text=f"เฉลยชีววิทยาอยู่ที่นี่\n{Bio_LINK}"
@@ -240,7 +247,7 @@ def get_bio_link_message(user_message: str = "", class_context=None) -> TextMess
 
 def get_physic_link_message(user_message: str = "", class_context=None) -> TextMessage:
     """ส่งลิงก์เฉลยฟิสิกส์"""
-    if class_context and not getattr(class_context, "is_legacy_fallback", False):
+    if not _allows_legacy_solution_links(class_context):
         return TextMessage(text="ลิงก์เฉลยฟิสิกส์ของห้องนี้ยังไม่ได้ตั้งค่า")
     return TextMessage(
         text=f"เฉลยฟิสิกส์อยู่ที่นี่\n{Physic_LINK}"

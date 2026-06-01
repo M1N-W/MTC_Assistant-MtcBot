@@ -125,6 +125,24 @@ class LinksCommandTest(unittest.TestCase):
         self.assertIn(Bio_LINK, bio_message.text)
         self.assertIn(Physic_LINK, physic_message.text)
 
+    def test_explicit_mtc12_context_keeps_legacy_solution_links(self):
+        context = ClassContext("mtc12", "user-a")
+
+        bio_message = handle_standard_command("ชีวะ", "ชีวะ", context)
+        physic_message = handle_standard_command("ฟิสิกส์", "ฟิสิกส์", context)
+
+        self.assertIn(Bio_LINK, bio_message.text)
+        self.assertIn(Physic_LINK, physic_message.text)
+
+    def test_explicit_mtc12_links_menu_keeps_solution_uri_buttons(self):
+        context = ClassContext("mtc12", "user-a")
+
+        message = handle_standard_command("ลิงก์", "ลิงก์", context)
+        uris = collect_uris(message.contents.to_dict())
+
+        self.assertIn(Bio_LINK, uris)
+        self.assertIn(Physic_LINK, uris)
+
     def test_non_legacy_solution_commands_do_not_return_mtc12_links(self):
         bio_message = handle_standard_command("ชีวะ", "ชีวะ", self.context)
         physic_message = handle_standard_command("ฟิสิกส์", "ฟิสิกส์", self.context)
