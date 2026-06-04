@@ -210,7 +210,7 @@ def handle_ban_user_command(admin_id: str, user_message: str) -> str:
     
     if len(parts) < 2:
         return (
-            "บอสครับ! รูปแบบคำสั่งไม่ถูกฮะ 🕵️‍♂️ ต้องพิมพ์แบบนี้:\n"
+            "รูปแบบคำสั่งไม่ถูกต้อง\n"
             "แบน [รหัสผู้ใช้] [เหตุผล]"
         )
     
@@ -220,14 +220,18 @@ def handle_ban_user_command(admin_id: str, user_message: str) -> str:
     # ป้องกันไม่ให้แบน admin
     from mtc_assistant.config import ADMIN_USER_IDS
     if target_user_id in ADMIN_USER_IDS:
-        return "บอสจะแบนพวกเดียวกันไม่ได้นะฮะ! 🛑"
+        return "ไม่สามารถระงับการใช้งานผู้ดูแลระบบได้"
     
     success = blacklist.ban_user(target_user_id, admin_id, reason)
     
     if success:
-        return f"🎯 จัดการแบนเป้าหมาย {target_user_id} เรียบร้อยครับบอส!\nข้อหา: {reason} 🤫"
+        return (
+            "✅ ระงับการใช้งานผู้ใช้แล้ว\n\n"
+            f"ผู้ใช้: {target_user_id}\n"
+            f"เหตุผล: {reason}"
+        )
     else:
-        return "❌ ภารกิจล้มเหลวฮะ ระบบแบนมีปัญหา"
+        return "ระงับการใช้งานผู้ใช้ไม่สำเร็จ\nสถานะ: ระบบระงับการใช้งานมีปัญหา"
 
 def handle_unban_user_command(admin_id: str, user_message: str) -> str:
     """
@@ -242,7 +246,7 @@ def handle_unban_user_command(admin_id: str, user_message: str) -> str:
     
     if len(parts) < 2:
         return (
-            "บอสครับ! จะให้ผมปลดแบนใคร พิมพ์มาแบบนี้นะฮะ:\n"
+            "รูปแบบคำสั่งไม่ถูกต้อง\n"
             "ปลดแบน [รหัสผู้ใช้]"
         )
     
@@ -250,9 +254,9 @@ def handle_unban_user_command(admin_id: str, user_message: str) -> str:
     success = blacklist.unban_user(target_user_id)
     
     if success:
-        return f"🔓 ปลดล็อกเป้าหมาย {target_user_id} ให้กลับมาใช้งานได้แล้วครับบอส!"
+        return f"✅ ปลดระงับผู้ใช้แล้ว\n\nผู้ใช้: {target_user_id}"
     else:
-        return f"🧐 เป้าหมาย {target_user_id} ไม่ได้อยู่ในแฟ้มบัญชีดำนะฮะ"
+        return f"ไม่พบผู้ใช้ในรายการระงับ\n\nผู้ใช้: {target_user_id}"
 
 def handle_list_banned_command(admin_id: str, user_message: str = "") -> str:
     """
@@ -264,9 +268,9 @@ def handle_list_banned_command(admin_id: str, user_message: str = "") -> str:
     banned = blacklist.get_all_banned()
     
     if not banned:
-        return "📋 แฟ้มบัญชีดำว่างเปล่าครับบอส! ตอนนี้ทุกคนเป็นเด็กดีหมดเลย 😇"
+        return "รายการผู้ใช้ที่ถูกระงับว่างอยู่"
     
-    message = f"📂 *แฟ้มลับ: รายชื่อบัญชีดำ* ({len(banned)} เป้าหมาย)\n\n"
+    message = f"รายการผู้ใช้ที่ถูกระงับ ({len(banned)} คน)\n\n"
     
     for i, (user_id, record) in enumerate(banned.items(), 1):
         message += f"{i}. `{user_id}`\n"

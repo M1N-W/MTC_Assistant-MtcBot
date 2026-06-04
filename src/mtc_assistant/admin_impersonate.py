@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 MTC Assistant - Admin Impersonate Feature (FIXED)
-ฟีเจอร์สำหรับแอดมินส่งข้อความไปหาผู้ใช้โดยตรง (สำหรับแกล้งเพื่อน 😄)
+ฟีเจอร์สำหรับแอดมินส่งข้อความจากบอทถึงผู้ใช้โดยตรง
 
 FIXED:
 - Added retry mechanism for connection errors
@@ -11,7 +11,7 @@ FIXED:
 
 Usage:
     1. พิมพ์ "ดูผู้ใช้" → ดูรายชื่อผู้ใช้ล่าสุด
-    2. พิมพ์ "ส่งถึง [user_id] [ข้อความ]" → ส่งข้อความแกล้งเพื่อน
+    2. พิมพ์ "ส่งถึง [user_id] [ข้อความ]" → ส่งข้อความจากบอทถึงผู้ใช้
     3. พิมพ์ "ยกเลิกส่ง" → ยกเลิก
 """
 
@@ -108,7 +108,7 @@ def send_impersonate_message(
         (success, result_message)
     """
     if not _line_api:
-        return False, "บอสครับ! LINE API ยังไม่พร้อมฮะ 🔧 รอแป๊บนึงก่อนนะ"
+        return False, "LINE API ยังไม่พร้อมใช้งาน\nลองใหม่อีกครั้งในภายหลัง"
     
     last_error = None
     
@@ -123,7 +123,11 @@ def send_impersonate_message(
             )
             
             logger.info(f"📤 Impersonate message sent to {target_user_id} (attempt {attempt + 1})")
-            return True, f"🎯 ส่งข้อความสวมรอยเรียบร้อยครับบอส! ปลอดภัย ไร้ร่องรอย 🤫 (→ {target_user_id[:8]}...)"
+            return True, (
+                "✅ ส่งข้อความจากบอทสำเร็จ\n\n"
+                f"ผู้ใช้: {target_user_id[:8]}...\n"
+                "สถานะ: บันทึกผลการส่งแล้ว"
+            )
         
         except ConnectionResetError as e:
             last_error = f"Connection reset: {e}"
@@ -168,9 +172,9 @@ def send_impersonate_message(
     
     # All retries failed
     return False, (
-        f"บอสครับ! พยายามส่งแล้ว {max_retries} ครั้งแต่ยังไม่ได้เลยฮะ 😤\n"
+        f"ส่งข้อความไม่สำเร็จหลังจากลอง {max_retries} ครั้ง\n"
         f"สาเหตุ: {last_error[:100]}\n\n"
-        f"💡 รอสักครู่แล้วลองใหม่อีกทีน้าบอส"
+        "ลองใหม่อีกครั้งในภายหลัง"
     )
 
 # ============================================================================
@@ -187,12 +191,12 @@ def handle_list_users_command(admin_id: str) -> str:
 
     if not snapshot:
         return (
-            "🕵️‍♂️ *รายชื่อเป้าหมาย*\n\n"
-            "บอสครับ ตอนนี้ยังไม่มีใครในระบบเลยฮะ 🫥\n"
-            "รอให้เพื่อนๆ ทักบอทก่อน แล้วค่อยกลับมาเช็คใหม่น้า"
+            "รายชื่อผู้ใช้\n\n"
+            "ยังไม่มีผู้ใช้ในระบบ\n"
+            "รอให้ผู้ใช้เริ่มใช้งานบอทก่อน แล้วตรวจสอบอีกครั้ง"
         )
 
-    message = f"🕵️‍♂️ *รายชื่อเป้าหมาย* ({len(snapshot)} คน) — เลือกได้เลยครับบอส!\n\n"
+    message = f"รายชื่อผู้ใช้ ({len(snapshot)} คน)\n\n"
 
     sorted_users = sorted(
         snapshot.items(),
@@ -209,9 +213,9 @@ def handle_list_users_command(admin_id: str) -> str:
         message += f"... และอีก {len(sorted_users) - 10} คน\n\n"
 
     message += (
-        "🎯 *สั่งภารกิจ:*\n"
+        "คำสั่งส่งข้อความ:\n"
         "ส่งถึง [user_id] [ข้อความ]\n\n"
-        "📌 *ตัวอย่าง:*\n"
+        "ตัวอย่าง:\n"
         f"ส่งถึง {sorted_users[0][0][:15]} สวัสดีครับ"
     )
 
@@ -240,9 +244,9 @@ def handle_send_impersonate_command(admin_id: str, user_message: str) -> str:
     # Validate user_id format — LINE IDs are always "U" + 32 hex chars (33 total)
     if not is_valid_line_user_id(target_user_id):
         return (
-            "บอสครับ! หาตัวเป้าหมายไม่เจอฮะ 🧐 หรือว่าเขาจะหลบหนีไปแล้ว?\n\n"
+            "รูปแบบ User ID ไม่ถูกต้อง\n\n"
             "User ID ต้องขึ้นต้นด้วย 'U' ตามด้วย hex 32 ตัว (รวม 33 ตัวอักษร)\n\n"
-            "💡 พิมพ์ 'ดูผู้ใช้' เพื่อดู User ID ที่ถูกต้องน้าครับ"
+            "พิมพ์ 'ดูผู้ใช้' เพื่อดู User ID ที่ถูกต้อง"
         )
     
     # Prevent sending to admin themselves
@@ -265,10 +269,10 @@ def handle_send_impersonate_command(admin_id: str, user_message: str) -> str:
         
         return (
             f"{result}\n\n"
-            f"📨 *ข้อความที่ส่ง:*\n"
+            f"ข้อความที่ส่ง:\n"
             f"{message[:200]}\n\n"
-            f"🎭 เป้าหมายจะเห็นเหมือนบอทพูดเองเลยครับบอส 😈\n"
-            f"⏰ เวลา: {time.strftime('%H:%M:%S')}"
+            "ผลลัพธ์: ผู้ใช้จะได้รับข้อความจากบัญชีบอท\n"
+            f"เวลา: {time.strftime('%H:%M:%S')}"
         )
     else:
         return result
@@ -295,10 +299,10 @@ def handle_test_impersonate_command(admin_id: str, user_message: str) -> str:
     
     if success:
         return (
-            "✅ ส่งข้อความทดสอบแล้วครับบอส! ภารกิจเบื้องต้นสำเร็จ 🎯\n\n"
-            "บอสควรเห็นข้อความนี้ในแชทส่วนตัว:\n"
+            "✅ ส่งข้อความทดสอบสำเร็จ\n\n"
+            "แอดมินควรเห็นข้อความนี้ในแชทส่วนตัว:\n"
             f'"{message[:100]}"\n\n'
-            "💡 ถ้าได้รับแล้ว แสดงว่าระบบสายลับพร้อมใช้งานเต็มที่แล้วครับ 🕵️‍♂️"
+            "สถานะ: ระบบส่งข้อความจากบอทพร้อมใช้งาน"
         )
     else:
         return result
@@ -306,17 +310,17 @@ def handle_test_impersonate_command(admin_id: str, user_message: str) -> str:
 def get_impersonate_help() -> str:
     """Get help text for impersonate commands"""
     return (
-        "🕵️‍♂️ *ระบบสายลับ — พร้อมรับคำสั่งจากบอสเสมอ!*\n\n"
+        "คำสั่งส่งข้อความจากบอท\n\n"
         "• ดูผู้ใช้\n"
-        "  → ดูรายชื่อเป้าหมายทั้งหมด 🎯\n\n"
+        "  → ดูรายชื่อผู้ใช้ล่าสุด\n\n"
         "• ส่งถึง [user_id] [ข้อความ]\n"
-        "  → สวมรอยส่งข้อความหาเป้าหมาย 🎭\n\n"
+        "  → ส่งข้อความจากบอทถึงผู้ใช้\n\n"
         "• ทดสอบส่ง [ข้อความ]\n"
-        "  → ทดสอบระบบโดยส่งหาตัวบอสเอง 🔧\n\n"
-        "⚠️ *หมายเหตุจากสายลับ:*\n"
-        "- ใช้เพื่อความสนุกเท่านั้นนะครับบอส\n"
-        "- เป้าหมายจะเห็นเหมือนบอทพูดเองเลย\n"
-        "- ระบบจะลองส่งใหม่อัตโนมัติถ้าเกิด error 🔄"
+        "  → ทดสอบระบบโดยส่งหาแอดมินเอง\n\n"
+        "หมายเหตุ:\n"
+        "- ใช้สำหรับงานผู้ดูแลระบบเท่านั้น\n"
+        "- ผู้ใช้จะได้รับข้อความจากบัญชีบอท\n"
+        "- ระบบจะลองส่งใหม่อัตโนมัติเมื่อเกิดข้อผิดพลาดจากการเชื่อมต่อ"
     )
 
 # ============================================================================

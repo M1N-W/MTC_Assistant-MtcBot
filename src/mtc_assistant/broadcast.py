@@ -239,9 +239,9 @@ def broadcast_message(message_text: str) -> dict:
         if i > 0 and i % 10 == 0:
             time.sleep(0.2)
     
-    result_message = f"🎯 บอสครับ! กระจายข่าวสำเร็จ {sent_count} เป้าหมาย"
+    result_message = f"✅ ผลการส่งประกาศ\n\nส่งสำเร็จ: {sent_count} คน"
     if failed_count > 0:
-        result_message += f"\n⚠️ แต่มี {failed_count} คนที่สัญญาณขาดหายไปฮะ"
+        result_message += f"\nส่งไม่สำเร็จ: {failed_count} คน"
     
     return {
         "success": sent_count > 0,
@@ -274,7 +274,7 @@ def broadcast_homework_reminder():
         if hw_list:
             message = (
                 "ประกาศจากระบบหัวหน้าห้อง! 📢✨\n\n"
-                "พรุ่งนี้พวกเรามีภารกิจ (การบ้าน) ต้องส่งน้า:\n" +
+                "พรุ่งนี้พวกเรามีการบ้านต้องส่งน้า:\n" +
                 "\n".join(hw_list) +
                 "\n\nใครยังไม่เริ่ม ปั่นด่วนๆ เลยนะคืนนี้ สู้ๆ! ✌️🔥"
             )
@@ -325,7 +325,7 @@ def save_broadcast_history(admin_id: str, message: str, result: dict):
 def get_broadcast_stats() -> str:
     """ดูสถิติการส่ง broadcast"""
     if not db:
-        return "บอสครับ! แฟ้มสถิติถูกล็อค ดึงข้อมูลไม่ได้ฮะ 🕵️‍♂️"
+        return "ยังไม่สามารถดึงรายงานการส่งประกาศได้\nสถานะ: ฐานข้อมูลยังไม่พร้อม"
     
     try:
         # นับจำนวนครั้งที่ส่ง
@@ -361,22 +361,22 @@ def get_broadcast_stats() -> str:
         history_text = (
             "\n".join(recent_broadcasts[:5])
             if recent_broadcasts
-            else "ยังไม่มีประวัติการทำภารกิจครับผม 🤫"
+            else "ยังไม่มีประวัติการส่งประกาศ"
         )
 
         stats = (
-            f"📁 *TOP SECRET: Broadcast Report* 📁\n\n"
-            f"👥 เป้าหมายทั้งหมด: {user_count} คน\n"
-            f"📢 ภารกิจกระจายข่าว: {total_broadcasts} ครั้ง\n"
+            f"รายงานการส่งประกาศ\n\n"
+            f"จำนวนผู้ใช้: {user_count} คน\n"
+            f"จำนวนครั้งที่ส่งประกาศ: {total_broadcasts} ครั้ง\n"
             f"✅ ส่งข้อความแล้ว: {total_sent} ข้อความ\n\n"
-            f"📝 *ประวัติภารกิจล่าสุด:*\n"
+            f"ประวัติการส่งล่าสุด:\n"
             f"{history_text}"
         )
         
         return stats
     except Exception as e:
         logger.error(f"Error getting broadcast stats: {e}")
-        return f"ระบบฐานข้อมูลรวนนิดหน่อยฮะบอส 🚧 ({str(e)})"
+        return f"ดึงรายงานการส่งประกาศไม่สำเร็จ\nสาเหตุ: {str(e)}"
 
 # ============================================================================
 # EXPORTS
