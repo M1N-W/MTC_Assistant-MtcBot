@@ -1,0 +1,47 @@
+{
+  "resources": [
+    {
+      "id": "mtc13-biology-solutions-example",
+      "class_id": "mtc13",
+      "term_id": "2569-t1",
+      "section": "textbook_solutions",
+      "type": "solution_manual",
+      "subject_id": "biology",
+      "subject_label": "Biology",
+      "title": "Example Biology Solutions",
+      "url": "https://example.com/mtc13/biology-solutions",
+      "description": "Fake example record for dry-run validation only.",
+      "enabled": true,
+      "sort_order": 10,
+      "source_note": "Fake example URL. Replace only after production ownership is verified."
+    },
+    {
+      "id": "mtc13-physics-solutions-example",
+      "class_id": "mtc13",
+      "term_id": "2569-t1",
+      "section": "textbook_solutions",
+      "type": "solution_manual",
+      "subject_id": "physics",
+      "subject_label": "Physics",
+      "title": "Example Physics Solutions",
+      "url": "https://example.com/mtc13/physics-solutions",
+      "description": "Fake example record for dry-run validation only.",
+      "enabled": true,
+      "sort_order": 20,
+      "source_note": "Fake example URL. Replace only after production ownership is verified."
+    },
+    {
+      "id": "mtc13-assignment-pack-example",
+      "class_id": "mtc13",
+      "term_id": "2569-t1",
+      "section": "assignment_resources",
+      "type": "worksheet_pack",
+      "title": "Example Assignment Pack",
+      "url": "https://example.com/mtc13/assignment-pack",
+      "description": "Fake non-subject-specific resource without subject_id.",
+      "enabled": true,
+      "sort_order": 30,
+      "source_note": "Fake example URL. Replace only after production ownership is verified."
+    }
+  ]
+}
