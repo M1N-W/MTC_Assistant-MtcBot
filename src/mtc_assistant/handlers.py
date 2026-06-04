@@ -53,10 +53,12 @@ from mtc_assistant.constants import (
     HOMEWORK_VIEW_COMMANDS,
 )
 from mtc_assistant.homework_session import (
+    HomeworkSessionStoreReadError,
     has_homework_session,
     start_homework_session,
     handle_homework_session,
     cancel_homework_session,
+    session_read_failure_message,
 )
 from mtc_assistant.rate_limit import is_rate_limited
 from mtc_assistant.invite_codes import is_join_command, join_class_with_invite
@@ -207,24 +209,30 @@ def handle_message(event):
     # INTERACTIVE HOMEWORK SYSTEM
     # ========================================================================
     
-    # Start homework session
-    if user_message in HOMEWORK_START_COMMANDS:
-        message, quick_reply = start_homework_session(user_id, class_context=class_context)
-        reply_to_line(event.reply_token, [message])
-        return
-    
     # Cancel homework session
     if user_message in HOMEWORK_CANCEL_COMMANDS:
-        result = cancel_homework_session(user_id) or "ไม่มี session การบ้านที่จะยกเลิก"
+        result = cancel_homework_session(user_id, db=db) or "ไม่มี session การบ้านที่จะยกเลิก"
         reply_to_line(event.reply_token, [TextMessage(text=result)])
         return
     
     # Handle homework session steps
-    if has_homework_session(user_id):
-        result = handle_homework_session(user_id, user_message)
+    try:
+        active_homework_session = has_homework_session(user_id, db=db)
+    except HomeworkSessionStoreReadError:
+        reply_to_line(event.reply_token, [session_read_failure_message()])
+        return
+
+    if active_homework_session:
+        result = handle_homework_session(user_id, user_message, db=db, class_context=class_context)
         if result:
             reply_to_line(event.reply_token, [result])
             return
+
+    # Start homework session
+    if user_message in HOMEWORK_START_COMMANDS:
+        message, quick_reply = start_homework_session(user_id, class_context=class_context, db=db)
+        reply_to_line(event.reply_token, [message])
+        return
     
     # View homework
     if user_message in HOMEWORK_VIEW_COMMANDS:
