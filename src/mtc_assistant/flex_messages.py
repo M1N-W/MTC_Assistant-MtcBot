@@ -56,8 +56,8 @@ def _section(title: str, examples: str | None = None, rows: list[dict] | None = 
             "type": "text",
             "text": title,
             "weight": "bold",
-            "size": "md",
-            "color": "#111827",
+            "size": "lg",
+            "color": "#1A1A1A",
             "wrap": True,
         }
     ]
@@ -77,7 +77,7 @@ def _section(title: str, examples: str | None = None, rows: list[dict] | None = 
         "layout": "vertical",
         "contents": contents,
         "spacing": "xs",
-        "margin": "lg",
+        "margin": "xl",
     }
 
 
@@ -86,36 +86,46 @@ def get_help_menu_message(user_message: str = "") -> FlexMessage:
     flex_content = {
         "type": "bubble",
         "size": "mega",
-        "header": {
+        "hero": {
             "type": "box",
             "layout": "vertical",
             "contents": [
                 {
-                    "type": "text",
-                    "text": "MTC Assistant",
-                    "weight": "bold",
-                    "size": "xl",
-                    "color": "#FFFFFF",
-                    "wrap": True,
-                },
-                {
-                    "type": "text",
-                    "text": "ผู้ช่วยประจำห้องเรียน",
-                    "size": "sm",
-                    "color": "#DCFCE7",
-                    "margin": "xs",
-                    "wrap": True,
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "MTC Assistant",
+                            "weight": "bold",
+                            "size": "xl",
+                            "color": "#FFFFFF",
+                            "align": "center",
+                            "wrap": True,
+                        },
+                        {
+                            "type": "text",
+                            "text": "ผู้ช่วยประจำห้องเรียน",
+                            "size": "sm",
+                            "color": "#FFFFFF",
+                            "align": "center",
+                            "margin": "sm",
+                            "opacity": 0.86,
+                            "wrap": True,
+                        },
+                    ],
+                    "paddingAll": "30px",
                 },
             ],
-            "backgroundColor": "#047857",
-            "paddingAll": "20px",
+            "backgroundColor": "#7C3AED",
+            "paddingAll": "0px",
         },
         "body": {
             "type": "box",
             "layout": "vertical",
             "contents": [
                 _section(
-                    "การเรียน",
+                    "📚 การเรียน",
                     "เช็คเวลาเรียน / ปลายภาค",
                     [
                         _button_row(
@@ -129,7 +139,7 @@ def get_help_menu_message(user_message: str = "") -> FlexMessage:
                     ],
                 ),
                 _section(
-                    "การบ้าน",
+                    "📝 การบ้าน",
                     "งาน",
                     [
                         _button_row(
@@ -139,17 +149,14 @@ def get_help_menu_message(user_message: str = "") -> FlexMessage:
                     ],
                 ),
                 _section(
-                    "ลิงก์สำคัญ",
-                    "เว็บโรงเรียน / เกรด / ลา",
+                    "🔗 ลิงก์และเอกสาร",
+                    "รวมเว็บโรงเรียน เกรด และแบบฟอร์มลาไว้ที่นี่",
                     [
-                        _button_row(
-                            _message_button("ลิงก์", "ลิงก์", "#0891B2"),
-                            _message_button("เว็บโรงเรียน", "เว็บโรงเรียน", "#0E7490"),
-                        ),
+                        _message_button("ลิงก์สำคัญ", "ลิงก์", "#0891B2"),
                     ],
                 ),
                 _section(
-                    "เฉลยวิชา",
+                    "📖 เฉลยวิชา",
                     "ชีวะ / ฟิสิกส์",
                     [
                         _button_row(
@@ -159,11 +166,11 @@ def get_help_menu_message(user_message: str = "") -> FlexMessage:
                     ],
                 ),
                 _section(
-                    "คำนวณ / AI",
+                    "🧮 คำนวณ / AI",
                     "คำนวณ [สมการ]\nพิมพ์คำถามอื่น ๆ เพื่อถาม AI ได้",
                 ),
             ],
-            "paddingAll": "18px",
+            "paddingAll": "20px",
             "spacing": "sm",
         },
     }

@@ -91,6 +91,23 @@ def collect_flex_strings(value):
     return strings
 
 
+def collect_message_button_labels(value):
+    labels = []
+    if isinstance(value, dict):
+        if value.get("type") == "button":
+            action = value.get("action")
+            if isinstance(action, dict) and action.get("type") == "message":
+                label = action.get("label")
+                if isinstance(label, str):
+                    labels.append(label)
+        for child in value.values():
+            labels.extend(collect_message_button_labels(child))
+    elif isinstance(value, list):
+        for child in value:
+            labels.extend(collect_message_button_labels(child))
+    return labels
+
+
 def add_resource(db, resource_id, data, class_id="mtc13", term_id="2569-t1"):
     db.store[f"classes/{class_id}/terms/{term_id}/resources/{resource_id}"] = data
 
@@ -239,6 +256,20 @@ class LinksCommandTest(unittest.TestCase):
                 haystack = help_text.lower() if term.isascii() else help_text
                 needle = term.lower() if term.isascii() else term
                 self.assertNotIn(needle, haystack)
+
+    def test_help_flex_uses_links_menu_as_external_link_hub(self):
+        message = handle_standard_command("help", "help", self.context)
+        self.assertIsInstance(message, FlexMessage)
+
+        contents = message.contents.to_dict()
+        help_text = "\n".join(collect_flex_strings(contents))
+        button_labels = collect_message_button_labels(contents)
+
+        self.assertIn("ลิงก์สำคัญ", button_labels)
+        self.assertIn("รวมเว็บโรงเรียน เกรด และแบบฟอร์มลาไว้ที่นี่", help_text)
+        self.assertNotIn("เว็บโรงเรียน", button_labels)
+        self.assertNotIn("เกรด", button_labels)
+        self.assertNotIn("ลา", button_labels)
 
     def test_link_text_commands_use_class_aware_values(self):
         cases = {
