@@ -176,6 +176,33 @@ class LinksCommandTest(unittest.TestCase):
         self.assertNotIn("mtc67", message.text)
         self.assertNotIn("  67", message.text)
 
+    def test_help_text_lists_core_student_demo_commands(self):
+        message = handle_standard_command("help", "help", self.context)
+
+        required_commands = [
+            "ตารางเรียน",
+            "คาบต่อไป",
+            "เช็คเวลาเรียน",
+            "บันทึกการบ้าน",
+            "การบ้าน",
+            "ลิงก์",
+            "เว็บโรงเรียน",
+            "เกรด",
+            "ลา",
+            "ชีวะ",
+            "ฟิสิกส์",
+            "กลางภาค",
+            "ปลายภาค",
+        ]
+        for command in required_commands:
+            with self.subTest(command=command):
+                self.assertIn(command, message.text)
+
+        self.assertNotIn("admin", message.text.lower())
+        self.assertNotIn("แอดมิน", message.text)
+        self.assertNotIn("MTC67", message.text)
+        self.assertNotIn("mtc67", message.text)
+
     def test_link_text_commands_use_class_aware_values(self):
         cases = {
             "งาน": "https://example.com/worksheet",
