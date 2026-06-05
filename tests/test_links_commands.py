@@ -192,6 +192,44 @@ class LinksCommandTest(unittest.TestCase):
 
                 self.assertIn(expected_url, message.text)
 
+    def test_exam_calendar_words_do_not_route_to_absence_form(self):
+        cases = [
+            "กลางภาค",
+            "ปลายภาค",
+            "สอบกลางภาค",
+            "สอบปลายภาค",
+            "สอบกลางภาคตอนไหน",
+            "สอบปลายภาคตอนไหน",
+        ]
+
+        for command in cases:
+            with self.subTest(command=command):
+                message = handle_standard_command(command, command.lower(), self.context)
+
+                self.assertIsInstance(message, TextMessage)
+                self.assertIn("สอบ", message.text)
+                self.assertNotIn("https://example.com/absence", message.text)
+
+    def test_absence_command_variants_route_to_absence_form(self):
+        cases = ["ลา", "ลาป่วย", "ลากิจ", "แบบฟอร์มลา", "ขอลา"]
+
+        for command in cases:
+            with self.subTest(command=command):
+                message = handle_standard_command(command, command.lower(), self.context)
+
+                self.assertIsInstance(message, TextMessage)
+                self.assertIn("https://example.com/absence", message.text)
+
+    def test_unrelated_words_containing_absence_syllable_do_not_route_to_absence_form(self):
+        cases = ["กลางภาค", "ปลายภาค", "ตลาด", "ปลา", "เวลา", "ลานจอดรถ"]
+
+        for command in cases:
+            with self.subTest(command=command):
+                message = handle_standard_command(command, command.lower(), self.context)
+
+                if message is not None:
+                    self.assertNotIn("https://example.com/absence", message.text)
+
     def test_links_menu_uses_class_aware_values(self):
         message = handle_standard_command("ลิงก์", "ลิงก์", self.context)
 

@@ -39,16 +39,16 @@ COMMANDS = [
     (("งาน", "การบ้าน", "ใบงาน"), get_worksheet_message),
     (("เว็บโรงเรียน", "เว็บ"), get_school_link_message),
     (("เกรด", "ดูเกรด"), get_grade_link_message),
-    (("ลา",), get_absence_form_message),
+    (("ลา", "ลาป่วย", "ลากิจ", "แบบฟอร์มลา", "ขอลา"), get_absence_form_message),
     (("ชีวะ",), get_bio_link_message),
     (("ฟิสิกส์",), get_physic_link_message),
     (("คาบต่อไป",), get_next_class_message),
     (("อีกกี่นาที",), get_time_until_next_class_message),
-    (("สอบ", "วันสอบ"), get_exam_countdown_message),
+    (("สอบ", "วันสอบ", "กลางภาค", "ปลายภาค"), get_exam_countdown_message),
     (("เปิดเพลง", "หาเพลง"), get_music_link_message),
 ]
 
-BROAD_EXACT_KEYWORDS = {"งาน", "การบ้าน", "ใบงาน"}
+EXACT_KEYWORDS = {"งาน", "การบ้าน", "ใบงาน", "ลา", "ลาป่วย", "ลากิจ", "แบบฟอร์มลา", "ขอลา"}
 MTC67_EXACT_COMMANDS = {"67", "mtc67"}
 
 
@@ -66,6 +66,12 @@ def _call_action(action, user_message: str, class_context=None):
         return action(user_message)
 
 
+def _keyword_matches(user_message_lower: str, keyword_lower: str) -> bool:
+    if keyword_lower in EXACT_KEYWORDS:
+        return user_message_lower == keyword_lower
+    return keyword_lower in user_message_lower
+
+
 def handle_standard_command(user_message: str, user_message_lower: str, class_context=None) -> Optional[TextMessage]:
     if user_message.lower() in MTC67_EXACT_COMMANDS:
         return get_mtc67_video_message(user_message, class_context)
@@ -77,11 +83,7 @@ def handle_standard_command(user_message: str, user_message_lower: str, class_co
         matched = False
         for keyword in keywords:
             keyword_lower = keyword.lower()
-            is_match = (
-                user_message_lower == keyword_lower
-                if keyword_lower in BROAD_EXACT_KEYWORDS
-                else keyword_lower in user_message_lower
-            )
+            is_match = _keyword_matches(user_message_lower, keyword_lower)
             if is_match:
                 try:
                     reply_message = _call_action(action, user_message, class_context)
