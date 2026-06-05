@@ -11,6 +11,7 @@ from __future__ import annotations
 import datetime
 import base64
 import binascii
+import re
 import threading
 from typing import Any, Callable, Dict, Optional, Tuple
 
@@ -19,6 +20,7 @@ from firebase_admin import firestore
 from werkzeug.exceptions import HTTPException
 
 import mtc_assistant.broadcast as broadcast
+from mtc_assistant.class_context import get_class_registry_entry
 from mtc_assistant.config import (
     DASHBOARD_ALLOWED_ORIGINS,
     LOCAL_TZ,
@@ -33,11 +35,19 @@ from mtc_assistant.paperless_capture import (
     PaperlessCaptureError,
     analyze_classroom_image,
 )
+from mtc_assistant.invite_codes import is_valid_class_id
+from mtc_assistant.links_service import LINK_KEYS, get_safe_fallback_links, merge_link_values
 from mtc_assistant.user_blacklist import get_blacklist_manager
 
 
 DbProvider = Callable[[], Any]
 MetricsProvider = Callable[[], Dict[str, Any]]
+TERM_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
+SECRET_VALUE_PATTERN = re.compile(
+    r"(api[_-]?key|bearer|private[_-]?key|secret|token|MTC_[A-Z0-9_]*|LINE_CHANNEL|GEMINI)",
+    re.IGNORECASE,
+)
+LOCAL_PATH_PATTERN = re.compile(r"^([A-Za-z]:\\|/Users/|/home/|/|\.{1,2}[/\\]|~[/\\])")
 
 
 def create_admin_api_blueprint(
@@ -54,7 +64,7 @@ def create_admin_api_blueprint(
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Vary"] = "Origin"
             response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
         return response
@@ -210,6 +220,55 @@ def create_admin_api_blueprint(
             }
         }), 202
 
+    @blueprint.get("/classes/<class_id>/terms/<term_id>/config/links")
+    def class_term_links(class_id: str, term_id: str):
+        db = get_db()
+        validation_error = _validate_links_target(db, class_id, term_id)
+        if validation_error:
+            return validation_error
+
+        doc = _links_doc_ref(db, class_id, term_id).get()
+        data = doc.to_dict() if getattr(doc, "exists", False) else {}
+        links = _extract_links(data or {})
+        return jsonify({
+            "data": _links_response(class_id, term_id, links, data or {})
+        }), 200
+
+    @blueprint.put("/classes/<class_id>/terms/<term_id>/config/links")
+    def update_class_term_links(class_id: str, term_id: str):
+        db = get_db()
+        validation_error = _validate_links_target(db, class_id, term_id)
+        if validation_error:
+            return validation_error
+
+        payload, error = _json_body()
+        if error:
+            return error
+        links, error = _validate_links_payload(payload)
+        if error:
+            return error
+
+        updated_at = _now_iso()
+        updated_by = "dashboard"
+        doc_ref = _links_doc_ref(db, class_id, term_id)
+        doc_ref.set({
+            **links,
+            "updated_at": updated_at,
+            "updated_by": updated_by,
+        }, merge=True)
+
+        doc = doc_ref.get()
+        data = doc.to_dict() if getattr(doc, "exists", False) else {}
+        response_links = _extract_links(data or links)
+        return jsonify({
+            "data": _links_response(
+                class_id,
+                term_id,
+                response_links,
+                data or {"updated_at": updated_at, "updated_by": updated_by},
+            )
+        }), 200
+
     @blueprint.get("/blacklist")
     def blacklist():
         manager = get_blacklist_manager()
@@ -269,6 +328,95 @@ def _json_body() -> Tuple[Dict[str, Any], Optional[Any]]:
     if not isinstance(payload, dict):
         return {}, _error("INVALID_JSON", "Request body must be a JSON object.", 400)
     return payload, None
+
+
+def _validate_links_target(db, class_id: str, term_id: str):
+    if not db:
+        return _error("FIREBASE_UNAVAILABLE", "Firebase is not connected.", 503)
+    if not is_valid_class_id(class_id):
+        return _error("VALIDATION_ERROR", "class_id is invalid.", 422)
+    if not TERM_ID_PATTERN.fullmatch(term_id or ""):
+        return _error("VALIDATION_ERROR", "term_id is invalid.", 422)
+
+    registry = get_class_registry_entry(db, class_id)
+    if not registry:
+        return _error("NOT_FOUND", "Class registry entry was not found.", 404)
+    if registry.active_term_id != term_id:
+        return _error("VALIDATION_ERROR", "Only the active term can be edited.", 422)
+
+    term_doc = (
+        db.collection("classes")
+        .document(class_id)
+        .collection("terms")
+        .document(term_id)
+        .collection("metadata")
+        .document("main")
+        .get()
+    )
+    if not getattr(term_doc, "exists", False):
+        return _error("NOT_FOUND", "Term metadata was not found.", 404)
+    return None
+
+
+def _links_doc_ref(db, class_id: str, term_id: str):
+    return (
+        db.collection("classes")
+        .document(class_id)
+        .collection("terms")
+        .document(term_id)
+        .collection("config")
+        .document("links")
+    )
+
+
+def _validate_links_payload(payload: Dict[str, Any]) -> Tuple[Dict[str, str], Optional[Any]]:
+    unknown_keys = sorted(set(payload) - set(LINK_KEYS))
+    if unknown_keys:
+        return {}, _error("VALIDATION_ERROR", f"Unknown link fields: {', '.join(unknown_keys)}.", 422)
+
+    links: Dict[str, str] = {}
+    for key in LINK_KEYS:
+        value = payload.get(key, "")
+        if not isinstance(value, str):
+            return {}, _error("VALIDATION_ERROR", f"{key} must be a string.", 422)
+        value = value.strip()
+        invalid_reason = _invalid_link_value(value)
+        if invalid_reason:
+            return {}, _error("VALIDATION_ERROR", f"{key} {invalid_reason}.", 422)
+        links[key] = value
+    return links, None
+
+
+def _invalid_link_value(value: str) -> str | None:
+    if not value:
+        return None
+    if LOCAL_PATH_PATTERN.match(value) or "\\" in value:
+        return "must not be a local or relative path"
+    if value.startswith(("http://", "file://")):
+        return "must use https://"
+    if not value.startswith("https://"):
+        return "must use https://"
+    if SECRET_VALUE_PATTERN.search(value):
+        return "must not contain secret-looking values"
+    return None
+
+
+def _extract_links(data: Dict[str, Any]) -> Dict[str, str]:
+    return {
+        key: str(data.get(key) or "").strip()
+        for key in LINK_KEYS
+    }
+
+
+def _links_response(class_id: str, term_id: str, links: Dict[str, str], data: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "class_id": class_id,
+        "term_id": term_id,
+        "links": links,
+        "effective_links": merge_link_values(get_safe_fallback_links(include_worksheet=False), links),
+        "updated_at": _json_safe(data.get("updated_at")),
+        "updated_by": str(data.get("updated_by") or ""),
+    }
 
 
 def _image_body() -> Tuple[bytes, str, Optional[Any]]:

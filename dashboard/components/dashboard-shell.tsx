@@ -50,6 +50,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { GeneralLinksEditor } from "@/components/general-links-editor";
 
 type ServiceMap = {
   line: boolean;
@@ -489,6 +490,8 @@ export function DashboardShell() {
             <Metric label="Equal access" value={sustainability ? `${sustainability.equal_access_rate_percent}%` : "--"} icon={Sprout} trend="Classroom inclusion" loading={isOverviewLoading} />
             <Metric label="Digital notices" value={sustainability?.broadcast_count ?? "--"} icon={BellRing} trend="Paper-free sends" loading={isOverviewLoading} />
           </div>
+
+          <GeneralLinksEditor />
 
           <div className="mt-6 grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
             <Panel title="Sustainability impact" action="Conservative classroom estimate" icon={Leaf}>
