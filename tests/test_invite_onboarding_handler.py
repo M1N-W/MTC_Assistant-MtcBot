@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import patch
 
+from linebot.v3.messaging import FlexMessage
+
 import mtc_assistant.handlers as handlers
 
 
@@ -62,7 +64,8 @@ class InviteOnboardingHandlerTest(unittest.TestCase):
         replies = self._run_message("help")
 
         self.assertEqual(1, len(replies))
-        self.assertIn("คำสั่งที่ใช้ได้", replies[0].text)
+        self.assertIsInstance(replies[0], FlexMessage)
+        self.assertEqual("คำสั่งที่ใช้ได้ของ MTC Assistant", replies[0].alt_text)
 
     def test_unknown_user_is_blocked_from_class_specific_commands(self):
         replies = self._run_message("ตารางเรียน")

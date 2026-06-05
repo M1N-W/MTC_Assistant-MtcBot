@@ -1,6 +1,6 @@
 import unittest
 
-from linebot.v3.messaging import TextMessage, VideoMessage
+from linebot.v3.messaging import FlexMessage, TextMessage, VideoMessage
 
 from mtc_assistant import features
 from mtc_assistant.class_context import ClassContext
@@ -74,6 +74,21 @@ def collect_uris(value):
         for child in value:
             uris.extend(collect_uris(child))
     return uris
+
+
+def collect_flex_strings(value):
+    strings = []
+    if isinstance(value, dict):
+        for key in ("text", "label", "altText"):
+            item = value.get(key)
+            if isinstance(item, str):
+                strings.append(item)
+        for child in value.values():
+            strings.extend(collect_flex_strings(child))
+    elif isinstance(value, list):
+        for child in value:
+            strings.extend(collect_flex_strings(child))
+    return strings
 
 
 def add_resource(db, resource_id, data, class_id="mtc13", term_id="2569-t1"):
@@ -171,13 +186,23 @@ class LinksCommandTest(unittest.TestCase):
 
     def test_mtc67_hidden_command_is_not_in_help_text(self):
         message = handle_standard_command("help", "help", self.context)
+        self.assertIsInstance(message, FlexMessage)
+        help_text = "\n".join(collect_flex_strings(message.contents.to_dict()))
 
-        self.assertNotIn("MTC67", message.text)
-        self.assertNotIn("mtc67", message.text)
-        self.assertNotIn("  67", message.text)
+        self.assertNotIn("MTC67", help_text)
+        self.assertNotIn("mtc67", help_text)
+        self.assertNotIn("  67", help_text)
 
-    def test_help_text_lists_core_student_demo_commands(self):
+    def test_help_command_returns_student_flex_menu(self):
         message = handle_standard_command("help", "help", self.context)
+
+        self.assertIsInstance(message, FlexMessage)
+        self.assertEqual("คำสั่งที่ใช้ได้ของ MTC Assistant", message.alt_text)
+
+    def test_help_flex_lists_core_student_demo_commands(self):
+        message = handle_standard_command("help", "help", self.context)
+        self.assertIsInstance(message, FlexMessage)
+        help_text = "\n".join(collect_flex_strings(message.contents.to_dict()))
 
         required_commands = [
             "ตารางเรียน",
@@ -196,12 +221,24 @@ class LinksCommandTest(unittest.TestCase):
         ]
         for command in required_commands:
             with self.subTest(command=command):
-                self.assertIn(command, message.text)
+                self.assertIn(command, help_text)
 
-        self.assertNotIn("admin", message.text.lower())
-        self.assertNotIn("แอดมิน", message.text)
-        self.assertNotIn("MTC67", message.text)
-        self.assertNotIn("mtc67", message.text)
+        forbidden_terms = [
+            "admin",
+            "broadcast",
+            "blacklist",
+            "ส่งถึง",
+            "แบน",
+            "สถิติประกาศ",
+            "MTC67",
+            "mtc67",
+            " 67",
+        ]
+        for term in forbidden_terms:
+            with self.subTest(term=term):
+                haystack = help_text.lower() if term.isascii() else help_text
+                needle = term.lower() if term.isascii() else term
+                self.assertNotIn(needle, haystack)
 
     def test_link_text_commands_use_class_aware_values(self):
         cases = {

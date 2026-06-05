@@ -22,6 +22,158 @@ def _allows_legacy_solution_links(class_context) -> bool:
     )
 
 
+def _message_button(label: str, text: str, color: str = "#10B981") -> dict:
+    return {
+        "type": "button",
+        "action": {
+            "type": "message",
+            "label": label,
+            "text": text,
+        },
+        "style": "primary",
+        "color": color,
+        "height": "sm",
+    }
+
+
+def _button_row(left: dict, right: dict) -> dict:
+    right = {**right, "margin": "sm"}
+    return {
+        "type": "box",
+        "layout": "horizontal",
+        "contents": [
+            {**left, "flex": 1},
+            {**right, "flex": 1},
+        ],
+        "spacing": "sm",
+        "margin": "sm",
+    }
+
+
+def _section(title: str, examples: str | None = None, rows: list[dict] | None = None) -> dict:
+    contents = [
+        {
+            "type": "text",
+            "text": title,
+            "weight": "bold",
+            "size": "md",
+            "color": "#111827",
+            "wrap": True,
+        }
+    ]
+    if rows:
+        contents.extend(rows)
+    if examples:
+        contents.append({
+            "type": "text",
+            "text": examples,
+            "size": "xs",
+            "color": "#4B5563",
+            "wrap": True,
+            "margin": "sm",
+        })
+    return {
+        "type": "box",
+        "layout": "vertical",
+        "contents": contents,
+        "spacing": "xs",
+        "margin": "lg",
+    }
+
+
+def get_help_menu_message(user_message: str = "") -> FlexMessage:
+    """Build the student-facing help menu."""
+    flex_content = {
+        "type": "bubble",
+        "size": "mega",
+        "header": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": "MTC Assistant",
+                    "weight": "bold",
+                    "size": "xl",
+                    "color": "#FFFFFF",
+                    "wrap": True,
+                },
+                {
+                    "type": "text",
+                    "text": "ผู้ช่วยประจำห้องเรียน",
+                    "size": "sm",
+                    "color": "#DCFCE7",
+                    "margin": "xs",
+                    "wrap": True,
+                },
+            ],
+            "backgroundColor": "#047857",
+            "paddingAll": "20px",
+        },
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                _section(
+                    "การเรียน",
+                    "เช็คเวลาเรียน / ปลายภาค",
+                    [
+                        _button_row(
+                            _message_button("ตารางเรียน", "ตารางเรียน", "#059669"),
+                            _message_button("คาบต่อไป", "คาบต่อไป", "#0D9488"),
+                        ),
+                        _button_row(
+                            _message_button("กลางภาค", "กลางภาค", "#2563EB"),
+                            _message_button("ปลายภาค", "ปลายภาค", "#1D4ED8"),
+                        ),
+                    ],
+                ),
+                _section(
+                    "การบ้าน",
+                    "งาน",
+                    [
+                        _button_row(
+                            _message_button("บันทึกการบ้าน", "บันทึกการบ้าน", "#7C3AED"),
+                            _message_button("การบ้าน", "การบ้าน", "#9333EA"),
+                        ),
+                    ],
+                ),
+                _section(
+                    "ลิงก์สำคัญ",
+                    "เว็บโรงเรียน / เกรด / ลา",
+                    [
+                        _button_row(
+                            _message_button("ลิงก์", "ลิงก์", "#0891B2"),
+                            _message_button("เว็บโรงเรียน", "เว็บโรงเรียน", "#0E7490"),
+                        ),
+                    ],
+                ),
+                _section(
+                    "เฉลยวิชา",
+                    "ชีวะ / ฟิสิกส์",
+                    [
+                        _button_row(
+                            _message_button("ชีวะ", "ชีวะ", "#16A34A"),
+                            _message_button("ฟิสิกส์", "ฟิสิกส์", "#4F46E5"),
+                        ),
+                    ],
+                ),
+                _section(
+                    "คำนวณ / AI",
+                    "คำนวณ [สมการ]\nพิมพ์คำถามอื่น ๆ เพื่อถาม AI ได้",
+                ),
+            ],
+            "paddingAll": "18px",
+            "spacing": "sm",
+        },
+    }
+
+    return FlexMessage(
+        alt_text="คำสั่งที่ใช้ได้ของ MTC Assistant",
+        contents=FlexContainer.from_dict(flex_content),
+    )
+
+
 def get_links_menu_message(user_message: str = "", class_context=None, db=None) -> FlexMessage:
     """แสดงเมนูลิงก์ทั้งหมดด้วย Flex Message"""
     links = get_links_config(db, class_context)

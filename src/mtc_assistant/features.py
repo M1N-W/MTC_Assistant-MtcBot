@@ -31,6 +31,7 @@ from mtc_assistant.links_service import (
 )
 from mtc_assistant.learning_resources_service import get_learning_resources
 from mtc_assistant.timetable_service import get_next_class_text, get_timetable_image_url, get_timetable_status_text
+from mtc_assistant.flex_messages import get_help_menu_message
 
 # ============================================================================
 # GLOBAL VARIABLES (will be set by main.py)
@@ -282,9 +283,8 @@ def get_physic_link_message(user_message: str = "", class_context=None) -> TextM
         text=f"เฉลยฟิสิกส์อยู่ที่นี่\n{Physic_LINK}"
     )
 
-def get_help_message(user_message: str = "") -> TextMessage:
-    """แสดงคำสั่งทั้งหมด"""
-    help_text = (
+def _get_help_text_fallback() -> str:
+    return (
         'คำสั่งที่ใช้ได้\n\n'
         'การเรียน\n'
         'ตารางเรียน / คาบต่อไป / เช็คเวลาเรียน\n'
@@ -299,7 +299,15 @@ def get_help_message(user_message: str = "") -> TextMessage:
         'คำนวณ [สมการ] / คำนวณเกรด [คะแนน] / คำนวณ GPA\n\n'
         'พิมพ์คำถามอื่น ๆ เพื่อถาม AI ได้'
     )
-    return TextMessage(text=help_text)
+
+
+def get_help_message(user_message: str = ""):
+    """แสดงคำสั่งทั้งหมด"""
+    try:
+        return get_help_menu_message(user_message)
+    except Exception as e:
+        logger.warning("Could not build Flex help menu: %s", e)
+        return TextMessage(text=_get_help_text_fallback())
 
 # ============================================================================
 # SCHEDULE FUNCTIONS
