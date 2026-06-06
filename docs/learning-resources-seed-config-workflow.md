@@ -84,42 +84,65 @@ Real production URLs must be verified before write. Use fake/sample data in docs
 
 ## Seed Input Format
 
-Recommended first version: JSON file under a future config/seeds path.
+Use a local JSON file with one explicit class and term:
 
-Tradeoffs:
+```json
+{
+  "class_id": "mtc-example",
+  "term_id": "2569-t1",
+  "updated_by": "local-operator",
+  "resources": [
+    {
+      "id": "biology-m4-t1-solutions",
+      "status": "active",
+      "section": "textbook_solutions",
+      "type": "solution_manual",
+      "subject_id": "biology",
+      "grade_level": "m4",
+      "title": "Sample biology solutions",
+      "url": "https://example.com/sample"
+    }
+  ]
+}
+```
 
-- JSON is explicit, reviewable in Git, script-friendly, and safer for validation-heavy URL data.
-- CSV is easier for non-devs but more sensitive to column drift, quoting errors, and ambiguous booleans.
-- Python dict is fast for a developer but less handoff-friendly and easier to mix with implementation logic.
-
-Use JSON for the first implementation. Do not create the seed file yet. Do not include real URLs, real student data, production rosters, secrets, or credentials.
+The example domain is intentionally rejected by apply mode. Replace it only in a
+local ignored seed after Mawin verifies the real URL. Store real seed files under
+`local-seeds/`, which is ignored by Git. Do not include student data, rosters,
+secrets, or credentials.
 
 ## Dry-Run-First Workflow
 
-Expected future workflow:
+Use Application Default Credentials through the standard Google environment:
 
-- Load seed input.
-- Validate `class_id` and `term_id`.
-- Validate required fields.
-- Validate URLs syntactically.
-- Detect duplicate resource IDs.
-- Compare seed records with existing Firestore resources.
-- Show planned creates, updates, skips, disables, errors, and warnings.
-- Default to no writes.
-- Require explicit `--apply` or equivalent for writes.
-- Write only after review.
-- Produce a clear summary.
+```powershell
+$env:GOOGLE_APPLICATION_CREDENTIALS='C:\path\outside-the-repo\service-account.json'
+$env:PYTHONPATH='src'
+python -m mtc_assistant.seed_learning_resources --seed local-seeds\resources.json
+```
 
-Expected output categories:
+Dry-run is the default. `--dry-run` is accepted when an explicit command is
+preferred. It reads the class registry and current resource documents but never
+writes:
 
-- `would_create`
-- `would_update`
-- `would_skip`
-- `would_disable`
-- `errors`
-- `warnings`
+```powershell
+python -m mtc_assistant.seed_learning_resources --seed local-seeds\resources.json --dry-run
+```
 
-Destructive deletion should not be part of the first version. Prefer disabling resources over deleting them.
+After reviewing the JSON summary, apply the same file explicitly:
+
+```powershell
+python -m mtc_assistant.seed_learning_resources --seed local-seeds\resources.json --apply
+```
+
+`--dry-run` and `--apply` cannot be combined. Apply mode creates a missing parent
+term document and creates or updates the listed resource documents. It skips
+unchanged documents. It does not delete, disable, archive, or modify resources
+that are absent from the seed, and it never modifies the class registry.
+
+Dry-run reports `would_create`, `would_update`, `would_skip`, `errors`, and
+`warnings`. Apply reports `created`, `updated`, `skipped`, `errors`, and
+`warnings`.
 
 ## Validation Rules
 
@@ -184,19 +207,17 @@ Before June 9, only high-ROI, low-blast-radius work should be done. Avoid broad 
 
 ## Phased Plan
 
-Phase A: This docs-only plan.
+Phase A: Docs-only workflow plan.
 
-Phase B: Implement dry-run seed validator only, no writes.
+Phase B: Offline seed validator.
 
-Phase C: Add explicit apply mode with safe creates, updates, and disable-only behavior.
+Phase C: Dry-run-first CLI with explicit create/update apply mode and fake-Firestore tests.
 
-Phase D: Add tests around validation and class isolation.
+Phase D: Add real class resources only after URLs and ownership are verified.
 
-Phase E: Add real MTC13 resources only after URLs and ownership are verified.
+Phase E: Run manual LINE tests after resource data is intentionally applied.
 
-Phase F: Run manual LINE tests and update manual-test docs after user-facing behavior changes.
-
-Phase G: Add a dashboard editor for learning resources later, after dashboard auth and class-admin boundaries are ready.
+Phase F: Add a dashboard editor later, after dashboard auth and class-admin boundaries are ready.
 
 The dashboard editor is later, not now.
 
