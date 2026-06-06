@@ -36,7 +36,7 @@ COMMANDS = [
     ),
     (("ปฏิทินกิจกรรม", "ปฏิทิน"), get_exam_countdown_message),
     (("ช่วยเหลือ", "คำสั่ง", "help"), get_help_message),
-    (("งาน", "การบ้าน", "ใบงาน"), get_worksheet_message),
+    (("งาน", "ใบงาน"), get_worksheet_message),
     (("เว็บโรงเรียน", "เว็บ"), get_school_link_message),
     (("เกรด", "ดูเกรด"), get_grade_link_message),
     (("ลา", "ลาป่วย", "ลากิจ", "แบบฟอร์มลา", "ขอลา"), get_absence_form_message),
@@ -48,7 +48,7 @@ COMMANDS = [
     (("เปิดเพลง", "หาเพลง"), get_music_link_message),
 ]
 
-EXACT_KEYWORDS = {"งาน", "การบ้าน", "ใบงาน", "ลา", "ลาป่วย", "ลากิจ", "แบบฟอร์มลา", "ขอลา"}
+EXACT_KEYWORDS = {"งาน", "ใบงาน", "ลา", "ลาป่วย", "ลากิจ", "แบบฟอร์มลา", "ขอลา"}
 MTC67_EXACT_COMMANDS = {"67", "mtc67"}
 
 

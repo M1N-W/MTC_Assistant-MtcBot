@@ -5,6 +5,7 @@ from unittest.mock import patch
 import mtc_assistant.handlers as handlers
 from mtc_assistant.class_context import ClassContext
 from mtc_assistant.command_router import handle_standard_command
+from mtc_assistant.constants import HOMEWORK_VIEW_COMMANDS
 from mtc_assistant.homework_session import (
     cancel_homework_session,
     handle_homework_session,
@@ -134,6 +135,10 @@ class HomeworkSessionRoutingTest(unittest.TestCase):
         reply = handle_standard_command("เคลียร์การบ้าน", "เคลียร์การบ้าน")
 
         self.assertIsNone(reply)
+
+    def test_homework_command_is_reserved_for_persisted_homework_records(self):
+        self.assertIn("การบ้าน", HOMEWORK_VIEW_COMMANDS)
+        self.assertIsNone(handle_standard_command("การบ้าน", "การบ้าน"))
 
     def test_homework_session_continues_from_firestore_when_memory_is_empty(self):
         db = FakeDb()

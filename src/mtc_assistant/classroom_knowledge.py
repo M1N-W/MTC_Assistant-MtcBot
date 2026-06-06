@@ -12,9 +12,7 @@ from typing import List
 import mtc_assistant.features as features
 from mtc_assistant.config import (
     ABSENCE_LINK,
-    Bio_LINK,
     GRADE_LINK,
-    Physic_LINK,
     SCHOOL_LINK,
     TIMETABLE_IMG,
     WORKSHEET_LINK,
@@ -43,8 +41,11 @@ KNOWLEDGE_BASE: List[KnowledgeChunk] = [
     ),
     KnowledgeChunk(
         "แหล่งเฉลยและเอกสารวิทยาศาสตร์",
-        "MTC Assistant constants",
-        f"เฉลยชีววิทยา: {Bio_LINK}\nเฉลยฟิสิกส์: {Physic_LINK}",
+        "MTC Assistant learning resources",
+        (
+            "แหล่งชีวะและฟิสิกส์จัดการผ่านระบบ learning resources ตามห้องเรียน "
+            "ภาคเรียน และระดับชั้น พิมพ์ ชีวะ หรือ ฟิสิกส์ เพื่อดูแหล่งข้อมูลที่ใช้ได้"
+        ),
     ),
     KnowledgeChunk(
         "ความสามารถหลักของ MTC Assistant",

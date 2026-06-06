@@ -297,7 +297,6 @@ class LinksCommandTest(unittest.TestCase):
     def test_link_text_commands_use_class_aware_values(self):
         cases = {
             "งาน": "https://example.com/worksheet",
-            "การบ้าน": "https://example.com/worksheet",
             "ใบงาน": "https://example.com/worksheet",
             "เว็บโรงเรียน": "https://example.com/school",
             "เกรด": "https://example.com/grade",
@@ -309,6 +308,11 @@ class LinksCommandTest(unittest.TestCase):
                 message = handle_standard_command(command, command, self.context)
 
                 self.assertIn(expected_url, message.text)
+
+    def test_homework_command_is_not_routed_to_external_worksheet_link(self):
+        message = handle_standard_command("การบ้าน", "การบ้าน", self.context)
+
+        self.assertIsNone(message)
 
     def test_exam_calendar_words_do_not_route_to_absence_form(self):
         cases = [
