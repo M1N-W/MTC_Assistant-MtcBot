@@ -48,6 +48,8 @@ The fake seed should produce no errors or warnings and should list three `would_
 ## Validation Rules
 
 - `class_id` and `term_id` are required.
+- `status` is required and must be `active`, `hidden`, or `archived`.
+- The obsolete `enabled` field is rejected.
 - Resource URLs must use `https://`.
 - `http://` URLs are hard validation errors.
 - Local/private file paths are rejected.
@@ -55,9 +57,12 @@ The fake seed should produce no errors or warnings and should list three `would_
 - Duplicate resource IDs are rejected within the same `class_id` and `term_id`.
 - `textbook_solutions` requires `subject_id`.
 - `textbook_solutions` currently accepts only `biology` and `physics`.
+- `textbook_solutions` requires `grade_level` and accepts only `m4`, `m5`, or `m6`.
+- Runtime only serves textbook solutions whose grade matches the class registry grade exactly.
 - `subject_id` is optional outside subject-specific sections, but must be safe if present.
 - General link fields such as `worksheet_url`, `grade_url`, `absence_form_url`, `timetable_image_url`, `school_url`, and `mtc_game_url` do not belong in learning resource seeds.
 - There is no destructive delete category.
+- Collision detection and disable planning consider only `status=active` resources.
 
 ## Phase C Is Deferred
 

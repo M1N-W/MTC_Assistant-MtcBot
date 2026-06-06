@@ -20,9 +20,10 @@ def resource(resource_id="bio-main", **overrides):
         "type": "solution_manual",
         "subject_id": "biology",
         "subject_label": "Biology",
+        "grade_level": "m4",
         "title": "Biology Solutions",
         "url": "https://example.com/bio",
-        "enabled": True,
+        "status": "active",
         "sort_order": 10,
     }
     data.update(overrides)
@@ -126,10 +127,34 @@ class LearningResourcesSeedValidatorTest(unittest.TestCase):
 
         self.assertEqual([], result["errors"])
 
-    def test_enabled_must_be_boolean(self):
-        result = plan_learning_resources_seed([resource(enabled="true")])
+    def test_status_accepts_supported_values(self):
+        result = plan_learning_resources_seed([
+            resource("active", status="active"),
+            resource("hidden", status="hidden"),
+            resource("archived", status="archived"),
+        ])
 
-        self.assertTrue(any("enabled" in error["message"] for error in result["errors"]))
+        self.assertEqual([], result["errors"])
+
+    def test_enabled_is_rejected_as_obsolete(self):
+        result = plan_learning_resources_seed([resource(enabled=True)])
+
+        self.assertTrue(any("enabled is obsolete" in error["message"] for error in result["errors"]))
+
+    def test_invalid_status_is_rejected(self):
+        result = plan_learning_resources_seed([resource(status="enabled")])
+
+        self.assertTrue(any("status" in error["message"] for error in result["errors"]))
+
+    def test_textbook_solutions_require_grade_level(self):
+        result = plan_learning_resources_seed([resource(grade_level="")])
+
+        self.assertTrue(any("grade_level" in error["message"] for error in result["errors"]))
+
+    def test_textbook_solutions_reject_invalid_grade_level(self):
+        result = plan_learning_resources_seed([resource(grade_level="M4")])
+
+        self.assertTrue(any("grade_level" in error["message"] for error in result["errors"]))
 
     def test_duplicate_resource_id_in_same_class_term_produces_error(self):
         result = plan_learning_resources_seed([
@@ -191,13 +216,21 @@ class LearningResourcesSeedValidatorTest(unittest.TestCase):
 
         self.assertTrue(any("subject_id" in error["message"] for error in result["errors"]))
 
-    def test_duplicate_enabled_textbook_solution_collision_fails(self):
+    def test_duplicate_active_textbook_solution_collision_fails(self):
         result = plan_learning_resources_seed([
             resource("bio-main"),
             resource("bio-alt", title="Biology Alt"),
         ])
 
         self.assertTrue(any("textbook_solutions" in error["message"] for error in result["errors"]))
+
+    def test_non_active_textbook_solutions_do_not_collide(self):
+        result = plan_learning_resources_seed([
+            resource("bio-hidden", status="hidden"),
+            resource("bio-archived", status="archived"),
+        ])
+
+        self.assertEqual([], result["errors"])
 
     def test_allow_multiple_escape_hatch_allows_textbook_solution_collision(self):
         result = plan_learning_resources_seed([
@@ -226,7 +259,7 @@ class LearningResourcesSeedValidatorTest(unittest.TestCase):
 
         self.assertEqual(["bio-main"], [item["id"] for item in result["would_update"]])
 
-    def test_would_disable_for_enabled_existing_record_missing_from_seed(self):
+    def test_would_disable_for_active_existing_record_missing_from_seed(self):
         result = plan_learning_resources_seed(
             [resource("bio-main")],
             existing_resources=[resource("old-bio", title="Old Biology")],
@@ -234,10 +267,13 @@ class LearningResourcesSeedValidatorTest(unittest.TestCase):
 
         self.assertEqual(["old-bio"], [item["id"] for item in result["would_disable"]])
 
-    def test_disabled_existing_record_missing_from_seed_does_not_disable(self):
+    def test_non_active_existing_record_missing_from_seed_does_not_disable(self):
         result = plan_learning_resources_seed(
             [resource("bio-main")],
-            existing_resources=[resource("old-bio", title="Old Biology", enabled=False)],
+            existing_resources=[
+                resource("old-hidden", title="Old Hidden", status="hidden"),
+                resource("old-archived", title="Old Archived", status="archived"),
+            ],
         )
 
         self.assertEqual([], result["would_disable"])

@@ -8,10 +8,11 @@
       "type": "solution_manual",
       "subject_id": "biology",
       "subject_label": "Biology",
+      "grade_level": "m4",
       "title": "Example Biology Solutions",
       "url": "https://example.com/mtc13/biology-solutions",
       "description": "Fake example record for dry-run validation only.",
-      "enabled": true,
+      "status": "active",
       "sort_order": 10,
       "source_note": "Fake example URL. Replace only after production ownership is verified."
     },
@@ -23,10 +24,11 @@
       "type": "solution_manual",
       "subject_id": "physics",
       "subject_label": "Physics",
+      "grade_level": "m4",
       "title": "Example Physics Solutions",
       "url": "https://example.com/mtc13/physics-solutions",
       "description": "Fake example record for dry-run validation only.",
-      "enabled": true,
+      "status": "active",
       "sort_order": 20,
       "source_note": "Fake example URL. Replace only after production ownership is verified."
     },
@@ -39,7 +41,7 @@
       "title": "Example Assignment Pack",
       "url": "https://example.com/mtc13/assignment-pack",
       "description": "Fake non-subject-specific resource without subject_id.",
-      "enabled": true,
+      "status": "active",
       "sort_order": 30,
       "source_note": "Fake example URL. Replace only after production ownership is verified."
     }

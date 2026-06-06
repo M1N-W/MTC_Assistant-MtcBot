@@ -14,6 +14,8 @@ from urllib.parse import urlparse
 
 TEXTBOOK_SOLUTIONS = "textbook_solutions"
 ALLOWED_TEXTBOOK_SOLUTION_SUBJECT_IDS = {"biology", "physics"}
+ALLOWED_GRADE_LEVELS = {"m4", "m5", "m6"}
+ALLOWED_STATUSES = {"active", "hidden", "archived"}
 GENERAL_LINK_FIELDS = {
     "worksheet_url",
     "grade_url",
@@ -83,7 +85,7 @@ def plan_learning_resources_seed(
                 errors.append(_issue(index, record.get("id"), "Duplicate resource id in the same class_id + term_id"))
             seen_ids[identity] = index
 
-        if _is_enabled_textbook_solution(record):
+        if _is_active_textbook_solution(record):
             key = (
                 record["class_id"],
                 record["term_id"],
@@ -98,7 +100,7 @@ def plan_learning_resources_seed(
     for records in collisions.values():
         if len(records) > 1 and not all(record.get("allow_multiple") is True for record in records):
             ids = ", ".join(record["id"] for record in records)
-            errors.append(_issue(None, ids, "Duplicate enabled textbook_solutions subject/type collision"))
+            errors.append(_issue(None, ids, "Duplicate active textbook_solutions subject/type collision"))
 
     result = _empty_result(errors, warnings)
     if errors:
@@ -124,7 +126,7 @@ def plan_learning_resources_seed(
             continue
         if _identity(record) in seed_by_identity:
             continue
-        if record.get("enabled") is True:
+        if record.get("status") == "active":
             result["would_disable"].append(record)
 
     return result
@@ -173,9 +175,12 @@ def _validate_record(
     if _non_empty_str(resource_id) and not _is_safe_firestore_id(resource_id):
         errors.append(_issue(index, resource_id, "id must be a safe Firestore document ID"))
 
-    enabled = record.get("enabled")
-    if not isinstance(enabled, bool):
-        errors.append(_issue(index, resource_id, "enabled must be boolean"))
+    if "enabled" in raw:
+        errors.append(_issue(index, resource_id, "enabled is obsolete; use status"))
+
+    status = record.get("status")
+    if status not in ALLOWED_STATUSES:
+        errors.append(_issue(index, resource_id, "status must be active, hidden, or archived"))
 
     section = record.get("section")
     subject_id = record.get("subject_id")
@@ -189,6 +194,10 @@ def _validate_record(
         errors.append(_issue(index, resource_id, "subject_id is not supported for textbook_solutions"))
     if _non_empty_str(subject_id) and not _is_safe_firestore_id(subject_id):
         errors.append(_issue(index, resource_id, "subject_id must be a safe non-empty string"))
+
+    grade_level = record.get("grade_level")
+    if section == TEXTBOOK_SOLUTIONS and grade_level not in ALLOWED_GRADE_LEVELS:
+        errors.append(_issue(index, resource_id, "grade_level must be m4, m5, or m6 for textbook_solutions"))
 
     url = record.get("url")
     if _non_empty_str(url):
@@ -233,9 +242,9 @@ def _comparison_payload(record: Mapping[str, Any]) -> dict[str, Any]:
     return {key: record[key] for key in sorted(record) if key not in ignored}
 
 
-def _is_enabled_textbook_solution(record: Mapping[str, Any]) -> bool:
+def _is_active_textbook_solution(record: Mapping[str, Any]) -> bool:
     return (
-        record.get("enabled") is True
+        record.get("status") == "active"
         and record.get("section") == TEXTBOOK_SOLUTIONS
         and _non_empty_str(record.get("subject_id"))
         and _non_empty_str(record.get("type"))

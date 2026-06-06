@@ -136,6 +136,7 @@ def valid_resource(title, url, **overrides):
         "type": "solution_manual",
         "subject_id": "biology",
         "subject_label": "Biology",
+        "grade_level": "m4",
         "title": title,
         "url": url,
         "status": "active",
@@ -155,6 +156,7 @@ class LinksCommandTest(unittest.TestCase):
             "display_name": "MTC13",
             "status": "active",
             "active_term_id": "2569-t1",
+            "grade_level": "m4",
         }
         self.db.store["classes/mtc13/terms/2569-t1/config/links"] = {
             WORKSHEET_URL: "https://example.com/worksheet",

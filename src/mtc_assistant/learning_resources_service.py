@@ -11,6 +11,8 @@ from mtc_assistant.config import logger
 
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 100
+TEXTBOOK_SOLUTIONS = "textbook_solutions"
+ALLOWED_GRADE_LEVELS = {"m4", "m5", "m6"}
 
 
 def get_learning_resources(
@@ -30,9 +32,11 @@ def get_learning_resources(
         return []
 
     try:
-        term_id = _get_active_term_id(db, class_context)
-        if not term_id:
+        registry = get_class_registry_entry(db, class_context.class_id)
+        if not registry or not registry.active_term_id:
             return []
+        term_id = registry.active_term_id
+        registry_grade = registry.grade_level if registry.grade_level in ALLOWED_GRADE_LEVELS else None
 
         docs = (
             db.collection("classes")
@@ -45,7 +49,7 @@ def get_learning_resources(
         resources = [
             resource
             for doc in docs
-            for resource in [_normalize_resource(doc.to_dict() or {}, term_id)]
+            for resource in [_normalize_resource(doc.to_dict() or {}, term_id, registry_grade)]
             if resource
         ]
     except Exception as e:
@@ -61,12 +65,11 @@ def get_learning_resources(
     return resources[:normalized_limit]
 
 
-def _get_active_term_id(db, class_context) -> str | None:
-    registry = get_class_registry_entry(db, class_context.class_id)
-    return registry.active_term_id if registry and registry.active_term_id else None
-
-
-def _normalize_resource(data: Mapping[str, Any], term_id: str) -> dict[str, Any] | None:
+def _normalize_resource(
+    data: Mapping[str, Any],
+    term_id: str,
+    registry_grade: str | None,
+) -> dict[str, Any] | None:
     if not isinstance(data, Mapping):
         return None
     if data.get("status") != "active":
@@ -77,19 +80,32 @@ def _normalize_resource(data: Mapping[str, Any], term_id: str) -> dict[str, Any]
     if not title or not url or not _is_valid_resource_url(url):
         return None
 
+    embedded_term_id = _clean_str(data.get("term_id"))
+    if embedded_term_id and embedded_term_id != term_id:
+        return None
+
+    section = _clean_str(data.get("section"))
+    grade_level = _clean_str(data.get("grade_level"))
+    if section == TEXTBOOK_SOLUTIONS and (
+        registry_grade not in ALLOWED_GRADE_LEVELS
+        or grade_level not in ALLOWED_GRADE_LEVELS
+        or grade_level != registry_grade
+    ):
+        return None
+
     return {
-        "section": _clean_str(data.get("section")),
+        "section": section,
         "type": _clean_str(data.get("type")),
         "subject_id": _clean_str(data.get("subject_id")),
         "subject_label": _clean_str(data.get("subject_label")),
-        "grade_level": _clean_str(data.get("grade_level")),
+        "grade_level": grade_level,
         "term_label": _clean_str(data.get("term_label")),
         "book_label": _clean_str(data.get("book_label")),
         "title": title,
         "url": url,
         "sort_order": _normalize_sort_order(data.get("sort_order")),
         "notes": _clean_str(data.get("notes")),
-        "term_id": _clean_str(data.get("term_id")) or term_id,
+        "term_id": embedded_term_id or term_id,
     }
 
 

@@ -67,12 +67,13 @@ High-level resource document shape for future implementation:
 - `subject`
 - `subject_id`
 - `subject_label`
+- `grade_level`
 - `title`
 - `section`
 - `type`
 - `url`
 - `description`
-- `enabled`
+- `status`
 - `sort_order`
 - `created_at`
 - `updated_at`
@@ -126,7 +127,9 @@ Destructive deletion should not be part of the first version. Prefer disabling r
 - `term_id` must be explicit.
 - `subject_id` must be from allowed known subjects or normalized before write.
 - `url` must be `https` unless there is a justified exception.
-- `enabled` must be boolean.
+- `status` must be `active`, `hidden`, or `archived`.
+- `textbook_solutions` must declare `grade_level` as `m4`, `m5`, or `m6`.
+- Runtime only returns textbook solutions when the resource grade exactly matches the class registry grade.
 - MTC13+ must never fall back to MTC12 subject-specific resources.
 - `title` must not be empty.
 - Accidental duplicate subject/type collisions should fail unless explicitly allowed.
@@ -139,7 +142,7 @@ Destructive deletion should not be part of the first version. Prefer disabling r
 - Re-running the same seed should not duplicate documents.
 - Stable resource IDs are required.
 - Updates should be deterministic.
-- Old resources should be disabled, not deleted, in the first implementation.
+- Old resources should use `hidden` or `archived`, not be deleted, in the first implementation.
 - Rollback can re-run a previous seed or disable newly created resources.
 - Firestore writes should include `updated_by` and `updated_at`.
 

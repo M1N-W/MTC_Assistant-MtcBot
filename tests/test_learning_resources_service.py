@@ -66,13 +66,15 @@ def legacy_context():
     return ClassContext("mtc12", "user-a", is_legacy_fallback=True)
 
 
-def add_registry(db, class_id="mtc13", active_term_id="2569-t1"):
+def add_registry(db, class_id="mtc13", active_term_id="2569-t1", grade_level="m4"):
     data = {
         "display_name": class_id.upper(),
         "status": "active",
     }
     if active_term_id is not None:
         data["active_term_id"] = active_term_id
+    if grade_level is not None:
+        data["grade_level"] = grade_level
     db.store[f"system/class_registry/{class_id}/main"] = data
 
 
@@ -86,6 +88,7 @@ def valid_resource(title="Biology Book", **overrides):
         "type": "solution_manual",
         "subject_id": "biology",
         "subject_label": "Biology",
+        "grade_level": "m4",
         "title": title,
         "url": "https://example.com/bio",
         "status": "active",
@@ -132,6 +135,48 @@ class LearningResourcesServiceTest(unittest.TestCase):
         self.assertEqual("https://example.com/bio", resources[0]["url"])
         self.assertEqual("2569-t1", resources[0]["term_id"])
 
+    def test_missing_registry_grade_hides_textbook_solutions(self):
+        db = FakeDb()
+        add_registry(db, grade_level=None)
+        add_resource(db, "bio-main", valid_resource())
+
+        self.assertEqual([], get_learning_resources(db, non_legacy_context()))
+
+    def test_invalid_registry_grade_hides_textbook_solutions(self):
+        db = FakeDb()
+        add_registry(db, grade_level="grade10")
+        add_resource(db, "bio-main", valid_resource())
+
+        self.assertEqual([], get_learning_resources(db, non_legacy_context()))
+
+    def test_missing_resource_grade_hides_textbook_solutions(self):
+        db = FakeDb()
+        add_registry(db)
+        add_resource(db, "bio-main", valid_resource(grade_level=None))
+
+        self.assertEqual([], get_learning_resources(db, non_legacy_context()))
+
+    def test_invalid_resource_grade_hides_textbook_solutions(self):
+        db = FakeDb()
+        add_registry(db)
+        add_resource(db, "bio-main", valid_resource(grade_level="M4"))
+
+        self.assertEqual([], get_learning_resources(db, non_legacy_context()))
+
+    def test_mismatched_resource_grade_hides_textbook_solutions(self):
+        db = FakeDb()
+        add_registry(db, grade_level="m5")
+        add_resource(db, "bio-main", valid_resource(grade_level="m4"))
+
+        self.assertEqual([], get_learning_resources(db, non_legacy_context()))
+
+    def test_m5_registry_cannot_receive_m4_solution_in_active_term(self):
+        db = FakeDb()
+        add_registry(db, active_term_id="2569-t1", grade_level="m5")
+        add_resource(db, "bio-main", valid_resource(grade_level="m4"), term_id="2569-t1")
+
+        self.assertEqual([], get_learning_resources(db, non_legacy_context()))
+
     def test_hidden_and_archived_resources_are_ignored(self):
         db = FakeDb()
         add_registry(db)
@@ -177,6 +222,14 @@ class LearningResourcesServiceTest(unittest.TestCase):
 
         self.assertEqual(1, len(resources))
         self.assertEqual("No Term", resources[0]["title"])
+        self.assertEqual("2569-t1", resources[0]["term_id"])
+
+    def test_conflicting_embedded_term_id_is_rejected(self):
+        db = FakeDb()
+        add_registry(db, active_term_id="2569-t1")
+        add_resource(db, "wrong-term", valid_resource(term_id="2569-t2"), term_id="2569-t1")
+
+        self.assertEqual([], get_learning_resources(db, non_legacy_context()))
 
     def test_subject_filter_works(self):
         db = FakeDb()
@@ -197,6 +250,29 @@ class LearningResourcesServiceTest(unittest.TestCase):
         resources = get_learning_resources(db, non_legacy_context(), section="assignment_resources")
 
         self.assertEqual(["Assignments"], [resource["title"] for resource in resources])
+
+    def test_assignment_resource_without_grade_remains_available(self):
+        db = FakeDb()
+        add_registry(db, grade_level=None)
+        add_resource(
+            db,
+            "assignment",
+            valid_resource(
+                "Assignment",
+                section="assignment_resources",
+                type="worksheet_pack",
+                subject_id=None,
+                grade_level=None,
+            ),
+        )
+
+        resources = get_learning_resources(
+            db,
+            non_legacy_context(),
+            section="assignment_resources",
+        )
+
+        self.assertEqual(["Assignment"], [resource["title"] for resource in resources])
 
     def test_multiple_books_sort_by_sort_order_then_title(self):
         db = FakeDb()
