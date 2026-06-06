@@ -50,6 +50,7 @@ def execute_seed(
     payload: Any,
     *,
     apply: bool = False,
+    allow_non_active_term: bool = False,
     timestamp: Any = None,
 ) -> dict[str, Any]:
     """Validate, plan, and optionally apply one class/term resource seed."""
@@ -79,7 +80,16 @@ def execute_seed(
     if not isinstance(active_term_id, str) or not active_term_id.strip():
         errors.append(_issue("Class registry active_term_id is missing"))
     elif term_id != active_term_id.strip():
-        errors.append(_issue("Seed term_id must match class registry active_term_id"))
+        if allow_non_active_term:
+            warnings.append(
+                _issue(
+                    f"Seed term_id {term_id} differs from registry active_term_id "
+                    f"{active_term_id.strip()}; resources will not be used by runtime until "
+                    "the registry active_term_id changes."
+                )
+            )
+        else:
+            errors.append(_issue("Seed term_id must match class registry active_term_id"))
     if registry_grade not in ALLOWED_GRADE_LEVELS:
         errors.append(_issue("Class registry grade_level must be m4, m5, or m6"))
 
@@ -177,6 +187,11 @@ def main(
     parser.add_argument("--seed", required=True, help="Path to the learning resources seed JSON.")
     parser.add_argument("--dry-run", action="store_true", help="Validate and preview without writes.")
     parser.add_argument("--apply", action="store_true", help="Apply reviewed creates and updates.")
+    parser.add_argument(
+        "--allow-non-active-term",
+        action="store_true",
+        help="Allow seeding a term other than the class registry active term.",
+    )
     args = parser.parse_args(argv)
     output = stdout or sys.stdout
 
@@ -188,7 +203,13 @@ def main(
     try:
         payload = json.loads(Path(args.seed).read_text(encoding="utf-8"))
         db = (db_factory or _firestore_client)()
-        result = execute_seed(db, payload, apply=args.apply, timestamp=timestamp)
+        result = execute_seed(
+            db,
+            payload,
+            apply=args.apply,
+            allow_non_active_term=args.allow_non_active_term,
+            timestamp=timestamp,
+        )
     except (OSError, ValueError, RuntimeError) as exc:
         result = _error_result(str(exc), mode="apply" if args.apply else "dry-run")
 

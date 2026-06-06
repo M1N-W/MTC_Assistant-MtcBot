@@ -144,6 +144,23 @@ Dry-run reports `would_create`, `would_update`, `would_skip`, `errors`, and
 `warnings`. Apply reports `created`, `updated`, `skipped`, `errors`, and
 `warnings`.
 
+### Seeding Future Terms
+
+The CLI rejects a seed whose `term_id` differs from the class registry
+`active_term_id` by default. Use `--allow-non-active-term` only for verified
+future-term resources:
+
+```powershell
+python -m mtc_assistant.seed_learning_resources --seed local-seeds\resources-2569-t2.json --dry-run --allow-non-active-term
+python -m mtc_assistant.seed_learning_resources --seed local-seeds\resources-2569-t2.json --apply --allow-non-active-term
+```
+
+The JSON `warnings` array states that these resources remain unused until the
+class registry `active_term_id` changes. The command writes under the seed
+`term_id` and never modifies the class registry. Always review a dry-run before
+apply. Keep local seed files with verified URLs under the ignored
+`local-seeds/` directory. Do not commit production URLs or use fake URLs.
+
 ## Validation Rules
 
 - `class_id` must be explicit.

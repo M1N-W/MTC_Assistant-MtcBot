@@ -2,6 +2,7 @@ import io
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 
 from mtc_assistant.seed_learning_resources import execute_seed, main
@@ -98,11 +99,12 @@ class SeedLearningResourcesTest(unittest.TestCase):
         self.db = FakeDb()
         add_registry(self.db)
 
-    def execute(self, payload=None, *, apply=False):
+    def execute(self, payload=None, *, apply=False, allow_non_active_term=False):
         return execute_seed(
             self.db,
             payload or valid_seed(),
             apply=apply,
+            allow_non_active_term=allow_non_active_term,
             timestamp=self.timestamp,
         )
 
@@ -202,6 +204,92 @@ class SeedLearningResourcesTest(unittest.TestCase):
         result = self.execute(valid_seed(term_id="2569-t2"))
 
         self.assertTrue(any("active_term_id" in error["message"] for error in result["errors"]))
+        self.assertEqual([], self.db.writes)
+
+    def test_allows_future_term_and_reports_json_warning(self):
+        result = self.execute(
+            valid_seed(term_id="2569-t2"),
+            allow_non_active_term=True,
+        )
+
+        self.assertEqual([], result["errors"])
+        self.assertEqual(
+            [
+                {
+                    "message": (
+                        "Seed term_id 2569-t2 differs from registry active_term_id 2569-t1; "
+                        "resources will not be used by runtime until the registry active_term_id changes."
+                    )
+                }
+            ],
+            result["warnings"],
+        )
+
+    def test_future_term_dry_run_plans_seed_term_path_without_writes(self):
+        result = self.execute(
+            valid_seed(term_id="2569-t2"),
+            allow_non_active_term=True,
+        )
+
+        self.assertEqual(["biology-m4-t1-solutions"], result["would_create"])
+        self.assertTrue(result["would_create_term_doc"])
+        self.assertEqual([], self.db.writes)
+        self.assertNotIn("classes/mtc13/terms/2569-t1", self.db.store)
+
+    def test_future_term_apply_writes_seed_term_path_without_modifying_registry(self):
+        registry_before = dict(self.db.store["system/class_registry/mtc13/main"])
+
+        result = self.execute(
+            valid_seed(term_id="2569-t2"),
+            apply=True,
+            allow_non_active_term=True,
+        )
+
+        future_term_path = "classes/mtc13/terms/2569-t2"
+        future_resource_path = (
+            "classes/mtc13/terms/2569-t2/resources/biology-m4-t1-solutions"
+        )
+        self.assertEqual([], result["errors"])
+        self.assertIn(future_term_path, self.db.store)
+        self.assertIn(future_resource_path, self.db.store)
+        self.assertNotIn("classes/mtc13/terms/2569-t1", self.db.store)
+        self.assertEqual(
+            registry_before,
+            self.db.store["system/class_registry/mtc13/main"],
+        )
+        self.assertNotIn(
+            "system/class_registry/mtc13/main",
+            [path for path, _, _ in self.db.writes],
+        )
+
+    def test_future_term_apply_still_rejects_registry_grade_mismatch(self):
+        result = self.execute(
+            valid_seed(
+                [valid_resource(grade_level="m5")],
+                term_id="2569-t2",
+            ),
+            apply=True,
+            allow_non_active_term=True,
+        )
+
+        self.assertTrue(any("registry grade_level" in error["message"] for error in result["errors"]))
+        self.assertEqual([], self.db.writes)
+
+    def test_future_term_apply_validates_all_records_before_writing(self):
+        result = self.execute(
+            valid_seed(
+                [
+                    valid_resource("valid"),
+                    valid_resource("invalid", class_id="mtc14"),
+                ],
+                term_id="2569-t2",
+            ),
+            apply=True,
+            allow_non_active_term=True,
+        )
+
+        self.assertTrue(result["errors"])
+        self.assertEqual([], self.db.writes)
 
     def test_rejects_embedded_resource_term_conflict(self):
         result = self.execute(valid_seed([valid_resource(term_id="2569-t2")]))
@@ -283,39 +371,74 @@ class SeedLearningResourcesCliTest(unittest.TestCase):
         self.db = FakeDb()
         add_registry(self.db)
 
-    def run_cli(self, extra_args=None):
+    def run_cli(self, extra_args=None, *, payload=None):
         with tempfile.TemporaryDirectory() as temp_dir:
             seed_path = Path(temp_dir) / "seed.json"
-            seed_path.write_text(json.dumps(valid_seed(), ensure_ascii=False), encoding="utf-8")
-            stdout = io.StringIO()
-            exit_code = main(
-                ["--seed", str(seed_path), *(extra_args or [])],
-                db_factory=lambda: self.db,
-                stdout=stdout,
-                timestamp="SERVER_TIMESTAMP",
+            seed_path.write_text(
+                json.dumps(payload or valid_seed(), ensure_ascii=False),
+                encoding="utf-8",
             )
-            return exit_code, json.loads(stdout.getvalue())
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with redirect_stderr(stderr):
+                exit_code = main(
+                    ["--seed", str(seed_path), *(extra_args or [])],
+                    db_factory=lambda: self.db,
+                    stdout=stdout,
+                    timestamp="SERVER_TIMESTAMP",
+                )
+            return exit_code, json.loads(stdout.getvalue()), stderr.getvalue()
 
     def test_default_mode_is_dry_run_and_performs_no_writes(self):
-        exit_code, result = self.run_cli()
+        exit_code, result, stderr = self.run_cli()
 
         self.assertEqual(0, exit_code)
         self.assertEqual("dry-run", result["mode"])
         self.assertEqual([], self.db.writes)
+        self.assertEqual("", stderr)
 
     def test_explicit_dry_run_performs_no_writes(self):
-        exit_code, result = self.run_cli(["--dry-run"])
+        exit_code, result, stderr = self.run_cli(["--dry-run"])
 
         self.assertEqual(0, exit_code)
         self.assertEqual("dry-run", result["mode"])
         self.assertEqual([], self.db.writes)
+        self.assertEqual("", stderr)
 
     def test_passing_dry_run_and_apply_fails(self):
-        exit_code, result = self.run_cli(["--dry-run", "--apply"])
+        exit_code, result, stderr = self.run_cli(["--dry-run", "--apply"])
 
         self.assertNotEqual(0, exit_code)
         self.assertTrue(result["errors"])
         self.assertEqual([], self.db.writes)
+        self.assertEqual("", stderr)
+
+    def test_future_term_without_flag_fails_and_writes_nothing(self):
+        exit_code, result, stderr = self.run_cli(
+            payload=valid_seed(term_id="2569-t2"),
+        )
+
+        self.assertNotEqual(0, exit_code)
+        self.assertTrue(any("active_term_id" in error["message"] for error in result["errors"]))
+        self.assertEqual([], self.db.writes)
+        self.assertEqual("", stderr)
+
+    def test_future_term_flag_returns_warning_in_json_only(self):
+        exit_code, result, stderr = self.run_cli(
+            ["--allow-non-active-term"],
+            payload=valid_seed(term_id="2569-t2"),
+        )
+
+        self.assertEqual(0, exit_code)
+        self.assertEqual([], result["errors"])
+        self.assertTrue(
+            any(
+                "resources will not be used by runtime" in warning["message"]
+                for warning in result["warnings"]
+            )
+        )
+        self.assertEqual([], self.db.writes)
+        self.assertEqual("", stderr)
 
 
 if __name__ == "__main__":
