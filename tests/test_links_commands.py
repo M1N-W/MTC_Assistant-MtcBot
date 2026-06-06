@@ -108,6 +108,24 @@ def collect_message_button_labels(value):
     return labels
 
 
+def collect_message_button_actions(value):
+    actions = {}
+    if isinstance(value, dict):
+        if value.get("type") == "button":
+            action = value.get("action")
+            if isinstance(action, dict) and action.get("type") == "message":
+                label = action.get("label")
+                text = action.get("text")
+                if isinstance(label, str) and isinstance(text, str):
+                    actions[label] = text
+        for child in value.values():
+            actions.update(collect_message_button_actions(child))
+    elif isinstance(value, list):
+        for child in value:
+            actions.update(collect_message_button_actions(child))
+    return actions
+
+
 def add_resource(db, resource_id, data, class_id="mtc13", term_id="2569-t1"):
     db.store[f"classes/{class_id}/terms/{term_id}/resources/{resource_id}"] = data
 
@@ -219,26 +237,21 @@ class LinksCommandTest(unittest.TestCase):
     def test_help_flex_lists_core_student_demo_commands(self):
         message = handle_standard_command("help", "help", self.context)
         self.assertIsInstance(message, FlexMessage)
-        help_text = "\n".join(collect_flex_strings(message.contents.to_dict()))
+        contents = message.contents.to_dict()
+        help_text = "\n".join(collect_flex_strings(contents))
+        button_actions = collect_message_button_actions(contents)
 
-        required_commands = [
-            "ตารางเรียน",
-            "คาบต่อไป",
-            "เช็คเวลาเรียน",
-            "บันทึกการบ้าน",
-            "การบ้าน",
-            "ลิงก์",
-            "เว็บโรงเรียน",
-            "เกรด",
-            "ลา",
-            "ชีวะ",
-            "ฟิสิกส์",
-            "กลางภาค",
-            "ปลายภาค",
-        ]
-        for command in required_commands:
-            with self.subTest(command=command):
-                self.assertIn(command, help_text)
+        self.assertEqual(
+            {
+                "ตารางเรียน": "ตารางเรียน",
+                "คาบต่อไป": "คาบต่อไป",
+                "เช็คเวลาเรียน": "เช็คเวลาเรียน",
+                "บันทึกงาน": "บันทึกการบ้าน",
+                "ดูการบ้าน": "การบ้าน",
+                "ลิงก์สำคัญ": "ลิงก์",
+            },
+            button_actions,
+        )
 
         forbidden_terms = [
             "admin",
@@ -250,6 +263,14 @@ class LinksCommandTest(unittest.TestCase):
             "MTC67",
             "mtc67",
             " 67",
+            "ชีวะ",
+            "ชีววิทยา",
+            "ฟิสิกส์",
+            "เว็บโรงเรียน",
+            "เกรด",
+            "แบบฟอร์มลา",
+            "กลางภาค",
+            "ปลายภาค",
         ]
         for term in forbidden_terms:
             with self.subTest(term=term):
@@ -266,7 +287,7 @@ class LinksCommandTest(unittest.TestCase):
         button_labels = collect_message_button_labels(contents)
 
         self.assertIn("ลิงก์สำคัญ", button_labels)
-        self.assertIn("รวมเว็บโรงเรียน เกรด และแบบฟอร์มลาไว้ที่นี่", help_text)
+        self.assertIn("สิ่งที่ใช้บ่อย", help_text)
         self.assertNotIn("เว็บโรงเรียน", button_labels)
         self.assertNotIn("เกรด", button_labels)
         self.assertNotIn("ลา", button_labels)
@@ -328,13 +349,23 @@ class LinksCommandTest(unittest.TestCase):
     def test_links_menu_uses_class_aware_values(self):
         message = handle_standard_command("ลิงก์", "ลิงก์", self.context)
 
-        uris = collect_uris(message.contents.to_dict())
+        contents = message.contents.to_dict()
+        uris = collect_uris(contents)
+        button_actions = collect_message_button_actions(contents)
+        links_text = "\n".join(collect_flex_strings(contents))
 
         self.assertIn("https://example.com/school", uris)
         self.assertIn("https://example.com/grade", uris)
         self.assertIn("https://example.com/absence", uris)
+        self.assertEqual("งาน", button_actions["งาน / ใบงาน"])
         self.assertNotIn(Bio_LINK, uris)
         self.assertNotIn(Physic_LINK, uris)
+        self.assertNotIn("ชีวะ", links_text)
+        self.assertNotIn("ชีววิทยา", links_text)
+        self.assertNotIn("ฟิสิกส์", links_text)
+        self.assertNotIn("YouTube", links_text)
+        self.assertNotIn("MTC67", links_text)
+        self.assertNotIn("admin", links_text.lower())
 
     def test_no_context_commands_keep_mtc12_fallback(self):
         worksheet_message = handle_standard_command("งาน", "งาน")
@@ -365,14 +396,19 @@ class LinksCommandTest(unittest.TestCase):
         self.assertIn(Bio_LINK, bio_message.text)
         self.assertIn(Physic_LINK, physic_message.text)
 
-    def test_explicit_mtc12_links_menu_keeps_solution_uri_buttons(self):
+    def test_explicit_mtc12_links_menu_does_not_advertise_legacy_solution_links(self):
         context = ClassContext("mtc12", "user-a")
 
         message = handle_standard_command("ลิงก์", "ลิงก์", context)
-        uris = collect_uris(message.contents.to_dict())
+        contents = message.contents.to_dict()
+        uris = collect_uris(contents)
+        links_text = "\n".join(collect_flex_strings(contents))
 
-        self.assertIn(Bio_LINK, uris)
-        self.assertIn(Physic_LINK, uris)
+        self.assertNotIn(Bio_LINK, uris)
+        self.assertNotIn(Physic_LINK, uris)
+        self.assertNotIn("ชีวะ", links_text)
+        self.assertNotIn("ชีววิทยา", links_text)
+        self.assertNotIn("ฟิสิกส์", links_text)
 
     def test_non_legacy_solution_commands_do_not_return_mtc12_links(self):
         bio_message = handle_standard_command("ชีวะ", "ชีวะ", self.context)

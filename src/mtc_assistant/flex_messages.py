@@ -5,21 +5,12 @@ MTC Assistant - Flex Message builders
 
 from linebot.v3.messaging import FlexMessage, FlexContainer
 
-from mtc_assistant.config import Bio_LINK, Physic_LINK
 from mtc_assistant.links_service import (
     ABSENCE_FORM_URL,
     GRADE_URL,
     SCHOOL_URL,
     get_links_config,
 )
-
-
-def _allows_legacy_solution_links(class_context) -> bool:
-    return (
-        not class_context
-        or getattr(class_context, "is_legacy_fallback", False)
-        or getattr(class_context, "class_id", None) == "mtc12"
-    )
 
 
 def _message_button(label: str, text: str, color: str = "#10B981") -> dict:
@@ -126,48 +117,32 @@ def get_help_menu_message(user_message: str = "") -> FlexMessage:
             "contents": [
                 _section(
                     "📚 การเรียน",
-                    "เช็คเวลาเรียน / ปลายภาค",
-                    [
+                    rows=[
                         _button_row(
                             _message_button("ตารางเรียน", "ตารางเรียน", "#059669"),
                             _message_button("คาบต่อไป", "คาบต่อไป", "#0D9488"),
                         ),
-                        _button_row(
-                            _message_button("กลางภาค", "กลางภาค", "#2563EB"),
-                            _message_button("ปลายภาค", "ปลายภาค", "#1D4ED8"),
-                        ),
+                        _message_button("เช็คเวลาเรียน", "เช็คเวลาเรียน", "#2563EB"),
                     ],
                 ),
                 _section(
                     "📝 การบ้าน",
-                    "งาน",
-                    [
+                    rows=[
                         _button_row(
-                            _message_button("บันทึกการบ้าน", "บันทึกการบ้าน", "#7C3AED"),
-                            _message_button("การบ้าน", "การบ้าน", "#9333EA"),
+                            _message_button("บันทึกงาน", "บันทึกการบ้าน", "#7C3AED"),
+                            _message_button("ดูการบ้าน", "การบ้าน", "#9333EA"),
                         ),
                     ],
                 ),
                 _section(
-                    "🔗 ลิงก์และเอกสาร",
-                    "รวมเว็บโรงเรียน เกรด และแบบฟอร์มลาไว้ที่นี่",
-                    [
+                    "🔗 สิ่งที่ใช้บ่อย",
+                    rows=[
                         _message_button("ลิงก์สำคัญ", "ลิงก์", "#0891B2"),
                     ],
                 ),
                 _section(
-                    "📖 เฉลยวิชา",
-                    "ชีวะ / ฟิสิกส์",
-                    [
-                        _button_row(
-                            _message_button("ชีวะ", "ชีวะ", "#16A34A"),
-                            _message_button("ฟิสิกส์", "ฟิสิกส์", "#4F46E5"),
-                        ),
-                    ],
-                ),
-                _section(
                     "🧮 คำนวณ / AI",
-                    "คำนวณ [สมการ]\nพิมพ์คำถามอื่น ๆ เพื่อถาม AI ได้",
+                    "พิมพ์ คำนวณ [สมการ]\nหรือพิมพ์คำถามอื่น ๆ เพื่อถาม AI ได้",
                 ),
             ],
             "paddingAll": "20px",
@@ -184,7 +159,6 @@ def get_help_menu_message(user_message: str = "") -> FlexMessage:
 def get_links_menu_message(user_message: str = "", class_context=None, db=None) -> FlexMessage:
     """แสดงเมนูลิงก์ทั้งหมดด้วย Flex Message"""
     links = get_links_config(db, class_context)
-    allows_solution_links = _allows_legacy_solution_links(class_context)
     flex_content = {
         "type": "bubble",
         "size": "mega",
@@ -275,12 +249,16 @@ def get_links_menu_message(user_message: str = "", class_context=None, db=None) 
                                     "type": "button",
                                     "action": {
                                         "type": "uri",
-                                        "label": "📝 แบบฟอร์มลาออนไลน์",
+                                        "label": "📝 แบบฟอร์มลา",
                                         "uri": links[ABSENCE_FORM_URL]
                                     },
                                     "style": "primary",
                                     "color": "#F59E0B",
                                     "height": "sm",
+                                    "margin": "sm"
+                                },
+                                {
+                                    **_message_button("งาน / ใบงาน", "งาน", "#7C3AED"),
                                     "margin": "sm"
                                 }
                             ],
@@ -288,86 +266,6 @@ def get_links_menu_message(user_message: str = "", class_context=None, db=None) 
                         }
                     ],
                     "paddingAll": "0px"
-                },
-                {
-                    "type": "separator",
-                    "margin": "xl"
-                },
-                {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "📖 เฉลยวิชา",
-                            "weight": "bold",
-                            "size": "lg",
-                            "color": "#1A1A1A"
-                        },
-                        {
-                            "type": "box",
-                            "layout": "horizontal",
-                            "contents": [
-                                {
-                                    "type": "button",
-                                    "action": {
-                                        "type": "uri" if allows_solution_links else "message",
-                                        "label": "🧬 ชีววิทยา",
-                                        **({"uri": Bio_LINK} if allows_solution_links else {"text": "ชีวะ"})
-                                    },
-                                    "style": "primary",
-                                    "color": "#10B981",
-                                    "height": "sm",
-                                    "flex": 1
-                                },
-                                {
-                                    "type": "button",
-                                    "action": {
-                                        "type": "uri" if allows_solution_links else "message",
-                                        "label": "⚛️ ฟิสิกส์",
-                                        **({"uri": Physic_LINK} if allows_solution_links else {"text": "ฟิสิกส์"})
-                                    },
-                                    "style": "primary",
-                                    "color": "#8B5CF6",
-                                    "height": "sm",
-                                    "flex": 1,
-                                    "margin": "sm"
-                                }
-                            ],
-                            "margin": "md"
-                        }
-                    ],
-                    "margin": "xl"
-                },
-                {
-                    "type": "separator",
-                    "margin": "xl"
-                },
-                {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "🎵 ความบันเทิง",
-                            "weight": "bold",
-                            "size": "lg",
-                            "color": "#1A1A1A"
-                        },
-                        {
-                            "type": "button",
-                            "action": {
-                                "type": "message",
-                                "label": "ค้นหาเพลงใน YouTube",
-                                "text": "เปิดเพลง"
-                            },
-                            "style": "primary",
-                            "color": "#EC4899",
-                            "height": "sm",
-                            "margin": "md"
-                        }
-                    ],
-                    "margin": "xl"
                 }
             ],
             "paddingAll": "20px"
