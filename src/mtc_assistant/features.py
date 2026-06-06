@@ -18,7 +18,7 @@ from linebot.v3.messaging import TextMessage, ImageMessage, VideoMessage
 # Import from config
 from mtc_assistant.config import (
     logger, LOCAL_TZ, SCHEDULE, EXAM_DATES, MESSAGES,
-    Bio_LINK, Physic_LINK, LINE_SAFE_TRUNCATE,
+    LINE_SAFE_TRUNCATE,
     MTC67_VIDEO_URL, MTC67_PREVIEW_IMAGE_URL,
 )
 from mtc_assistant.firestore_paths import class_collection, root_collection
@@ -243,13 +243,6 @@ def get_mtc67_video_message(user_message: str = "", class_context=None):
         preview_image_url=MTC67_PREVIEW_IMAGE_URL,
     )
 
-def _allows_legacy_solution_links(class_context) -> bool:
-    return (
-        not class_context
-        or getattr(class_context, "is_legacy_fallback", False)
-        or getattr(class_context, "class_id", None) == "mtc12"
-    )
-
 def _get_learning_resource_message(subject_id: str, unavailable_label: str, class_context=None) -> TextMessage:
     resources = get_learning_resources(
         db,
@@ -269,19 +262,11 @@ def _get_learning_resource_message(subject_id: str, unavailable_label: str, clas
 
 def get_bio_link_message(user_message: str = "", class_context=None) -> TextMessage:
     """ส่งลิงก์เฉลยชีวะ"""
-    if not _allows_legacy_solution_links(class_context):
-        return _get_learning_resource_message("biology", "ชีวะ", class_context)
-    return TextMessage(
-        text=f"เฉลยชีววิทยาอยู่ที่นี่\n{Bio_LINK}"
-    )
+    return _get_learning_resource_message("biology", "ชีวะ", class_context)
 
 def get_physic_link_message(user_message: str = "", class_context=None) -> TextMessage:
     """ส่งลิงก์เฉลยฟิสิกส์"""
-    if not _allows_legacy_solution_links(class_context):
-        return _get_learning_resource_message("physics", "ฟิสิกส์", class_context)
-    return TextMessage(
-        text=f"เฉลยฟิสิกส์อยู่ที่นี่\n{Physic_LINK}"
-    )
+    return _get_learning_resource_message("physics", "ฟิสิกส์", class_context)
 
 def _get_help_text_fallback() -> str:
     return (

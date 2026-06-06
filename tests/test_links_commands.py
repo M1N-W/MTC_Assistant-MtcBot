@@ -369,7 +369,7 @@ class LinksCommandTest(unittest.TestCase):
         self.assertNotIn("MTC67", links_text)
         self.assertNotIn("admin", links_text.lower())
 
-    def test_no_context_commands_keep_mtc12_fallback(self):
+    def test_no_context_solution_commands_return_safe_unavailable_response(self):
         worksheet_message = handle_standard_command("งาน", "งาน")
         school_message = handle_standard_command("เว็บโรงเรียน", "เว็บโรงเรียน")
         bio_message = handle_standard_command("ชีวะ", "ชีวะ")
@@ -377,26 +377,32 @@ class LinksCommandTest(unittest.TestCase):
 
         self.assertIn(WORKSHEET_LINK, worksheet_message.text)
         self.assertIn(SCHOOL_LINK, school_message.text)
-        self.assertIn(Bio_LINK, bio_message.text)
-        self.assertIn(Physic_LINK, physic_message.text)
+        self.assertIn("ยังไม่ได้ตั้งค่า", bio_message.text)
+        self.assertIn("ยังไม่ได้ตั้งค่า", physic_message.text)
+        self.assertNotIn(Bio_LINK, bio_message.text)
+        self.assertNotIn(Physic_LINK, physic_message.text)
 
-    def test_explicit_mtc12_context_keeps_legacy_solution_links(self):
+    def test_explicit_mtc12_context_does_not_return_legacy_solution_links(self):
         context = ClassContext("mtc12", "user-a")
 
         bio_message = handle_standard_command("ชีวะ", "ชีวะ", context)
         physic_message = handle_standard_command("ฟิสิกส์", "ฟิสิกส์", context)
 
-        self.assertIn(Bio_LINK, bio_message.text)
-        self.assertIn(Physic_LINK, physic_message.text)
+        self.assertIn("ยังไม่ได้ตั้งค่า", bio_message.text)
+        self.assertIn("ยังไม่ได้ตั้งค่า", physic_message.text)
+        self.assertNotIn(Bio_LINK, bio_message.text)
+        self.assertNotIn(Physic_LINK, physic_message.text)
 
-    def test_legacy_fallback_context_keeps_legacy_solution_links(self):
+    def test_legacy_fallback_context_does_not_return_legacy_solution_links(self):
         context = ClassContext("mtc12", "user-a", is_legacy_fallback=True)
 
         bio_message = handle_standard_command("ชีวะ", "ชีวะ", context)
         physic_message = handle_standard_command("ฟิสิกส์", "ฟิสิกส์", context)
 
-        self.assertIn(Bio_LINK, bio_message.text)
-        self.assertIn(Physic_LINK, physic_message.text)
+        self.assertIn("ยังไม่ได้ตั้งค่า", bio_message.text)
+        self.assertIn("ยังไม่ได้ตั้งค่า", physic_message.text)
+        self.assertNotIn(Bio_LINK, bio_message.text)
+        self.assertNotIn(Physic_LINK, physic_message.text)
 
     def test_explicit_mtc12_links_menu_does_not_advertise_legacy_solution_links(self):
         context = ClassContext("mtc12", "user-a")
