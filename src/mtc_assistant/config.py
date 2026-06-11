@@ -56,6 +56,8 @@ CHANNEL_SECRET = os.environ.get('CHANNEL_SECRET')
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 YOUTUBE_API_KEY = os.environ.get('YOUTUBE_API_KEY')
 FIREBASE_KEY_PATH = "firebase_key.json"
+MTC67_VIDEO_URL = os.environ.get("MTC67_VIDEO_URL", "")
+MTC67_PREVIEW_IMAGE_URL = os.environ.get("MTC67_PREVIEW_IMAGE_URL", "")
 
 # Safe PORT parsing
 try:
