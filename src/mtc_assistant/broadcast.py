@@ -7,21 +7,12 @@ MTC Assistant - Broadcast Module
 import datetime  # FIXED: Added missing import for broadcast_homework_reminder
 import time
 
-try:  # pragma: no cover
-    from linebot.v3.messaging import (
-        ApiClient, MessagingApi, Configuration,
-        TextMessage, PushMessageRequest
-    )
-except Exception:  # fallback for static analysis or missing package
-    # Provide minimal stubs so linters/type-checkers won't fail.
-    ApiClient = object  # type: ignore
-    MessagingApi = object  # type: ignore
-    Configuration = object  # type: ignore
-    TextMessage = object  # type: ignore
-    PushMessageRequest = object  # type: ignore
+from linebot.v3.messaging import (
+    ApiClient, MessagingApi, Configuration,
+    TextMessage, PushMessageRequest
+)
 from mtc_assistant.config import logger
 from firebase_admin import firestore
-from mtc_assistant.firestore_paths import class_collection
 
 # Global variables with memory management
 db = None
@@ -58,7 +49,7 @@ def set_line_api(config: Configuration):
 # USER TRACKING
 # ============================================================================
 
-def track_user(user_id: str, display_name: str = "Unknown", class_context=None):
+def track_user(user_id: str, display_name: str = "Unknown"):
     """
     บันทึก user_id เข้า Firebase เพื่อส่ง broadcast
     เรียกฟังก์ชันนี้ทุกครั้งที่มีคนส่งข้อความ
@@ -84,31 +75,12 @@ def track_user(user_id: str, display_name: str = "Unknown", class_context=None):
         # Clean cache if it gets too large
         cleanup_user_cache()
 
-        active_class_id = getattr(class_context, "class_id", None)
-        root_payload = {
+        db.collection('users').document(user_id).set({
             'user_id': user_id,
             'display_name': display_name,
             'last_seen': firestore.SERVER_TIMESTAMP,
             'is_active': True,
-        }
-        if active_class_id:
-            root_payload.update({
-                'active_class_id': active_class_id,
-                'class_ids': firestore.ArrayUnion([active_class_id]),
-                'status': 'active',
-                'last_seen_at': firestore.SERVER_TIMESTAMP,
-            })
-
-        db.collection('users').document(user_id).set(root_payload, merge=True)
-
-        if active_class_id and not getattr(class_context, "is_legacy_fallback", False):
-            class_collection(db, active_class_id, "users").document(user_id).set({
-                'user_id': user_id,
-                'display_name': display_name,
-                'role': getattr(class_context, "role", "student"),
-                'status': 'active',
-                'last_seen_at': firestore.SERVER_TIMESTAMP,
-            }, merge=True)
+        }, merge=True)
 
         if is_new_user:
             db.collection('meta').document('stats').set(
@@ -239,9 +211,9 @@ def broadcast_message(message_text: str) -> dict:
         if i > 0 and i % 10 == 0:
             time.sleep(0.2)
     
-    result_message = f"✅ ผลการส่งประกาศ\n\nส่งสำเร็จ: {sent_count} คน"
+    result_message = f"🎯 บอสครับ! กระจายข่าวสำเร็จ {sent_count} เป้าหมาย"
     if failed_count > 0:
-        result_message += f"\nส่งไม่สำเร็จ: {failed_count} คน"
+        result_message += f"\n⚠️ แต่มี {failed_count} คนที่สัญญาณขาดหายไปฮะ"
     
     return {
         "success": sent_count > 0,
@@ -274,7 +246,7 @@ def broadcast_homework_reminder():
         if hw_list:
             message = (
                 "ประกาศจากระบบหัวหน้าห้อง! 📢✨\n\n"
-                "พรุ่งนี้พวกเรามีการบ้านต้องส่งน้า:\n" +
+                "พรุ่งนี้พวกเรามีภารกิจ (การบ้าน) ต้องส่งน้า:\n" +
                 "\n".join(hw_list) +
                 "\n\nใครยังไม่เริ่ม ปั่นด่วนๆ เลยนะคืนนี้ สู้ๆ! ✌️🔥"
             )
@@ -325,7 +297,7 @@ def save_broadcast_history(admin_id: str, message: str, result: dict):
 def get_broadcast_stats() -> str:
     """ดูสถิติการส่ง broadcast"""
     if not db:
-        return "ยังไม่สามารถดึงรายงานการส่งประกาศได้\nสถานะ: ฐานข้อมูลยังไม่พร้อม"
+        return "บอสครับ! แฟ้มสถิติถูกล็อค ดึงข้อมูลไม่ได้ฮะ 🕵️‍♂️"
     
     try:
         # นับจำนวนครั้งที่ส่ง
@@ -361,22 +333,22 @@ def get_broadcast_stats() -> str:
         history_text = (
             "\n".join(recent_broadcasts[:5])
             if recent_broadcasts
-            else "ยังไม่มีประวัติการส่งประกาศ"
+            else "ยังไม่มีประวัติการทำภารกิจครับผม 🤫"
         )
 
         stats = (
-            f"รายงานการส่งประกาศ\n\n"
-            f"จำนวนผู้ใช้: {user_count} คน\n"
-            f"จำนวนครั้งที่ส่งประกาศ: {total_broadcasts} ครั้ง\n"
+            f"📁 *TOP SECRET: Broadcast Report* 📁\n\n"
+            f"👥 เป้าหมายทั้งหมด: {user_count} คน\n"
+            f"📢 ภารกิจกระจายข่าว: {total_broadcasts} ครั้ง\n"
             f"✅ ส่งข้อความแล้ว: {total_sent} ข้อความ\n\n"
-            f"ประวัติการส่งล่าสุด:\n"
+            f"📝 *ประวัติภารกิจล่าสุด:*\n"
             f"{history_text}"
         )
         
         return stats
     except Exception as e:
         logger.error(f"Error getting broadcast stats: {e}")
-        return f"ดึงรายงานการส่งประกาศไม่สำเร็จ\nสาเหตุ: {str(e)}"
+        return f"ระบบฐานข้อมูลรวนนิดหน่อยฮะบอส 🚧 ({str(e)})"
 
 # ============================================================================
 # EXPORTS
