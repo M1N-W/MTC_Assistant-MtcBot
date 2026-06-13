@@ -452,7 +452,7 @@ export function DashboardShell() {
     },
     announcements: {
       title: "ประกาศ",
-      description: "เขียน ตรวจสอบ และส่งประกาศถึงนักเรียนทั้งห้อง",
+      description: "เขียน ตรวจสอบ และส่งประกาศถึงผู้ใช้ทั้งหมดในระบบ",
     },
     resources: {
       title: "ลิงก์และสื่อ",
@@ -580,7 +580,7 @@ export function DashboardShell() {
                 </Panel>
                 <Panel title="งานที่ใช้บ่อย" icon={Sparkles}>
                   <div className="quick-actions">
-                    <button type="button" onClick={() => navigateTo("announcements")}><MessageSquareText size={18} />ส่งประกาศถึงนักเรียน</button>
+                    <button type="button" onClick={() => navigateTo("announcements")}><MessageSquareText size={18} />ส่งประกาศถึงผู้ใช้ทั้งหมด</button>
                     <button type="button" onClick={() => navigateTo("resources")}><BellRing size={18} />จัดการลิงก์และสื่อ</button>
                     <button type="button" onClick={() => navigateTo("members")}><Users size={18} />ค้นหาสมาชิก</button>
                   </div>
@@ -607,7 +607,7 @@ export function DashboardShell() {
 
           {activeSection === "announcements" ? (
             <div className="mt-6 grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
-              <Panel title="ส่งประกาศถึงนักเรียน" icon={MessageSquareText}>
+              <Panel title="ส่งประกาศถึงผู้ใช้ทั้งหมด" icon={MessageSquareText}>
                 <form onSubmit={submitBroadcast} className="grid gap-3">
                   <label className="field-label" htmlFor="broadcast">ข้อความประกาศ</label>
                   <textarea
@@ -620,10 +620,10 @@ export function DashboardShell() {
                     }}
                     className="mission-input min-h-36 resize-y p-4 leading-6"
                     maxLength={1000}
-                    placeholder="พิมพ์ข้อความที่ต้องการส่งถึงนักเรียนทั้งห้อง"
+                    placeholder="พิมพ์ข้อความที่ต้องการส่งถึงผู้ใช้ทั้งหมด"
                     required
                   />
-                  <p className="text-xs text-slate-500">ส่งถึงสมาชิกทั้งห้องผ่าน LINE โปรดตรวจสอบข้อความก่อนยืนยัน</p>
+                  <p className="text-xs text-slate-500">ข้อความนี้จะถูกส่งให้ผู้ใช้ทั้งหมดที่ลงทะเบียนในระบบผ่าน LINE โปรดตรวจสอบก่อนยืนยัน</p>
                   {!broadcastPreview ? (
                     <button className="primary-button" disabled={broadcastMutation.isPending}>
                       <Search size={17} />
@@ -632,6 +632,9 @@ export function DashboardShell() {
                   ) : (
                     <div className="announcement-preview">
                       <p className="text-xs font-semibold text-slate-500">ตัวอย่างประกาศ</p>
+                      <p className="mt-2 text-sm font-semibold text-amber-800">
+                        ผู้รับ: ผู้ใช้ทั้งหมดที่ลงทะเบียนในระบบ
+                      </p>
                       <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-emerald-950">{broadcastMessage.trim()}</p>
                       <div className="mt-4 flex flex-wrap gap-2">
                         <button type="button" className="primary-button" onClick={confirmBroadcast} disabled={broadcastMutation.isPending}>
@@ -644,7 +647,7 @@ export function DashboardShell() {
                       </div>
                     </div>
                   )}
-                  {broadcastMutation.isSuccess ? <StatusNotice tone="success" title="ส่งประกาศเรียบร้อยแล้ว" text="ระบบกำลังส่งข้อความถึงนักเรียนทั้งห้อง" /> : null}
+                  {broadcastMutation.isSuccess ? <StatusNotice tone="success" title="ส่งประกาศเรียบร้อยแล้ว" text="ระบบกำลังส่งข้อความถึงผู้ใช้ทั้งหมดในระบบ" /> : null}
                   {broadcastMutation.isError ? <StatusNotice tone="danger" title="ไม่สามารถส่งประกาศได้" text="ข้อความที่กรอกยังอยู่ กรุณาลองอีกครั้ง" error={broadcastMutation.error as Error} /> : null}
                 </form>
               </Panel>
