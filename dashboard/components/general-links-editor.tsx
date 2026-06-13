@@ -26,10 +26,10 @@ type ApiErrorPayload = {
 const DEFAULT_CLASS_ID = "mtc13";
 const DEFAULT_TERM_ID = "2569-t1";
 const LINK_FIELDS: { key: LinkKey; label: string; helper: string }[] = [
-  { key: "worksheet_url", label: "Worksheet URL", helper: "Used by งาน / ใบงาน." },
-  { key: "school_url", label: "School URL", helper: "Used by เว็บโรงเรียน." },
-  { key: "grade_url", label: "Grade URL", helper: "Used by เกรด." },
-  { key: "absence_form_url", label: "Absence form URL", helper: "Used by ลา." },
+  { key: "worksheet_url", label: "ลิงก์ใบงาน", helper: "ใช้กับคำสั่ง งาน และ ใบงาน" },
+  { key: "school_url", label: "เว็บไซต์โรงเรียน", helper: "ใช้กับคำสั่ง เว็บโรงเรียน" },
+  { key: "grade_url", label: "ลิงก์ตรวจผลการเรียน", helper: "ใช้กับคำสั่ง เกรด" },
+  { key: "absence_form_url", label: "แบบฟอร์มลา", helper: "ใช้กับคำสั่ง ลา" },
 ];
 
 const EMPTY_LINKS: LinksPayload = {
@@ -58,7 +58,7 @@ async function readLinks(classId: string, termId: string) {
   const response = await fetch(linksPath(classId, termId), { cache: "no-store" });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(getApiError(payload, "Could not load links."));
+    throw new Error(getApiError(payload, "ไม่สามารถโหลดลิงก์ได้ กรุณาลองอีกครั้ง"));
   }
   return (payload as { data: LinksResponse }).data;
 }
@@ -71,22 +71,22 @@ async function writeLinks(classId: string, termId: string, links: LinksPayload) 
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(getApiError(payload, "Could not save links."));
+    throw new Error(getApiError(payload, "ไม่สามารถบันทึกได้ ข้อมูลที่กรอกยังอยู่ กรุณาลองอีกครั้ง"));
   }
   return (payload as { data: LinksResponse }).data;
 }
 
 function validateClientLinks(classId: string, termId: string, links: LinksPayload) {
   if (!classId.trim()) {
-    return "Class ID is required.";
+    return "กรุณาระบุห้องเรียน";
   }
   if (!termId.trim()) {
-    return "Term ID is required.";
+    return "กรุณาระบุภาคเรียน";
   }
   for (const field of LINK_FIELDS) {
     const value = links[field.key].trim();
     if (value && !value.startsWith("https://")) {
-      return `${field.label} must be blank or start with https://.`;
+      return `${field.label} ต้องเว้นว่างหรือขึ้นต้นด้วย https://`;
     }
   }
   return "";
@@ -111,7 +111,7 @@ export function GeneralLinksEditor() {
       setLinks(data.links);
       setLoaded(data);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Could not load links.");
+      setError(loadError instanceof Error ? loadError.message : "ไม่สามารถโหลดลิงก์ได้ กรุณาลองอีกครั้ง");
     } finally {
       setLoading(false);
     }
@@ -135,9 +135,9 @@ export function GeneralLinksEditor() {
       const data = await writeLinks(classId.trim(), termId.trim(), trimmedLinks);
       setLinks(data.links);
       setLoaded(data);
-      setSuccess("Saved general links.");
+      setSuccess("บันทึกลิงก์เรียบร้อยแล้ว");
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Could not save links.");
+      setError(saveError instanceof Error ? saveError.message : "ไม่สามารถบันทึกได้ ข้อมูลที่กรอกยังอยู่ กรุณาลองอีกครั้ง");
     } finally {
       setSaving(false);
     }
@@ -156,13 +156,13 @@ export function GeneralLinksEditor() {
             <LinkIcon size={18} strokeWidth={2.2} />
           </span>
           <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold text-emerald-950">General Links</h2>
-            <p className="mt-1 text-sm text-slate-600">Edit class and term links used by LINE commands.</p>
+            <h2 className="truncate text-base font-semibold text-emerald-950">ลิงก์ที่ใช้ในห้องเรียน</h2>
+            <p className="mt-1 text-sm text-slate-600">จัดการลิงก์ที่นักเรียนเปิดผ่านคำสั่งใน LINE</p>
           </div>
         </div>
         {loaded?.updated_at ? (
           <span className="font-mono text-xs font-semibold text-slate-500">
-            Updated {new Date(loaded.updated_at).toLocaleString()}
+            อัปเดต {new Date(loaded.updated_at).toLocaleString("th-TH")}
           </span>
         ) : null}
       </div>
@@ -170,7 +170,7 @@ export function GeneralLinksEditor() {
       <form onSubmit={saveLinks} className="grid gap-4">
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
           <label className="grid gap-2">
-            <span className="field-label">Class ID</span>
+            <span className="field-label">ห้องเรียน</span>
             <input
               value={classId}
               onChange={(event) => setClassId(event.target.value)}
@@ -179,7 +179,7 @@ export function GeneralLinksEditor() {
             />
           </label>
           <label className="grid gap-2">
-            <span className="field-label">Term ID</span>
+            <span className="field-label">ภาคเรียน</span>
             <input
               value={termId}
               onChange={(event) => setTermId(event.target.value)}
@@ -190,11 +190,11 @@ export function GeneralLinksEditor() {
           <div className="flex items-end gap-2">
             <button type="button" onClick={loadCurrentLinks} disabled={loading || saving} className="secondary-button h-12">
               <Search size={17} />
-              {loading ? "Loading..." : "Load"}
+              {loading ? "กำลังโหลด..." : "โหลดข้อมูล"}
             </button>
             <button type="button" onClick={loadCurrentLinks} disabled={loading || saving} className="mini-button h-12">
               <RefreshCcw size={16} />
-              Reset
+              โหลดใหม่
             </button>
           </div>
         </div>
@@ -222,7 +222,7 @@ export function GeneralLinksEditor() {
           </div>
           <button type="submit" disabled={saving || loading} className="primary-button">
             <Save size={17} />
-            {saving ? "Saving..." : "Save links"}
+            {saving ? "กำลังบันทึก..." : "บันทึกลิงก์"}
           </button>
         </div>
       </form>

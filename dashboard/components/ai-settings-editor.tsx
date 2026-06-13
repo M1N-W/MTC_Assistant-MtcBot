@@ -57,7 +57,7 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message = (payload as { error?: { message?: string } }).error?.message;
-    throw new Error(message || "AI settings request failed.");
+    throw new Error(message || "ไม่สามารถโหลดการตั้งค่า AI ได้ กรุณาลองอีกครั้ง");
   }
   return (payload as { data: T }).data;
 }
@@ -104,7 +104,7 @@ export function AISettingsEditor() {
       setRequestBudget(loaded.settings.daily_fallback_request_budget ?? 20);
       setTokenBudget(loaded.settings.daily_fallback_token_budget ?? 30000);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Could not load AI settings.");
+      setError(loadError instanceof Error ? loadError.message : "ไม่สามารถโหลดการตั้งค่า AI ได้ กรุณาลองอีกครั้ง");
     } finally {
       setBusy("");
     }
@@ -112,7 +112,7 @@ export function AISettingsEditor() {
 
   async function validateKey() {
     if (!apiKey.trim()) {
-      setError("Enter a new API key before testing.");
+      setError("กรุณากรอก API key ก่อนทดสอบการเชื่อมต่อ");
       return;
     }
     setBusy("validate");
@@ -126,9 +126,9 @@ export function AISettingsEditor() {
           body: JSON.stringify({ api_key: apiKey.trim(), model }),
         },
       );
-      setSuccess("Connection validated. The key has not been saved yet.");
+      setSuccess("เชื่อมต่อสำเร็จ API key นี้ยังไม่ได้ถูกบันทึก");
     } catch (validateError) {
-      setError(validateError instanceof Error ? validateError.message : "Validation failed.");
+      setError(validateError instanceof Error ? validateError.message : "ไม่สามารถทดสอบการเชื่อมต่อได้ กรุณาลองอีกครั้ง");
     } finally {
       setBusy("");
     }
@@ -137,7 +137,7 @@ export function AISettingsEditor() {
   async function saveCredential(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!apiKey.trim()) {
-      setError("Enter a new API key to save or replace this credential.");
+      setError("กรุณากรอก API key ใหม่ก่อนบันทึก");
       return;
     }
     setBusy("save");
@@ -152,17 +152,17 @@ export function AISettingsEditor() {
         },
       );
       setApiKey("");
-      setSuccess("Credential encrypted and saved. The full key cannot be displayed again.");
+      setSuccess("บันทึก API key แบบเข้ารหัสแล้ว ระบบจะไม่แสดง key ฉบับเต็มอีก");
       await loadCredentials();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Could not save credential.");
+      setError(saveError instanceof Error ? saveError.message : "ไม่สามารถบันทึกได้ ข้อมูลที่กรอกยังอยู่ กรุณาลองอีกครั้ง");
     } finally {
       setBusy("");
     }
   }
 
   async function deleteCredential() {
-    if (!selected?.configured || !window.confirm(`Delete the ${selected.display_name} credential?`)) {
+    if (!selected?.configured || !window.confirm(`ลบ API key ของ ${selected.display_name} หรือไม่`)) {
       return;
     }
     setBusy("delete");
@@ -174,10 +174,10 @@ export function AISettingsEditor() {
         { method: "DELETE" },
       );
       setApiKey("");
-      setSuccess("Credential deleted. System fallback remains governed by class policy.");
+      setSuccess("ลบ API key เรียบร้อยแล้ว");
       await loadCredentials();
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Could not delete credential.");
+      setError(deleteError instanceof Error ? deleteError.message : "ไม่สามารถลบ API key ได้ กรุณาลองอีกครั้ง");
     } finally {
       setBusy("");
     }
@@ -197,9 +197,9 @@ export function AISettingsEditor() {
         },
       );
       await loadCredentials();
-      setSuccess("Credential disabled. It will not be selected for new requests.");
+      setSuccess("ปิดการใช้งาน API key นี้แล้ว");
     } catch (disableError) {
-      setError(disableError instanceof Error ? disableError.message : "Could not disable credential.");
+      setError(disableError instanceof Error ? disableError.message : "ไม่สามารถปิดการใช้งานได้ กรุณาลองอีกครั้ง");
     } finally {
       setBusy("");
     }
@@ -224,9 +224,9 @@ export function AISettingsEditor() {
         },
       );
       setData((current) => current ? { ...current, settings } : current);
-      setSuccess("Class AI policy saved.");
+      setSuccess("บันทึกการตั้งค่า AI เรียบร้อยแล้ว");
     } catch (settingsError) {
-      setError(settingsError instanceof Error ? settingsError.message : "Could not save policy.");
+      setError(settingsError instanceof Error ? settingsError.message : "ไม่สามารถบันทึกได้ กรุณาลองอีกครั้ง");
     } finally {
       setBusy("");
     }
@@ -241,21 +241,21 @@ export function AISettingsEditor() {
             <p className="font-mono text-xs font-bold uppercase tracking-[0.14em] text-[#F4B942]">
               Classroom OS
             </p>
-            <h2 className="mt-1 text-xl font-semibold text-[#12372A]">Class AI credentials</h2>
+            <h2 className="mt-1 text-xl font-semibold text-[#12372A]">การเชื่อมต่อ AI ของห้องเรียน</h2>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
-              Super-admin managed class provider keys. Keys are encrypted by Flask and are never returned after submission.
+              สำหรับผู้ดูแลระบบ ใช้เชื่อมต่อ Gemini หรือผู้ให้บริการ AI ที่ห้องเรียนเลือก
             </p>
           </div>
         </div>
         <div className="flex gap-2">
           <input
-            aria-label="Class ID"
+            aria-label="ห้องเรียน"
             className="field-input w-32"
             value={classId}
             onChange={(event) => setClassId(event.target.value)}
           />
           <button className="secondary-button" type="button" onClick={loadCredentials} disabled={Boolean(busy)}>
-            <RefreshCcw size={16} /> Load
+            <RefreshCcw size={16} /> โหลดข้อมูล
           </button>
         </div>
       </div>
@@ -265,14 +265,14 @@ export function AISettingsEditor() {
 
       {!data ? (
         <div className="mt-5 rounded-lg border border-dashed border-[#12372A]/25 bg-white/45 p-6 text-center text-sm text-slate-600">
-          Load a class to inspect credentials and fallback policy.
+          เลือกห้องเรียนแล้วกดโหลดข้อมูลเพื่อดูสถานะการเชื่อมต่อ AI
         </div>
       ) : (
         <div className="mt-5 grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
           <form onSubmit={saveCredential} className="rounded-lg border border-[#12372A]/15 bg-white/70 p-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="grid gap-2">
-                <span className="field-label">Provider</span>
+                <span className="field-label">ผู้ให้บริการ AI</span>
                 <select
                   className="field-input"
                   value={providerId}
@@ -288,7 +288,7 @@ export function AISettingsEditor() {
                 </select>
               </label>
               <label className="grid gap-2">
-                <span className="field-label">Allowed model</span>
+                <span className="field-label">โมเดลที่ใช้งาน</span>
                 <select className="field-input" value={model} onChange={(event) => setModel(event.target.value)}>
                   {(selected?.allowed_models || []).map((allowedModel) => <option key={allowedModel}>{allowedModel}</option>)}
                 </select>
@@ -298,60 +298,65 @@ export function AISettingsEditor() {
             <div className="mt-4 rounded-md border border-[#F4B942]/35 bg-[#FFF8E7] p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="flex items-center gap-2 text-sm font-semibold text-[#12372A]">
-                  <ShieldCheck size={17} /> {selected?.masked_key || "No key configured"}
+                  <ShieldCheck size={17} /> {selected?.masked_key || "ยังไม่ได้ตั้งค่า API key"}
                 </span>
                 <span className="rounded-full bg-white px-2.5 py-1 font-mono text-[11px] font-bold uppercase text-[#12372A]">
                   {selected?.status || "not_configured"}
                 </span>
               </div>
-              {selected?.last_error_type ? <p className="mt-2 text-xs text-rose-700">Last safe error: {selected.last_error_type}</p> : null}
+              {selected?.last_error_type ? (
+                <details className="mt-2 text-xs text-rose-700">
+                  <summary className="cursor-pointer font-semibold">รายละเอียดทางเทคนิค</summary>
+                  <p className="mt-1 font-mono">{selected.last_error_type}</p>
+                </details>
+              ) : null}
             </div>
 
             <label className="mt-4 grid gap-2">
-              <span className="field-label">New API key</span>
+              <span className="field-label">API key ใหม่</span>
               <input
                 className="field-input font-mono"
                 type="password"
                 autoComplete="new-password"
                 value={apiKey}
                 onChange={(event) => setApiKey(event.target.value)}
-                placeholder={selected?.configured ? "Enter a replacement key" : "Enter provider API key"}
+                placeholder={selected?.configured ? "กรอก key ใหม่เพื่อแทนที่" : "กรอก API key"}
               />
-              <span className="text-xs text-slate-500">No reveal action. Replacing a key requires entering it again.</span>
+              <span className="text-xs text-slate-500">ระบบจะไม่แสดง key ฉบับเต็มหลังบันทึก</span>
             </label>
 
             <div className="mt-4 flex flex-wrap gap-2">
               <button className="secondary-button" type="button" onClick={validateKey} disabled={Boolean(busy)}>
-                {busy === "validate" ? <LoaderCircle className="animate-spin" size={16} /> : <CheckCircle2 size={16} />} Test connection
+                {busy === "validate" ? <LoaderCircle className="animate-spin" size={16} /> : <CheckCircle2 size={16} />} ทดสอบการเชื่อมต่อ
               </button>
               <button className="primary-button" type="submit" disabled={Boolean(busy)}>
-                <Save size={16} /> {selected?.configured ? "Replace key" : "Save key"}
+                <Save size={16} /> {selected?.configured ? "เปลี่ยน API key" : "บันทึก API key"}
               </button>
               <button className="secondary-button" type="button" onClick={disableCredential} disabled={Boolean(busy) || !selected?.configured || selected.status === "disabled"}>
-                <ShieldCheck size={16} /> Disable
+                <ShieldCheck size={16} /> ปิดใช้งาน
               </button>
               <button className="danger-button" type="button" onClick={deleteCredential} disabled={Boolean(busy) || !selected?.configured}>
-                <Trash2 size={16} /> Delete
+                <Trash2 size={16} /> ลบ
               </button>
             </div>
           </form>
 
           <div className="rounded-lg border border-[#12372A]/15 bg-white/70 p-4">
-            <h3 className="font-semibold text-[#12372A]">Fallback and usage budget</h3>
+            <h3 className="font-semibold text-[#12372A]">การใช้งานสำรองและขีดจำกัด</h3>
             <label className="mt-4 flex items-center justify-between gap-4 rounded-md bg-[#FFF8E7] p-3 text-sm font-semibold text-[#12372A]">
-              System fallback
+              อนุญาตให้ใช้ระบบ AI สำรอง
               <input type="checkbox" checked={fallbackEnabled} onChange={(event) => setFallbackEnabled(event.target.checked)} />
             </label>
             <label className="mt-4 grid gap-2">
-              <span className="field-label">Daily fallback requests</span>
+              <span className="field-label">จำนวนคำขอสำรองต่อวัน</span>
               <input className="field-input" type="number" min={0} max={1000} value={requestBudget} onChange={(event) => setRequestBudget(Number(event.target.value))} />
             </label>
             <label className="mt-4 grid gap-2">
-              <span className="field-label">Daily fallback tokens</span>
+              <span className="field-label">จำนวน token สำรองต่อวัน</span>
               <input className="field-input" type="number" min={0} max={10000000} value={tokenBudget} onChange={(event) => setTokenBudget(Number(event.target.value))} />
             </label>
             <button className="primary-button mt-4 w-full" type="button" onClick={saveSettings} disabled={Boolean(busy)}>
-              <Save size={16} /> Save class policy
+              <Save size={16} /> บันทึกการตั้งค่า
             </button>
           </div>
         </div>

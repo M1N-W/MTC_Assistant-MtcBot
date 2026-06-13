@@ -19,7 +19,11 @@ export default function LoginPage() {
     });
     setLoading(false);
     if (!response.ok) {
-      setError(response.status === 503 ? "Dashboard auth is not configured." : "Password is incorrect.");
+      setError(
+        response.status === 503
+          ? "ระบบเข้าสู่ระบบยังไม่พร้อมใช้งาน กรุณาติดต่อผู้ดูแลระบบ"
+          : "รหัสผ่านไม่ถูกต้อง กรุณาลองอีกครั้ง",
+      );
       return;
     }
     window.location.href = "/";
@@ -39,21 +43,21 @@ export default function LoginPage() {
             <div className="login-mark">
               <Bot size={26} strokeWidth={2.5} />
             </div>
-            <p className="mt-6 font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-100/76">
-              [ SYSTEM AUTHENTICATION ]
-            </p>
-            <h1 className="mt-3 text-2xl font-semibold tracking-[-0.01em] text-white">
+            <p className="mt-6 text-sm font-semibold text-emerald-700">
               MTC Assistant
+            </p>
+            <h1 className="mt-2 text-2xl font-semibold tracking-[-0.01em] text-emerald-950">
+              เข้าสู่ระบบ MTC Dashboard
             </h1>
-            <p className="mt-2 text-sm leading-6 text-cyan-50/62">
-              Secure access to the NSC operations console.
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              จัดการข้อมูลและการใช้งานของห้องเรียน MTC Assistant
             </p>
           </div>
 
           <form onSubmit={submit} className="mt-8 grid gap-4">
             <label className="login-field-label" htmlFor="password">
               <LockKeyhole size={15} />
-              Dashboard password
+              รหัสผ่าน
             </label>
             <input
               className="sr-only"
@@ -79,7 +83,7 @@ export default function LoginPage() {
               </p>
             ) : null}
             <button type="submit" disabled={loading} className="primary-button h-12 justify-center">
-              {loading ? "Signing in..." : "Open dashboard"}
+              {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่แดชบอร์ด"}
               <ArrowRight size={17} />
             </button>
           </form>
