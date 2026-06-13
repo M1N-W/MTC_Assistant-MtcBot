@@ -32,3 +32,12 @@ def build_due_date_quick_reply() -> QuickReply:
         QuickReplyItem(action=MessageAction(label="สัปดาห์หน้า", text="สัปดาห์หน้า")),
         QuickReplyItem(action=MessageAction(label="ยกเลิก", text="ยกเลิกการบ้าน")),
     ])
+
+
+def build_unknown_message_quick_reply() -> QuickReply:
+    return QuickReply(items=[
+        QuickReplyItem(action=MessageAction(label="ถาม AI", text="ai")),
+        QuickReplyItem(action=MessageAction(label="ดูคำสั่ง", text="ช่วยเหลือ")),
+        QuickReplyItem(action=MessageAction(label="การบ้าน", text="การบ้าน")),
+        QuickReplyItem(action=MessageAction(label="ตารางเรียน", text="ตารางเรียน")),
+    ])

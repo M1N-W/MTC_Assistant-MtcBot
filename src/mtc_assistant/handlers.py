@@ -45,6 +45,12 @@ import mtc_assistant.features as features
 import mtc_assistant.broadcast as broadcast
 
 from mtc_assistant.admin_router import handle_admin_command
+from mtc_assistant.ai_entry_router import (
+    AIEntryKind,
+    UNKNOWN_MESSAGE_TEXT,
+    classify_ai_entry,
+)
+from mtc_assistant.ai_runtime import generate_ai_response
 from mtc_assistant.class_context import onboarding_prompt, resolve_line_class_context
 from mtc_assistant.command_router import handle_standard_command
 from mtc_assistant.constants import (
@@ -62,6 +68,7 @@ from mtc_assistant.homework_session import (
 )
 from mtc_assistant.rate_limit import is_rate_limited
 from mtc_assistant.invite_codes import is_join_command, join_class_with_invite
+from mtc_assistant.quick_replies import build_unknown_message_quick_reply
 
 # ============================================================================
 # LINE BOT CONFIGURATION
@@ -239,6 +246,25 @@ def handle_message(event):
         hw_text = get_homeworks_from_db(class_context)
         reply_to_line(event.reply_token, [TextMessage(text=hw_text)])
         return
+
+    explicit_ai = classify_ai_entry(user_message)
+    if explicit_ai.kind == AIEntryKind.EMPTY_AI:
+        reply_to_line(event.reply_token, [TextMessage(text=explicit_ai.response_text)])
+        return
+    if explicit_ai.kind == AIEntryKind.EXPLICIT_AI:
+        try:
+            ai_text = generate_ai_response(
+                explicit_ai.prompt,
+                class_id=class_context.class_id,
+                user_id=user_id,
+                db=features.db,
+                legacy_responder=get_gemini_response,
+            )
+        except Exception as e:
+            logger.exception("Explicit AI error: %s", e)
+            ai_text = "AI ของเรากำลังมึนตึ้บ ขอเวลาตั้งสติแป๊บนึงนะ 😵‍💫 ลองทักมาใหม่นะครับ!"
+        reply_to_line(event.reply_token, [TextMessage(text=ai_text)])
+        return
     
     # ========================================================================
     # ADMIN COMMANDS
@@ -339,16 +365,31 @@ def handle_message(event):
         reply_message = handle_standard_command(user_message, user_message_lower, class_context=class_context)
     
     # ========================================================================
-    # FALLBACK TO AI
+    # SMART AI ENTRY OR UNKNOWN HELPER
     # ========================================================================
     if not reply_message:
-        try:
-            ai_text = get_gemini_response(user_message)
-            reply_message = TextMessage(text=ai_text)
-        except Exception as e:
-            logger.exception(f"AI error: {e}")
+        ai_entry = classify_ai_entry(user_message)
+        if ai_entry.kind in (AIEntryKind.DATE_UTILITY, AIEntryKind.CLASSROOM_BRIDGE):
+            reply_message = TextMessage(text=ai_entry.response_text)
+        elif ai_entry.kind == AIEntryKind.NATURAL_AI:
+            try:
+                ai_text = generate_ai_response(
+                    ai_entry.prompt,
+                    class_id=class_context.class_id,
+                    user_id=user_id,
+                    db=features.db,
+                    legacy_responder=get_gemini_response,
+                )
+                reply_message = TextMessage(text=ai_text)
+            except Exception as e:
+                logger.exception("Natural AI error: %s", e)
+                reply_message = TextMessage(
+                    text="AI ของเรากำลังมึนตึ้บ ขอเวลาตั้งสติแป๊บนึงนะ 😵‍💫 ลองทักมาใหม่นะครับ!"
+                )
+        else:
             reply_message = TextMessage(
-                text="AI ของเรากำลังมึนตึ้บ ขอเวลาตั้งสติแป๊บนึงนะ 😵‍💫 ลองทักมาใหม่นะครับ!"
+                text=UNKNOWN_MESSAGE_TEXT,
+                quick_reply=build_unknown_message_quick_reply(),
             )
     
     # Send reply
