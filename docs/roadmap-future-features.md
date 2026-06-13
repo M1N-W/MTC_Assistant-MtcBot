@@ -1,5 +1,10 @@
 # 🚀 MTC Assistant - Feature Expansion Roadmap
 
+> **Legacy and non-authoritative:** This is an old feature-idea backlog. It
+> must not define current implementation order. Current roadmap authority is
+> [MTC OS Master Plan](mtc-os-master-plan.md). Architecture examples below may
+> no longer match the repository. Historical content is preserved.
+
 **Project:** MTC Assistant v21  
 **Current Features:** 20+  
 **Code Quality:** 9/10  

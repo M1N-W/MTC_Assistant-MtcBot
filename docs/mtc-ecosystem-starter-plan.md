@@ -1,5 +1,11 @@
 # MTC Ecosystem Starter Plan
 
+> **Superseded:** The active canonical product map is
+> [MTC Enviroment Overview](mtc-enviroment-overview.md). MTC Hub has been
+> removed from the active plan, and MTC the Game is a private-group web game,
+> not a community platform. This file is retained only as historical planning
+> context.
+
 ## Purpose
 
 This plan aligns MTC Assistant, MTC Dashboard, Math Talent, MTC Cipher, MTC The Game, and MTC Hub without creating scope creep before the 2026-06-09 MTC12/MTC13 code-family reveal event.

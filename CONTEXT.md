@@ -67,8 +67,14 @@ Key backend modules:
 
 - Next.js app under `dashboard/`.
 - App Router, TypeScript, Tailwind, React Query, TanStack Table, and Recharts.
-- The browser authenticates to Next.js, not directly to Flask.
+- The current shared-password login is transitional.
+- Target authority: Flask owns dashboard identity, authentication, sessions,
+  roles, class assignments, authorization, recovery, and audit records.
+- Next.js remains the browser-facing UI and server-side BFF. It stores and
+  forwards an opaque Flask-issued session but does not authorize operations.
 - Next.js proxies admin requests server-side using `MTC_BOT_API_BASE_URL` and `MTC_DASHBOARD_API_TOKEN`.
+- `MTC_DASHBOARD_API_TOKEN` authenticates the proxy service only. It is not a
+  user principal.
 - The browser must never receive `MTC_DASHBOARD_API_TOKEN`.
 
 ### Deployment
@@ -123,7 +129,10 @@ Rules:
 - `class_id` is required for class-owned data.
 - A LINE user belongs to one active class by default.
 - Super admins can access all classes.
-- Class admins can access only their assigned class.
+- Class admins belong to exactly one assigned class in MTC OS v1.
+- Teachers belong to one or more explicitly assigned classes.
+- Only super admins appoint, remove, or change class-admin and teacher
+  assignments.
 - Shared system configuration lives under `/system`.
 - Class-specific configuration lives under `/classes/{classId}`.
 - New classes should be onboarded through Firestore/dashboard configuration, not code edits.
@@ -187,7 +196,7 @@ Rules:
 /classes/{classId}/users/{userId}
   user_id: string
   display_name: string | null
-  role: "student" | "class_admin" | "super_admin"
+  role: "student" | "teacher" | "class_admin" | "super_admin"
   status: "active" | "inactive" | "banned"
   joined_at: timestamp
   last_seen_at: timestamp
@@ -297,6 +306,8 @@ POST   /api/admin/classes/{class_id}/broadcasts
 Rules:
 
 - Validate admin authorization before every class-scoped read/write.
+- Validate the current Flask-managed principal, role, capability, account
+  status, and class assignment for every protected request.
 - Return structured errors using the current `{"error": {"code", "message", "request_id"}}` shape.
 - Keep `/callback` independent from dashboard errors.
 - Limit dashboard payload sizes.
@@ -426,6 +437,9 @@ Constraints:
 ### Data Boundaries
 
 - Class admins must not read or mutate other classes.
+- Teachers must not read or mutate classes outside explicit assignments.
+- Raw LINE user IDs are super-admin-only and require an audited support,
+  abuse-response, or delivery-diagnosis purpose.
 - A user's `class_id` must be resolved server-side.
 - Do not trust client-provided `class_id` without checking permissions.
 - Keep super admin powers explicit.
