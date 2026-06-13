@@ -1,10 +1,21 @@
 # Learning Resources Seed Validator Usage
 
+> **Historical Phase B usage:** The repository now has an implemented
+> dry-run-first Firestore seed/apply workflow. Use
+> [Learning Resources Seed/Config Workflow](learning-resources-seed-config-workflow.md)
+> for the current authoritative workflow. This file is retained for the
+> offline validator interface and must not be read as current dry-run-only
+> system status.
+
 ## Purpose
 
-The Learning Resources seed validator is a Phase B safety tool for checking local JSON seed files before any future production write workflow exists.
+The Learning Resources seed validator is a Phase B safety tool for checking
+local JSON seed files. It remains useful for offline validation before using
+the current Firestore-aware workflow.
 
-It validates class/term-scoped learning resource records and prints a dry-run plan only. It does not write Firestore, does not have an apply mode, does not change LINE behavior, and does not require a Render deploy.
+This specific validator prints a dry-run plan and does not write Firestore.
+The separate current CLI supports reviewed dry-run and explicit apply modes as
+documented in the authoritative workflow.
 
 ## Resource Boundaries
 
@@ -64,14 +75,17 @@ The fake seed should produce no errors or warnings and should list three `would_
 - There is no destructive delete category.
 - Collision detection and disable planning consider only `status=active` resources.
 
-## Phase C Is Deferred
+## Phase C Status
 
-Phase C apply mode is intentionally not implemented yet. Real production resource URLs and ownership must be verified before any future tool writes to Firestore.
+Phase C is implemented through the Firestore-aware
+`mtc_assistant.seed_learning_resources` workflow. Dry-run remains the default,
+and apply requires an explicit `--apply` after review. Real production URLs and
+ownership must be verified before writes.
 
-Until then, this workflow stays dry-run only:
+This offline validator still:
 
-- No `--apply`.
-- No Firestore writes.
-- No Firebase credentials required.
-- No production URLs in example files.
-- No student data, roster data, LINE user IDs, secrets, tokens, or environment values.
+- performs no Firestore writes;
+- requires no Firebase credentials;
+- keeps production URLs out of example files; and
+- accepts no student data, roster data, LINE user IDs, secrets, tokens, or
+  environment values.

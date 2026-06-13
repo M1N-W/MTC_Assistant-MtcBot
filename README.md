@@ -228,6 +228,11 @@ export RATE_LIMIT_WINDOW="60"
 
 ## 📈 Roadmap
 
+Canonical documentation is indexed in
+[`docs/README.md`](docs/README.md). Current MTC Assistant to MTC OS scope and
+implementation order are defined in
+[`docs/mtc-os-master-plan.md`](docs/mtc-os-master-plan.md).
+
 - [x] ระบบตารางเรียนและแจ้งเตือน
 - [x] ระบบการบ้าน (Firebase)
 - [x] AI Integration (Gemini Dual-model)
