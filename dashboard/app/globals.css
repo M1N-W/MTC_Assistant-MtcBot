@@ -133,6 +133,34 @@ a:focus-visible {
   padding: 1.25rem;
 }
 
+.ai-settings-panel {
+  border: 1px solid rgba(18, 55, 42, 0.18);
+  border-radius: var(--radius-card);
+  background:
+    radial-gradient(circle at 92% 4%, rgba(244, 185, 66, 0.18), transparent 18rem),
+    linear-gradient(135deg, rgba(255, 248, 231, 0.94), rgba(255, 255, 255, 0.76));
+  box-shadow: var(--shadow-card-base);
+  padding: 1.25rem;
+  transition: border-color 220ms ease-out, box-shadow 220ms ease-out;
+}
+
+.ai-settings-panel:focus-within {
+  border-color: rgba(18, 55, 42, 0.42);
+  box-shadow: 0 24px 70px rgba(18, 55, 42, 0.14);
+}
+
+.ai-settings-icon {
+  display: inline-flex;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: #12372a;
+  color: #f4b942;
+}
+
 .metric-card {
   background: var(--color-surface);
   border: 1px solid var(--color-primary-border);

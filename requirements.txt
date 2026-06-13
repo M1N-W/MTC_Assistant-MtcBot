@@ -5,4 +5,5 @@ google-genai>=0.7.0,<1.0
 requests>=2.28,<3
 tzdata>=2023.3,<2025
 firebase-admin>=5.2,<7
+cryptography>=42,<47
 setuptools>=69.0.0

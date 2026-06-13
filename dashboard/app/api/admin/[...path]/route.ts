@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { isAuthenticated } from "@/lib/auth";
+import { getSessionPrincipal } from "@/lib/auth";
 
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
@@ -19,7 +19,8 @@ type RouteContext = {
 };
 
 async function proxy(request: NextRequest, context: RouteContext) {
-  if (!(await isAuthenticated())) {
+  const principal = await getSessionPrincipal();
+  if (!principal) {
     return Response.json(
       { error: { code: "UNAUTHORIZED", message: "Dashboard session is required." } },
       { status: 401 },
@@ -43,6 +44,9 @@ async function proxy(request: NextRequest, context: RouteContext) {
   const headers = new Headers();
   headers.set("Authorization", `Bearer ${apiToken}`);
   headers.set("Accept", "application/json");
+  headers.set("X-MTC-Admin-Id", principal.adminId);
+  headers.set("X-MTC-Admin-Role", principal.role);
+  headers.set("X-MTC-Admin-Classes", principal.classIds.join(","));
   if (request.headers.get("content-type")) {
     headers.set("Content-Type", request.headers.get("content-type") || "application/json");
   }
@@ -113,5 +117,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
+  return proxy(request, context);
+}
+
+export async function PATCH(request: NextRequest, context: RouteContext) {
   return proxy(request, context);
 }

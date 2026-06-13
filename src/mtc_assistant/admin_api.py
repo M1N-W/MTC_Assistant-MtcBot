@@ -11,15 +11,24 @@ from __future__ import annotations
 import datetime
 import base64
 import binascii
+import os
 import re
 import threading
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional, Tuple
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, g, jsonify, request
 from firebase_admin import firestore
 from werkzeug.exceptions import HTTPException
 
 import mtc_assistant.broadcast as broadcast
+from mtc_assistant.ai_credential_service import (
+    AICredentialService,
+    build_credential_cipher_from_env,
+    system_credentials_from_env,
+)
+from mtc_assistant.ai_provider_adapters import AIProviderError
+from mtc_assistant.ai_provider_registry import get_provider_definition
 from mtc_assistant.class_context import get_class_registry_entry
 from mtc_assistant.config import (
     DASHBOARD_ALLOWED_ORIGINS,
@@ -42,6 +51,7 @@ from mtc_assistant.user_blacklist import get_blacklist_manager
 
 DbProvider = Callable[[], Any]
 MetricsProvider = Callable[[], Dict[str, Any]]
+CredentialServiceProvider = Callable[[Any], AICredentialService]
 TERM_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
 SECRET_VALUE_PATTERN = re.compile(
     r"(api[_-]?key|bearer|private[_-]?key|secret|token|MTC_[A-Z0-9_]*|LINE_CHANNEL|GEMINI)",
@@ -50,12 +60,24 @@ SECRET_VALUE_PATTERN = re.compile(
 LOCAL_PATH_PATTERN = re.compile(r"^([A-Za-z]:\\|/Users/|/home/|/|\.{1,2}[/\\]|~[/\\])")
 
 
+@dataclass(frozen=True)
+class DashboardPrincipal:
+    admin_id: str
+    role: str
+    class_ids: frozenset[str]
+    authenticated: bool
+
+
 def create_admin_api_blueprint(
     get_db: DbProvider,
     get_metrics: MetricsProvider,
     get_services: Callable[[], Dict[str, Any]],
+    get_ai_credential_service: CredentialServiceProvider | None = None,
 ) -> Blueprint:
     blueprint = Blueprint("admin_api", __name__, url_prefix="/api/admin")
+    credential_service_provider = (
+        get_ai_credential_service or _default_ai_credential_service
+    )
 
     @blueprint.after_request
     def add_api_headers(response):
@@ -63,8 +85,13 @@ def create_admin_api_blueprint(
         if origin and origin in DASHBOARD_ALLOWED_ORIGINS:
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Vary"] = "Origin"
-            response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = (
+                "Authorization, Content-Type, X-MTC-Admin-Id, "
+                "X-MTC-Admin-Role, X-MTC-Admin-Classes"
+            )
+            response.headers["Access-Control-Allow-Methods"] = (
+                "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+            )
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
         return response
@@ -79,6 +106,7 @@ def create_admin_api_blueprint(
         expected = f"Bearer {MTC_DASHBOARD_API_TOKEN}"
         if auth_header != expected:
             return _error("UNAUTHORIZED", "Missing or invalid dashboard API token.", 401)
+        g.dashboard_principal = _dashboard_principal_from_headers()
         return None
 
     @blueprint.errorhandler(Exception)
@@ -308,7 +336,352 @@ def create_admin_api_blueprint(
             return _error("NOT_FOUND", "User is not currently banned.", 404)
         return jsonify({"data": {"user_id": user_id, "status": "unbanned"}}), 200
 
+    @blueprint.get("/classes/<class_id>/ai/credentials")
+    def class_ai_credentials(class_id: str):
+        access_error = _require_class_admin_access(class_id)
+        if access_error:
+            return access_error
+        db = get_db()
+        service, service_error = _get_ai_credential_service(
+            db,
+            credential_service_provider,
+        )
+        if service_error:
+            return service_error
+        return jsonify({
+            "data": {
+                "class_id": class_id,
+                "providers": service.list_class_credentials(class_id),
+                "settings": _get_ai_settings(db, class_id),
+            }
+        }), 200
+
+    @blueprint.post("/classes/<class_id>/ai/credentials/<provider_id>/validate")
+    def validate_class_ai_credential(class_id: str, provider_id: str):
+        access_error = _require_class_admin_access(class_id)
+        if access_error:
+            return access_error
+        payload, error = _json_body()
+        if error:
+            return error
+        api_key, model, error = _validate_credential_payload(provider_id, payload)
+        if error:
+            return error
+        service, service_error = _get_ai_credential_service(
+            get_db(),
+            credential_service_provider,
+        )
+        if service_error:
+            return service_error
+        try:
+            result = service.validate_credential(provider_id, api_key, model)
+        except AIProviderError as exc:
+            return _error("AI_CREDENTIAL_INVALID", str(exc), 422)
+        return jsonify({"data": result}), 200
+
+    @blueprint.put("/classes/<class_id>/ai/credentials/<provider_id>")
+    def save_class_ai_credential(class_id: str, provider_id: str):
+        access_error = _require_class_admin_access(class_id)
+        if access_error:
+            return access_error
+        payload, error = _json_body()
+        if error:
+            return error
+        if payload.get("status") == "disabled":
+            service, service_error = _get_ai_credential_service(
+                get_db(),
+                credential_service_provider,
+            )
+            if service_error:
+                return service_error
+            try:
+                disabled = service.disable_class_credential(
+                    class_id,
+                    provider_id,
+                    actor_id=g.dashboard_principal.admin_id,
+                )
+            except ValueError as exc:
+                return _error("VALIDATION_ERROR", str(exc), 422)
+            return jsonify({"data": disabled}), 200
+        api_key, model, error = _validate_credential_payload(provider_id, payload)
+        if error:
+            return error
+        service, service_error = _get_ai_credential_service(
+            get_db(),
+            credential_service_provider,
+        )
+        if service_error:
+            return service_error
+        try:
+            service.validate_credential(provider_id, api_key, model)
+            saved = service.save_class_credential(
+                class_id,
+                provider_id,
+                api_key,
+                model=model,
+                actor_id=g.dashboard_principal.admin_id,
+            )
+        except AIProviderError as exc:
+            return _error("AI_CREDENTIAL_INVALID", str(exc), 422)
+        except ValueError as exc:
+            return _error("VALIDATION_ERROR", str(exc), 422)
+        return jsonify({"data": saved}), 200
+
+    @blueprint.delete("/classes/<class_id>/ai/credentials/<provider_id>")
+    def delete_class_ai_credential(class_id: str, provider_id: str):
+        access_error = _require_class_admin_access(class_id)
+        if access_error:
+            return access_error
+        service, service_error = _get_ai_credential_service(
+            get_db(),
+            credential_service_provider,
+        )
+        if service_error:
+            return service_error
+        try:
+            deleted = service.delete_class_credential(class_id, provider_id)
+        except ValueError as exc:
+            return _error("VALIDATION_ERROR", str(exc), 422)
+        if not deleted:
+            return _error("NOT_FOUND", "AI credential was not found.", 404)
+        return jsonify({
+            "data": {
+                "class_id": class_id,
+                "provider_id": provider_id,
+                "status": "deleted",
+            }
+        }), 200
+
+    @blueprint.patch("/classes/<class_id>/ai/settings")
+    def update_class_ai_settings(class_id: str):
+        access_error = _require_class_admin_access(class_id)
+        if access_error:
+            return access_error
+        db = get_db()
+        if not db:
+            return _error("FIREBASE_UNAVAILABLE", "Firebase is not connected.", 503)
+        payload, error = _json_body()
+        if error:
+            return error
+        settings, error = _validate_ai_settings(payload)
+        if error:
+            return error
+        settings.update({
+            "updated_at": _now_iso(),
+            "updated_by": g.dashboard_principal.admin_id,
+        })
+        _ai_settings_ref(db, class_id).set(settings, merge=True)
+        return jsonify({"data": _get_ai_settings(db, class_id)}), 200
+
     return blueprint
+
+
+def _dashboard_principal_from_headers() -> DashboardPrincipal:
+    admin_id = request.headers.get("X-MTC-Admin-Id", "").strip()
+    role = request.headers.get("X-MTC-Admin-Role", "").strip()
+    class_ids = frozenset(
+        value.strip()
+        for value in request.headers.get("X-MTC-Admin-Classes", "").split(",")
+        if value.strip()
+    )
+    authenticated = bool(admin_id and role in {"super_admin", "class_admin"})
+    return DashboardPrincipal(admin_id, role, class_ids, authenticated)
+
+
+def _require_class_admin_access(class_id: str):
+    if not _env_flag("ALLOW_CLASS_BYOK", default=True):
+        return _error(
+            "CLASS_BYOK_DISABLED",
+            "Class AI credentials are disabled.",
+            503,
+        )
+    if not is_valid_class_id(class_id):
+        return _error("VALIDATION_ERROR", "class_id is invalid.", 422)
+    principal = getattr(g, "dashboard_principal", None)
+    if not principal or not principal.authenticated:
+        return _error(
+            "ADMIN_PRINCIPAL_REQUIRED",
+            "Authenticated dashboard principal claims are required.",
+            403,
+        )
+    if principal.role == "super_admin":
+        return None
+    return _error(
+        "SUPER_ADMIN_REQUIRED",
+        "BYOK v1 is managed by super admins only.",
+        403,
+    )
+
+
+def _env_flag(name: str, *, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _default_ai_credential_service(db) -> AICredentialService:
+    return AICredentialService(
+        db,
+        build_credential_cipher_from_env(),
+        system_credentials=system_credentials_from_env(),
+    )
+
+
+def _get_ai_credential_service(db, provider: CredentialServiceProvider):
+    if not db:
+        return None, _error("FIREBASE_UNAVAILABLE", "Firebase is not connected.", 503)
+    try:
+        return provider(db), None
+    except (ValueError, TypeError) as exc:
+        logger.warning("AI credential service is unavailable: %s", exc)
+        return None, _error(
+            "AI_CREDENTIALS_NOT_CONFIGURED",
+            "AI credential encryption is not configured.",
+            503,
+        )
+
+
+def _validate_credential_payload(provider_id: str, payload: Dict[str, Any]):
+    try:
+        definition = get_provider_definition(provider_id)
+    except ValueError as exc:
+        return "", "", _error("VALIDATION_ERROR", str(exc), 422)
+
+    unknown_keys = sorted(set(payload) - {"api_key", "model"})
+    if unknown_keys:
+        return "", "", _error(
+            "VALIDATION_ERROR",
+            f"Unknown credential fields: {', '.join(unknown_keys)}.",
+            422,
+        )
+    api_key = payload.get("api_key")
+    model = payload.get("model")
+    if not isinstance(api_key, str) or not api_key.strip():
+        return "", "", _error("VALIDATION_ERROR", "api_key is required.", 422)
+    if len(api_key.strip()) > 500:
+        return "", "", _error(
+            "VALIDATION_ERROR",
+            "api_key must be 500 characters or fewer.",
+            422,
+        )
+    if not isinstance(model, str):
+        return "", "", _error("VALIDATION_ERROR", "model is required.", 422)
+    try:
+        definition.validate_model(model.strip())
+    except ValueError as exc:
+        return "", "", _error("VALIDATION_ERROR", str(exc), 422)
+    return api_key.strip(), model.strip(), None
+
+
+def _validate_ai_settings(payload: Dict[str, Any]):
+    allowed = {
+        "selected_provider",
+        "selected_model",
+        "system_fallback_enabled",
+        "daily_fallback_request_budget",
+        "daily_fallback_token_budget",
+    }
+    unknown_keys = sorted(set(payload) - allowed)
+    if unknown_keys:
+        return {}, _error(
+            "VALIDATION_ERROR",
+            f"Unknown AI settings fields: {', '.join(unknown_keys)}.",
+            422,
+        )
+    provider_id = payload.get("selected_provider")
+    model = payload.get("selected_model")
+    if not isinstance(provider_id, str) or not isinstance(model, str):
+        return {}, _error(
+            "VALIDATION_ERROR",
+            "selected_provider and selected_model are required.",
+            422,
+        )
+    try:
+        definition = get_provider_definition(provider_id.strip())
+        definition.validate_model(model.strip())
+    except ValueError as exc:
+        return {}, _error("VALIDATION_ERROR", str(exc), 422)
+
+    fallback_enabled = payload.get("system_fallback_enabled")
+    if not isinstance(fallback_enabled, bool):
+        return {}, _error(
+            "VALIDATION_ERROR",
+            "system_fallback_enabled must be a boolean.",
+            422,
+        )
+    request_budget = _validated_budget(
+        payload.get("daily_fallback_request_budget"),
+        "daily_fallback_request_budget",
+        maximum=1000,
+    )
+    if isinstance(request_budget, tuple):
+        return {}, request_budget
+    token_budget = _validated_budget(
+        payload.get("daily_fallback_token_budget"),
+        "daily_fallback_token_budget",
+        maximum=10_000_000,
+    )
+    if isinstance(token_budget, tuple):
+        return {}, token_budget
+
+    return {
+        "selected_provider": provider_id.strip(),
+        "selected_model": model.strip(),
+        "system_fallback_enabled": fallback_enabled,
+        "daily_fallback_request_budget": request_budget,
+        "daily_fallback_token_budget": token_budget,
+    }, None
+
+
+def _validated_budget(value, field_name: str, maximum: int):
+    if isinstance(value, bool) or not isinstance(value, int):
+        return _error("VALIDATION_ERROR", f"{field_name} must be an integer.", 422)
+    if value < 0 or value > maximum:
+        return _error(
+            "VALIDATION_ERROR",
+            f"{field_name} must be between 0 and {maximum}.",
+            422,
+        )
+    return value
+
+
+def _ai_settings_ref(db, class_id: str):
+    return (
+        db.collection("classes")
+        .document(class_id)
+        .collection("config")
+        .document("ai")
+    )
+
+
+def _get_ai_settings(db, class_id: str) -> Dict[str, Any]:
+    snapshot = _ai_settings_ref(db, class_id).get()
+    data = snapshot.to_dict() if getattr(snapshot, "exists", False) else {}
+    provider_id = str(data.get("selected_provider") or "gemini")
+    try:
+        definition = get_provider_definition(provider_id)
+    except ValueError:
+        definition = get_provider_definition("gemini")
+    model = str(data.get("selected_model") or definition.default_model)
+    try:
+        definition.validate_model(model)
+    except ValueError:
+        model = definition.default_model
+    return {
+        "class_id": class_id,
+        "selected_provider": definition.provider_id,
+        "selected_model": model,
+        "system_fallback_enabled": bool(data.get("system_fallback_enabled", True)),
+        "daily_fallback_request_budget": int(
+            data.get("daily_fallback_request_budget", 20) or 0
+        ),
+        "daily_fallback_token_budget": int(
+            data.get("daily_fallback_token_budget", 30000) or 0
+        ),
+        "updated_at": _json_safe(data.get("updated_at")),
+        "updated_by": str(data.get("updated_by") or ""),
+    }
 
 
 def _error(code: str, message: str, status: int):

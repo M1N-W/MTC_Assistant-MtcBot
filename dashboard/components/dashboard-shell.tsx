@@ -16,6 +16,7 @@ import {
   Gauge,
   GraduationCap,
   Inbox,
+  KeyRound,
   Leaf,
   LineChart as LineChartIcon,
   LogOut,
@@ -51,6 +52,7 @@ import {
   YAxis,
 } from "recharts";
 import { GeneralLinksEditor } from "@/components/general-links-editor";
+import { AISettingsEditor } from "@/components/ai-settings-editor";
 
 type ServiceMap = {
   line: boolean;
@@ -391,6 +393,7 @@ export function DashboardShell() {
     ["Broadcast", MessageSquareText],
     ["Blacklist", ShieldAlert],
     ["System", Radar],
+    ["AI Settings", KeyRound],
   ];
 
   return (
@@ -492,6 +495,7 @@ export function DashboardShell() {
           </div>
 
           <GeneralLinksEditor />
+          <AISettingsEditor />
 
           <div className="mt-6 grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
             <Panel title="Sustainability impact" action="Conservative classroom estimate" icon={Leaf}>
