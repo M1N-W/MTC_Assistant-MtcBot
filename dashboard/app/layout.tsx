@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MTC Assistant Command Center",
-  description: "Admin dashboard for MTC Assistant LINE Bot",
+  title: "MTC Dashboard",
+  description: "พื้นที่จัดการข้อมูลห้องเรียน MTC Assistant",
 };
 
 export default function RootLayout({

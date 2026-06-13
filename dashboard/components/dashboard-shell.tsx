@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   CircleGauge,
   Clock3,
+  Copy,
   FileScan,
   Gauge,
   GraduationCap,
@@ -21,7 +22,6 @@ import {
   LineChart as LineChartIcon,
   LogOut,
   MessageSquareText,
-  Network,
   Radar,
   RefreshCcw,
   Search,
@@ -41,7 +41,7 @@ import {
   getFilteredRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { CSSProperties, FormEvent, useMemo, useState } from "react";
+import { CSSProperties, FormEvent, useEffect, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -53,6 +53,10 @@ import {
 } from "recharts";
 import { GeneralLinksEditor } from "@/components/general-links-editor";
 import { AISettingsEditor } from "@/components/ai-settings-editor";
+import {
+  parseDashboardSection,
+  type DashboardSection,
+} from "@/lib/dashboard-sections";
 
 type ServiceMap = {
   line: boolean;
@@ -195,7 +199,7 @@ function getApiError(payload: unknown, status: number) {
   const message =
     typeof apiError?.message === "string" && apiError.message.trim()
       ? apiError.message
-      : "Dashboard API request failed.";
+      : "ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองอีกครั้ง";
   const code =
     typeof apiError?.code === "string" && apiError.code.trim()
       ? apiError.code
@@ -209,13 +213,13 @@ function validationError(message: string) {
 
 function validateCaptureFile(file: File | null) {
   if (!file) {
-    throw validationError("Choose an image first.");
+    throw validationError("กรุณาเลือกภาพก่อนเริ่มวิเคราะห์");
   }
   if (!ALLOWED_CAPTURE_TYPES.has(file.type)) {
-    throw validationError("Only PNG, JPEG, and WebP images are supported.");
+    throw validationError("รองรับเฉพาะไฟล์ PNG, JPEG และ WEBP");
   }
   if (file.size > MAX_CAPTURE_BYTES) {
-    throw validationError("Image must be 6 MB or smaller.");
+    throw validationError("ไฟล์ภาพต้องมีขนาดไม่เกิน 6 MB");
   }
   return file;
 }
@@ -228,7 +232,7 @@ function getPayloadData<T>(payload: unknown, status: number): T {
     }
   }
   throw new DashboardApiError(
-    "Dashboard API response did not include a data object. Please refresh the page.",
+    "ข้อมูลที่ได้รับไม่สมบูรณ์ กรุณาอัปเดตข้อมูลอีกครั้ง",
     status,
     "INVALID_API_RESPONSE",
   );
@@ -272,12 +276,31 @@ async function apiUpload<T>(path: string, file: File): Promise<T> {
 
 export function DashboardShell() {
   const queryClient = useQueryClient();
-  const [activeSection, setActiveSection] = useState("Overview");
+  const [activeSection, setActiveSection] = useState<DashboardSection>("overview");
   const [broadcastMessage, setBroadcastMessage] = useState("");
+  const [broadcastPreview, setBroadcastPreview] = useState(false);
   const [banUserId, setBanUserId] = useState("");
   const [banReason, setBanReason] = useState("");
   const [captureFile, setCaptureFile] = useState<File | null>(null);
   const [captureResult, setCaptureResult] = useState<PaperlessCaptureResult | null>(null);
+
+  useEffect(() => {
+    function syncSectionFromHash() {
+      const section = parseDashboardSection(window.location.hash);
+      setActiveSection(section);
+      if (window.location.hash !== `#${section}`) {
+        window.history.replaceState(null, "", `#${section}`);
+      }
+    }
+
+    syncSectionFromHash();
+    window.addEventListener("hashchange", syncSectionFromHash);
+    window.addEventListener("popstate", syncSectionFromHash);
+    return () => {
+      window.removeEventListener("hashchange", syncSectionFromHash);
+      window.removeEventListener("popstate", syncSectionFromHash);
+    };
+  }, []);
 
   const overviewQuery = useQuery({
     queryKey: ["overview"],
@@ -295,15 +318,16 @@ export function DashboardShell() {
   const broadcastMutation = useMutation({
     mutationFn: (message: string) => {
       if (!message) {
-        throw validationError("Broadcast message is required.");
+        throw validationError("กรุณากรอกข้อความประกาศ");
       }
       if (message.length > 1000) {
-        throw validationError("Broadcast message must be 1000 characters or fewer.");
+        throw validationError("ข้อความประกาศต้องไม่เกิน 1,000 ตัวอักษร");
       }
       return apiSend("broadcasts", "POST", { message });
     },
     onSuccess: () => {
       setBroadcastMessage("");
+      setBroadcastPreview(false);
       void queryClient.invalidateQueries({ queryKey: ["overview"] });
     },
   });
@@ -311,13 +335,13 @@ export function DashboardShell() {
   const banMutation = useMutation({
     mutationFn: ({ userId, reason }: BanPayload) => {
       if (!userId) {
-        throw validationError("LINE user ID is required.");
+        throw validationError("กรุณากรอก LINE User ID");
       }
       if (!reason) {
-        throw validationError("Reason is required.");
+        throw validationError("กรุณากรอกเหตุผล");
       }
       if (reason.length > 240) {
-        throw validationError("Reason must be 240 characters or fewer.");
+        throw validationError("เหตุผลต้องไม่เกิน 240 ตัวอักษร");
       }
       return apiSend("blacklist", "POST", { user_id: userId, reason });
     },
@@ -355,10 +379,10 @@ export function DashboardShell() {
     const total = metrics?.total_requests || 0;
     const errors = metrics?.total_errors || 0;
     return [
-      { label: "Requests", value: total },
-      { label: "Messages", value: metrics?.total_messages || 0 },
-      { label: "Errors", value: errors },
-      { label: "Users", value: overview?.counts.registered_users || 0 },
+      { label: "คำขอ", value: total },
+      { label: "ข้อความ", value: metrics?.total_messages || 0 },
+      { label: "ข้อผิดพลาด", value: errors },
+      { label: "สมาชิก", value: overview?.counts.registered_users || 0 },
     ];
   }, [metrics, overview]);
 
@@ -371,6 +395,15 @@ export function DashboardShell() {
 
   function submitBroadcast(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const message = broadcastMessage.trim();
+    if (!message) {
+      broadcastMutation.mutate(message);
+      return;
+    }
+    setBroadcastPreview(true);
+  }
+
+  function confirmBroadcast() {
     broadcastMutation.mutate(broadcastMessage.trim());
   }
 
@@ -386,15 +419,56 @@ export function DashboardShell() {
     captureMutation.mutate(captureFile);
   }
 
-  const navItems: [string, LucideIcon][] = [
-    ["Overview", Gauge],
-    ["Users", GraduationCap],
-    ["Homework", BookOpenCheck],
-    ["Broadcast", MessageSquareText],
-    ["Blacklist", ShieldAlert],
-    ["System", Radar],
-    ["AI Settings", KeyRound],
+  function navigateTo(section: DashboardSection) {
+    setActiveSection(section);
+    const nextHash = `#${section}`;
+    if (window.location.hash !== nextHash) {
+      window.history.pushState(null, "", nextHash);
+    }
+  }
+
+  const navItems: [DashboardSection, string, LucideIcon][] = [
+    ["overview", "ภาพรวม", Gauge],
+    ["members", "สมาชิก", GraduationCap],
+    ["homework", "การบ้าน", BookOpenCheck],
+    ["announcements", "ประกาศ", MessageSquareText],
+    ["resources", "ลิงก์และสื่อ", BellRing],
+    ["system", "ระบบ", Radar],
+    ["ai-settings", "การตั้งค่า AI", KeyRound],
   ];
+
+  const sectionHeadings: Record<DashboardSection, { title: string; description: string }> = {
+    overview: {
+      title: "ภาพรวมการใช้งาน",
+      description: "ข้อมูลสำคัญและงานประจำของห้องเรียนในที่เดียว",
+    },
+    members: {
+      title: "สมาชิก",
+      description: "ค้นหาและตรวจสอบสมาชิกที่เชื่อมต่อกับ MTC Assistant",
+    },
+    homework: {
+      title: "การบ้าน",
+      description: "ติดตามการบ้านล่าสุดที่นักเรียนได้รับผ่าน LINE",
+    },
+    announcements: {
+      title: "ประกาศ",
+      description: "เขียน ตรวจสอบ และส่งประกาศถึงผู้ใช้ทั้งหมดในระบบ",
+    },
+    resources: {
+      title: "ลิงก์และสื่อ",
+      description: "จัดการลิงก์ที่นักเรียนใช้สำหรับการเรียนและงานประจำ",
+    },
+    system: {
+      title: "ระบบ",
+      description: "ตรวจสอบสถานะ บันทึกการใช้งาน และเครื่องมือขั้นสูง",
+    },
+    "ai-settings": {
+      title: "การตั้งค่า AI",
+      description: "จัดการการเชื่อมต่อ AI สำหรับผู้ดูแลระบบ",
+    },
+  };
+
+  const sectionHeading = sectionHeadings[activeSection];
 
   return (
     <main className="dashboard-shell min-h-screen">
@@ -410,17 +484,18 @@ export function DashboardShell() {
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-white">MTC Assistant</p>
-              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-cyan-100/60">NSC Console</p>
+              <p className="text-xs font-medium text-emerald-100/70">MTC Dashboard</p>
             </div>
           </div>
 
-          <nav className="mt-5 grid gap-2">
-            {navItems.map(([label, Icon]) => (
+          <nav className="mt-5 grid gap-2" aria-label="เมนูหลัก">
+            {navItems.map(([section, label, Icon]) => (
               <button
-                key={label}
+                key={section}
                 type="button"
-                onClick={() => setActiveSection(label)}
-                className={`nav-item ${activeSection === label ? "nav-item-active" : ""}`}
+                onClick={() => navigateTo(section)}
+                className={`nav-item ${activeSection === section ? "nav-item-active" : ""}`}
+                aria-current={activeSection === section ? "page" : undefined}
               >
                 <Icon size={18} strokeWidth={2.2} />
                 <span>{label}</span>
@@ -429,327 +504,406 @@ export function DashboardShell() {
           </nav>
 
           <div className="impact-card mt-5 rounded-lg border border-white/10 bg-white/[0.04] p-3">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-lime-200">
+            <div className="flex items-center gap-2 text-xs font-semibold text-lime-200">
               <Leaf size={14} />
-              Impact Lens
+              Classroom OS
             </div>
             <p className="mt-2 text-xs leading-5 text-cyan-50/62">
-              Paperless capture, digital notices, and classroom access in one secured workspace.
+              พื้นที่จัดการข้อมูลและงานประจำของห้องเรียน MTC Assistant
             </p>
           </div>
 
           <button type="button" onClick={logout} className="secondary-button mt-5 w-full">
             <LogOut size={17} />
-            Sign out
+            ออกจากระบบ
           </button>
         </aside>
 
         <section className="relative px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
           <header className="mission-hero">
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2 font-mono text-xs font-semibold uppercase tracking-[0.16em] text-cyan-200">
+              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-emerald-100">
                 <span className="h-2 w-2 rounded-full bg-lime-300 shadow-[0_0_18px_rgba(163,230,53,0.72)]" />
-                Smart Classroom Command Center
+                MTC Assistant Dashboard
               </div>
-              <h1 className="mt-3 text-3xl font-semibold tracking-[-0.01em] text-white md:text-4xl">
-                Live operations
+              <h1 className="mt-3 text-3xl font-semibold tracking-[-0.01em] text-white">
+                {sectionHeading.title}
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-cyan-50/68">
-                Monitor LINE bot health, paperless workflows, classroom notices, and access controls without touching webhook delivery.
+                {sectionHeading.description}
               </p>
             </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="status-pill">
-                <Network size={16} />
-                Token-proxied API
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  void queryClient.invalidateQueries();
-                }}
-                className="primary-button"
-              >
-                <RefreshCcw size={17} />
-                Refresh
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                void queryClient.invalidateQueries();
+              }}
+              className="primary-button"
+            >
+              <RefreshCcw size={17} />
+              อัปเดตข้อมูล
+            </button>
           </header>
 
           {overviewQuery.isError ? (
-            <StatusNotice tone="danger" title="Dashboard API unavailable" error={overviewQuery.error as Error} />
+            <StatusNotice
+              tone="danger"
+              title="ไม่สามารถโหลดข้อมูลได้"
+              text="กรุณาลองอัปเดตข้อมูลอีกครั้ง ข้อมูลที่คุณกรอกไว้ยังไม่ถูกลบ"
+              error={overviewQuery.error as Error}
+            />
           ) : null}
 
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <Metric label="Registered users" value={overview?.counts.registered_users ?? "--"} icon={GraduationCap} trend="Class roster reach" loading={isOverviewLoading} />
-            <Metric label="Total requests" value={metrics?.total_requests ?? "--"} icon={Activity} trend="Automation load" loading={isOverviewLoading} />
-            <Metric label="Avg response" value={metrics ? `${metrics.avg_response_time_ms}ms` : "--"} icon={CircleGauge} trend="Response budget" loading={isOverviewLoading} />
-            <Metric label="Banned users" value={overview?.counts.banned_users ?? "--"} icon={ShieldAlert} trend="Safety controls" loading={isOverviewLoading} />
-          </div>
-
-          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <Metric label="Sheets saved" value={sustainability?.paper_saved_sheets ?? "--"} icon={FileScan} trend="Paperless estimate" loading={isOverviewLoading} />
-            <Metric label="Admin hours saved" value={sustainability ? `${sustainability.admin_hours_saved}h` : "--"} icon={Clock3} trend="Teacher time" loading={isOverviewLoading} />
-            <Metric label="Equal access" value={sustainability ? `${sustainability.equal_access_rate_percent}%` : "--"} icon={Sprout} trend="Classroom inclusion" loading={isOverviewLoading} />
-            <Metric label="Digital notices" value={sustainability?.broadcast_count ?? "--"} icon={BellRing} trend="Paper-free sends" loading={isOverviewLoading} />
-          </div>
-
-          <GeneralLinksEditor />
-          <AISettingsEditor />
-
-          <div className="mt-6 grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
-            <Panel title="Sustainability impact" action="Conservative classroom estimate" icon={Leaf}>
-              {sustainability ? (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="data-tile">
-                    <p className="font-mono text-2xl font-semibold text-[var(--color-text-main)] tabular-nums">{sustainability.paper_saved_sheets}</p>
-                    <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--color-text-muted)]">Sheets saved</p>
-                  </div>
-                  <div className="data-tile">
-                    <p className="font-mono text-2xl font-semibold text-[var(--color-text-main)] tabular-nums">{sustainability.admin_hours_saved}h</p>
-                    <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--color-text-muted)]">Admin time saved</p>
-                  </div>
-                  <div className="data-tile">
-                    <p className="font-mono text-2xl font-semibold text-[var(--color-text-main)] tabular-nums">{sustainability.co2_saved_grams}g</p>
-                    <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--color-text-muted)]">CO₂ saved</p>
-                  </div>
-                  <div className="data-tile">
-                    <p className="font-mono text-2xl font-semibold text-[var(--color-text-main)] tabular-nums">{sustainability.equal_access_rate_percent}%</p>
-                    <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--color-text-muted)]">Equal access</p>
-                  </div>
-                </div>
-              ) : (
-                <SkeletonRows count={3} />
-              )}
-              {sustainability ? (
-                <div className="mt-4 grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
-                  <ImpactLine label="Active students" value={`${sustainability.active_students}/${sustainability.expected_class_size}`} />
-                  <ImpactLine label="Homework records" value={sustainability.homework_count} />
-                  <ImpactLine label="Broadcast recipients" value={sustainability.broadcast_recipients} />
-                  <ImpactLine label="CO2 estimate" value={`${sustainability.co2_saved_grams}g`} />
-                </div>
-              ) : (
-                <SkeletonRows count={3} />
-              )}
-            </Panel>
-
-            <Panel title="Paperless Capture AI" action="Gemini Vision PoC" icon={FileScan}>
-              <form onSubmit={submitCapture} className="grid gap-4">
-                <label className="field-label" htmlFor="paperless-image">
-                  Classroom image
-                </label>
-                <label className="upload-zone" htmlFor="paperless-image">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-emerald-700/10 text-emerald-800">
-                    <Camera size={20} />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold text-emerald-950">
-                      {captureFile ? captureFile.name : "Upload board, worksheet, or class notice"}
-                    </span>
-                    <span className="mt-1 block text-xs text-slate-500">PNG, JPEG, or WEBP. The analysis stays behind the admin API.</span>
-                  </span>
-                </label>
-                <input
-                  id="paperless-image"
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0] || null;
-                    if (file && (!ALLOWED_CAPTURE_TYPES.has(file.type) || file.size > MAX_CAPTURE_BYTES)) {
-                      event.currentTarget.value = "";
-                      setCaptureFile(null);
-                      setCaptureResult(null);
-                      captureMutation.mutate(file);
-                      return;
-                    }
-                    captureMutation.reset();
-                    setCaptureFile(file);
-                    setCaptureResult(null);
-                  }}
-                  className="sr-only"
-                  required
-                />
-                <button className="primary-button h-12 justify-center" disabled={captureMutation.isPending}>
-                  <Sparkles size={17} />
-                  {captureMutation.isPending ? "Analyzing..." : "Analyze image"}
-                </button>
-                {captureMutation.isError ? <StatusNotice tone="danger" title="Capture failed" error={captureMutation.error as Error} /> : null}
-              </form>
-
-              {captureResult ? (
-                <div className="result-card">
-                  <div className="flex items-center gap-2 text-emerald-950">
-                    <Sparkles size={17} />
-                    <p className="text-sm font-semibold">{captureResult.analysis.title}</p>
-                  </div>
-                  <ul className="mt-3 grid gap-2 text-sm leading-6 text-slate-700">
-                    {captureResult.analysis.summary.map((item, index) => (
-                      <li key={`${item}-${index}`} className="flex gap-2">
-                        <Check size={15} className="mt-1 shrink-0 text-emerald-700" />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  {captureResult.analysis.homework_candidates.length ? (
-                    <div className="mt-4 border-t border-emerald-900/10 pt-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">Homework candidates</p>
-                      <p className="mt-2 text-sm text-emerald-950">{captureResult.analysis.homework_candidates.join(" / ")}</p>
-                    </div>
-                  ) : null}
-                  {captureResult.analysis.paperless_value ? (
-                    <p className="mt-3 text-sm leading-6 text-slate-700">{captureResult.analysis.paperless_value}</p>
-                  ) : null}
-                </div>
-              ) : null}
-            </Panel>
-          </div>
-
-          <div className="mt-6 grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
-            <Panel title="Traffic shape" action={overview?.generated_at ? `Updated ${new Date(overview.generated_at).toLocaleTimeString()}` : "Loading"} icon={LineChartIcon}>
-              <div className="chart-frame">
-                {isOverviewLoading ? <div className="skeleton-block h-full min-h-[260px]" /> : null}
-                {!isOverviewLoading ? (
-                <ResponsiveContainer width="100%" height={280} minWidth={0} minHeight={280}>
-                  <AreaChart data={chartData} margin={{ left: -10, right: 18, top: 18, bottom: 4 }}>
-                    <defs>
-                      <linearGradient id="trafficFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.18} />
-                        <stop offset="100%" stopColor="#0a7c6e" stopOpacity={0.03} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid stroke="rgba(7,23,19,0.07)" vertical={false} />
-                    <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "#5b756e", fontSize: 12, fontWeight: 600 }} />
-                    <YAxis tickLine={false} axisLine={false} tick={{ fill: "#5b756e", fontSize: 12 }} />
-                    <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} cursor={{ stroke: "#22d3ee", strokeOpacity: 0.24 }} />
-                    <Area type="monotone" dataKey="value" stroke="#0a7c6e" fill="url(#trafficFill)" strokeWidth={2.5} dot={{ r: 4, fill: "#22d3ee", stroke: "#071713", strokeWidth: 2 }} activeDot={{ r: 6, fill: "#a3e635", stroke: "#071713", strokeWidth: 2 }} />
-                  </AreaChart>
-                </ResponsiveContainer>
-                ) : null}
+          {activeSection === "overview" ? (
+            <>
+              <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <Metric label="สมาชิกในระบบ" value={overview?.counts.registered_users ?? "--"} icon={GraduationCap} trend="ผู้ใช้ที่ลงทะเบียนแล้ว" loading={isOverviewLoading} />
+                <Metric label="การบ้านล่าสุด" value={overview?.counts.active_homework_preview ?? "--"} icon={BookOpenCheck} trend="รายการที่แสดงอยู่" loading={isOverviewLoading} />
+                <Metric label="ประกาศล่าสุด" value={overview?.counts.recent_broadcasts ?? "--"} icon={BellRing} trend="รายการส่งล่าสุด" loading={isOverviewLoading} />
+                <Metric label="สถานะระบบ" value={overview && Object.values(overview.services).every(Boolean) ? "ปกติ" : "--"} icon={Wifi} trend="การทำงานของระบบ" loading={isOverviewLoading} />
               </div>
-            </Panel>
 
-            <Panel title="Service status" icon={Wifi}>
-              <div className="grid gap-3">
-                {overview ? (
-                  Object.entries(overview.services).map(([name, ok]) => (
-                    <div key={name} className="service-row">
-                      <div className="flex items-center gap-3">
-                        <span className={`service-dot ${ok ? "service-dot-ready" : "service-dot-degraded"}`} />
-                        <span className="font-mono text-sm font-semibold capitalize text-emerald-950">{name}</span>
-                      </div>
-                      <span className={`service-badge ${ok ? "service-badge-ready" : "service-badge-degraded"}`}>
-                        <CheckCircle2 size={15} />
-                        {ok ? "Ready" : "Degraded"}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <SkeletonRows count={4} />
-                )}
+              <div className="mt-6 grid gap-5 xl:grid-cols-2">
+                <Panel title="การบ้านล่าสุด" icon={BookOpenCheck}>
+                  <HomeworkList items={overview?.homework_preview || []} loaded={Boolean(overview)} />
+                  <button type="button" className="mini-button mt-4" onClick={() => navigateTo("homework")}>ดูการบ้านทั้งหมด</button>
+                </Panel>
+                <Panel title="ประกาศล่าสุด" icon={MessageSquareText}>
+                  <BroadcastList items={overview?.recent_broadcasts || []} loaded={Boolean(overview)} />
+                  <button type="button" className="mini-button mt-4" onClick={() => navigateTo("announcements")}>ส่งประกาศ</button>
+                </Panel>
               </div>
-            </Panel>
-          </div>
 
-          <div className="mt-6 grid gap-5 xl:grid-cols-2">
-            <Panel title="Recent homework" icon={BookOpenCheck}>
-              <div className="grid gap-3">
-                {(overview?.homework_preview || []).map((item) => (
-                  <div key={item.id} className="homework-row">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-semibold text-emerald-950">{item.subject || "ไม่ระบุวิชา"}</p>
-                      <span className="rounded-full bg-white/70 px-3 py-1 text-xs font-medium text-slate-500">{item.due_date || "ไม่ระบุกำหนดส่ง"}</span>
-                    </div>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">{item.detail || "ไม่มีรายละเอียด"}</p>
+              <div className="mt-6 grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+                <Panel title="สถานะระบบ" icon={Wifi}>
+                  <ServiceStatus services={overview?.services} />
+                </Panel>
+                <Panel title="งานที่ใช้บ่อย" icon={Sparkles}>
+                  <div className="quick-actions">
+                    <button type="button" onClick={() => navigateTo("announcements")}><MessageSquareText size={18} />ส่งประกาศถึงผู้ใช้ทั้งหมด</button>
+                    <button type="button" onClick={() => navigateTo("resources")}><BellRing size={18} />จัดการลิงก์และสื่อ</button>
+                    <button type="button" onClick={() => navigateTo("members")}><Users size={18} />ค้นหาสมาชิก</button>
                   </div>
-                ))}
-                {overview && overview.homework_preview.length === 0 ? <EmptyState text="No homework records are available." icon={BookOpenCheck} /> : null}
+                </Panel>
               </div>
-            </Panel>
+            </>
+          ) : null}
 
-            <Panel title="Broadcast console" icon={MessageSquareText}>
-              <form onSubmit={submitBroadcast} className="grid gap-3">
-                <label className="field-label" htmlFor="broadcast">
-                  Message
-                </label>
-                <textarea
-                  id="broadcast"
-                  value={broadcastMessage}
-                  onChange={(event) => setBroadcastMessage(event.target.value)}
-                  className="mission-input min-h-36 resize-y p-4 leading-6"
-                  maxLength={1000}
-                  required
-                />
-                <button className="primary-button" disabled={broadcastMutation.isPending}>
-                  <Send size={17} />
-                  {broadcastMutation.isPending ? "Queueing..." : "Queue broadcast"}
-                </button>
-                {broadcastMutation.isSuccess ? <StatusNotice tone="success" title="Queued" text="Broadcast is running in the backend." /> : null}
-                {broadcastMutation.isError ? <StatusNotice tone="danger" title="Could not queue broadcast" error={broadcastMutation.error as Error} /> : null}
-              </form>
-            </Panel>
-          </div>
+          {activeSection === "members" ? (
+            <div className="mt-6">
+              <Panel title="รายชื่อสมาชิก" icon={Users}>
+                <UsersTable data={usersQuery.data?.items || []} loading={usersQuery.isLoading || usersQuery.isFetching} />
+              </Panel>
+            </div>
+          ) : null}
 
-          <div className="mt-6 grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-            <Panel title="Users" icon={Users}>
-              <UsersTable data={usersQuery.data?.items || []} loading={usersQuery.isLoading || usersQuery.isFetching} />
-            </Panel>
-            <Panel title="Blacklist control" icon={ShieldAlert}>
-              <form onSubmit={submitBan} className="grid gap-3">
-                <label className="field-label" htmlFor="ban-user">
-                  LINE user ID
-                </label>
-                <input
-                  id="ban-user"
-                  value={banUserId}
-                  onChange={(event) => setBanUserId(event.target.value)}
-                  className="mission-input h-12 px-4"
-                  required
-                />
-                <label className="field-label" htmlFor="ban-reason">
-                  Reason
-                </label>
-                <input
-                  id="ban-reason"
-                  value={banReason}
-                  onChange={(event) => setBanReason(event.target.value)}
-                  className="mission-input h-12 px-4"
-                  maxLength={240}
-                  required
-                />
-                <button className="danger-button" disabled={banMutation.isPending}>
-                  <Ban size={17} />
-                  Ban user
-                </button>
-              </form>
-              <div className="mt-5 grid gap-2">
-                {(blacklistQuery.data?.items || []).map((item) => (
-                  <div key={item.user_id} className="blacklist-row">
-                    <div className="min-w-0">
-                      <p className="truncate font-mono text-sm font-semibold text-emerald-950">{item.user_id}</p>
-                      <p className="truncate text-xs text-slate-500">{item.reason}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        unbanMutation.mutate(item.user_id);
-                      }}
-                      className="mini-button"
-                      disabled={unbanMutation.isPending}
-                    >
-                      {unbanMutation.isPending ? "Working..." : "Unban"}
+          {activeSection === "homework" ? (
+            <div className="mt-6">
+              <Panel title="การบ้านล่าสุด" action="แสดงข้อมูลจากระบบปัจจุบัน" icon={BookOpenCheck}>
+                <HomeworkList items={overview?.homework_preview || []} loaded={Boolean(overview)} />
+              </Panel>
+            </div>
+          ) : null}
+
+          {activeSection === "announcements" ? (
+            <div className="mt-6 grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
+              <Panel title="ส่งประกาศถึงผู้ใช้ทั้งหมด" icon={MessageSquareText}>
+                <form onSubmit={submitBroadcast} className="grid gap-3">
+                  <label className="field-label" htmlFor="broadcast">ข้อความประกาศ</label>
+                  <textarea
+                    id="broadcast"
+                    value={broadcastMessage}
+                    onChange={(event) => {
+                      setBroadcastMessage(event.target.value);
+                      setBroadcastPreview(false);
+                      broadcastMutation.reset();
+                    }}
+                    className="mission-input min-h-36 resize-y p-4 leading-6"
+                    maxLength={1000}
+                    placeholder="พิมพ์ข้อความที่ต้องการส่งถึงผู้ใช้ทั้งหมด"
+                    required
+                  />
+                  <p className="text-xs text-slate-500">ข้อความนี้จะถูกส่งให้ผู้ใช้ทั้งหมดที่ลงทะเบียนในระบบผ่าน LINE โปรดตรวจสอบก่อนยืนยัน</p>
+                  {!broadcastPreview ? (
+                    <button className="primary-button" disabled={broadcastMutation.isPending}>
+                      <Search size={17} />
+                      ดูตัวอย่าง
                     </button>
-                  </div>
-                ))}
-                {blacklistQuery.isLoading || blacklistQuery.isFetching ? <SkeletonRows count={3} /> : null}
-                {blacklistQuery.data?.items.length === 0 ? <EmptyState text="Blacklist is empty." icon={ShieldAlert} /> : null}
-                {unbanMutation.isError ? <StatusNotice tone="danger" title="Could not unban user" error={unbanMutation.error as Error} /> : null}
+                  ) : (
+                    <div className="announcement-preview">
+                      <p className="text-xs font-semibold text-slate-500">ตัวอย่างประกาศ</p>
+                      <p className="mt-2 text-sm font-semibold text-amber-800">
+                        ผู้รับ: ผู้ใช้ทั้งหมดที่ลงทะเบียนในระบบ
+                      </p>
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-emerald-950">{broadcastMessage.trim()}</p>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button type="button" className="primary-button" onClick={confirmBroadcast} disabled={broadcastMutation.isPending}>
+                          <Send size={17} />
+                          {broadcastMutation.isPending ? "กำลังส่งประกาศ..." : "ยืนยันการส่ง"}
+                        </button>
+                        <button type="button" className="mini-button" onClick={() => setBroadcastPreview(false)} disabled={broadcastMutation.isPending}>
+                          แก้ไขข้อความ
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {broadcastMutation.isSuccess ? <StatusNotice tone="success" title="ส่งประกาศเรียบร้อยแล้ว" text="ระบบกำลังส่งข้อความถึงผู้ใช้ทั้งหมดในระบบ" /> : null}
+                  {broadcastMutation.isError ? <StatusNotice tone="danger" title="ไม่สามารถส่งประกาศได้" text="ข้อความที่กรอกยังอยู่ กรุณาลองอีกครั้ง" error={broadcastMutation.error as Error} /> : null}
+                </form>
+              </Panel>
+              <Panel title="ประกาศล่าสุด" icon={BellRing}>
+                <BroadcastList items={overview?.recent_broadcasts || []} loaded={Boolean(overview)} />
+              </Panel>
+            </div>
+          ) : null}
+
+          {activeSection === "resources" ? <GeneralLinksEditor /> : null}
+          {activeSection === "ai-settings" ? <AISettingsEditor /> : null}
+
+          {activeSection === "system" ? (
+            <>
+              <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <Metric label="คำขอทั้งหมด" value={metrics?.total_requests ?? "--"} icon={Activity} trend="สถิติการใช้งาน" loading={isOverviewLoading} />
+                <Metric label="เวลาตอบสนองเฉลี่ย" value={metrics ? `${metrics.avg_response_time_ms}ms` : "--"} icon={CircleGauge} trend="ประสิทธิภาพระบบ" loading={isOverviewLoading} />
+                <Metric label="ข้อผิดพลาด" value={metrics?.total_errors ?? "--"} icon={AlertTriangle} trend="รายการที่ระบบตรวจพบ" loading={isOverviewLoading} />
+                <Metric label="สมาชิกที่ระงับ" value={overview?.counts.banned_users ?? "--"} icon={ShieldAlert} trend="การควบคุมความปลอดภัย" loading={isOverviewLoading} />
               </div>
-            </Panel>
-          </div>
+
+              <div className="mt-6 grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+                <Panel title="สถิติการใช้งาน" action={overview?.generated_at ? `อัปเดต ${new Date(overview.generated_at).toLocaleTimeString("th-TH")}` : "กำลังโหลด"} icon={LineChartIcon}>
+                  <div className="chart-frame">
+                    {isOverviewLoading ? <div className="skeleton-block h-full min-h-[260px]" /> : null}
+                    {!isOverviewLoading ? (
+                      <ResponsiveContainer width="100%" height={280} minWidth={0} minHeight={280}>
+                        <AreaChart data={chartData} margin={{ left: -10, right: 18, top: 18, bottom: 4 }}>
+                          <defs>
+                            <linearGradient id="trafficFill" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.18} />
+                              <stop offset="100%" stopColor="#0a7c6e" stopOpacity={0.03} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid stroke="rgba(7,23,19,0.07)" vertical={false} />
+                          <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "#5b756e", fontSize: 12, fontWeight: 600 }} />
+                          <YAxis tickLine={false} axisLine={false} tick={{ fill: "#5b756e", fontSize: 12 }} />
+                          <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} cursor={{ stroke: "#22d3ee", strokeOpacity: 0.24 }} />
+                          <Area type="monotone" dataKey="value" stroke="#0a7c6e" fill="url(#trafficFill)" strokeWidth={2.5} dot={{ r: 4, fill: "#22d3ee", stroke: "#071713", strokeWidth: 2 }} activeDot={{ r: 6, fill: "#a3e635", stroke: "#071713", strokeWidth: 2 }} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    ) : null}
+                  </div>
+                </Panel>
+                <Panel title="สถานะบริการ" icon={Wifi}>
+                  <ServiceStatus services={overview?.services} />
+                </Panel>
+              </div>
+
+              <div className="mt-6 grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+                <Panel title="ผลลัพธ์การลดงานและกระดาษ" action="ค่าประมาณจากข้อมูลในระบบ" icon={Leaf}>
+                  {sustainability ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-3">
+                        <DataTile value={sustainability.paper_saved_sheets} label="แผ่นกระดาษที่ลดลง" />
+                        <DataTile value={`${sustainability.admin_hours_saved} ชม.`} label="เวลาผู้ดูแลที่ประหยัด" />
+                        <DataTile value={`${sustainability.co2_saved_grams} กรัม`} label="คาร์บอนโดยประมาณ" />
+                        <DataTile value={`${sustainability.equal_access_rate_percent}%`} label="การเข้าถึงข้อมูล" />
+                      </div>
+                      <div className="mt-4 grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
+                        <ImpactLine label="นักเรียนที่ใช้งาน" value={`${sustainability.active_students}/${sustainability.expected_class_size}`} />
+                        <ImpactLine label="รายการการบ้าน" value={sustainability.homework_count} />
+                        <ImpactLine label="ผู้รับประกาศ" value={sustainability.broadcast_recipients} />
+                        <ImpactLine label="คำขออัตโนมัติ" value={sustainability.automated_request_count} />
+                      </div>
+                    </>
+                  ) : <SkeletonRows count={3} />}
+                </Panel>
+
+                <Panel title="เครื่องมืออ่านภาพด้วย AI" action="Gemini Vision" icon={FileScan}>
+                  <form onSubmit={submitCapture} className="grid gap-4">
+                    <label className="field-label" htmlFor="paperless-image">ภาพจากห้องเรียน</label>
+                    <label className="upload-zone" htmlFor="paperless-image">
+                      <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-emerald-700/10 text-emerald-800"><Camera size={20} /></span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold text-emerald-950">{captureFile ? captureFile.name : "เลือกภาพกระดาน ใบงาน หรือประกาศ"}</span>
+                        <span className="mt-1 block text-xs text-slate-500">รองรับ PNG, JPEG และ WEBP ขนาดไม่เกิน 6 MB</span>
+                      </span>
+                    </label>
+                    <input
+                      id="paperless-image"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] || null;
+                        if (file && (!ALLOWED_CAPTURE_TYPES.has(file.type) || file.size > MAX_CAPTURE_BYTES)) {
+                          event.currentTarget.value = "";
+                          setCaptureFile(null);
+                          setCaptureResult(null);
+                          captureMutation.mutate(file);
+                          return;
+                        }
+                        captureMutation.reset();
+                        setCaptureFile(file);
+                        setCaptureResult(null);
+                      }}
+                      className="sr-only"
+                      required
+                    />
+                    <button className="primary-button h-12 justify-center" disabled={captureMutation.isPending}>
+                      <Sparkles size={17} />
+                      {captureMutation.isPending ? "กำลังวิเคราะห์..." : "วิเคราะห์ภาพ"}
+                    </button>
+                    {captureMutation.isError ? <StatusNotice tone="danger" title="ไม่สามารถวิเคราะห์ภาพได้" text="ไฟล์ที่เลือกยังอยู่ กรุณาตรวจสอบไฟล์แล้วลองอีกครั้ง" error={captureMutation.error as Error} /> : null}
+                  </form>
+                  {captureResult ? <CaptureResult result={captureResult} /> : null}
+                </Panel>
+              </div>
+
+              <div className="mt-6">
+                <Panel title="การระงับการใช้งาน" action="สำหรับผู้ดูแลระบบ" icon={ShieldAlert}>
+                  <div className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
+                    <form onSubmit={submitBan} className="grid gap-3">
+                      <label className="field-label" htmlFor="ban-user">LINE User ID</label>
+                      <input id="ban-user" value={banUserId} onChange={(event) => setBanUserId(event.target.value)} className="mission-input h-12 px-4" required />
+                      <label className="field-label" htmlFor="ban-reason">เหตุผล</label>
+                      <input id="ban-reason" value={banReason} onChange={(event) => setBanReason(event.target.value)} className="mission-input h-12 px-4" maxLength={240} required />
+                      <button className="danger-button" disabled={banMutation.isPending}><Ban size={17} />{banMutation.isPending ? "กำลังดำเนินการ..." : "ระงับการใช้งาน"}</button>
+                      {banMutation.isError ? <StatusNotice tone="danger" title="ไม่สามารถระงับการใช้งานได้" text="ข้อมูลที่กรอกยังอยู่ กรุณาลองอีกครั้ง" error={banMutation.error as Error} /> : null}
+                    </form>
+                    <div className="grid content-start gap-2">
+                      {(blacklistQuery.data?.items || []).map((item) => (
+                        <div key={item.user_id} className="blacklist-row">
+                          <div className="min-w-0">
+                            <p className="truncate font-mono text-sm font-semibold text-emerald-950">{maskLineUserId(item.user_id)}</p>
+                            <p className="truncate text-xs text-slate-500">{item.reason}</p>
+                          </div>
+                          <button type="button" onClick={() => unbanMutation.mutate(item.user_id)} className="mini-button" disabled={unbanMutation.isPending}>
+                            {unbanMutation.isPending ? "กำลังดำเนินการ..." : "ยกเลิกการระงับ"}
+                          </button>
+                        </div>
+                      ))}
+                      {blacklistQuery.isLoading || blacklistQuery.isFetching ? <SkeletonRows count={3} /> : null}
+                      {blacklistQuery.data?.items.length === 0 ? <EmptyState text="ยังไม่มีสมาชิกที่ถูกระงับ" icon={ShieldAlert} /> : null}
+                      {unbanMutation.isError ? <StatusNotice tone="danger" title="ไม่สามารถยกเลิกการระงับได้" text="กรุณาลองอีกครั้ง" error={unbanMutation.error as Error} /> : null}
+                    </div>
+                  </div>
+                </Panel>
+              </div>
+            </>
+          ) : null}
         </section>
       </div>
     </main>
   );
+}
+
+function HomeworkList({ items, loaded }: { items: Homework[]; loaded: boolean }) {
+  if (!loaded) {
+    return <SkeletonRows count={3} />;
+  }
+  if (!items.length) {
+    return <EmptyState text="ยังไม่มีการบ้าน" icon={BookOpenCheck} />;
+  }
+  return (
+    <div className="grid gap-3">
+      {items.map((item) => (
+        <div key={item.id} className="homework-row">
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-semibold text-emerald-950">{item.subject || "ไม่ระบุวิชา"}</p>
+            <span className="rounded-full bg-white/70 px-3 py-1 text-xs font-medium text-slate-500">
+              {item.due_date || "ไม่ระบุกำหนดส่ง"}
+            </span>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{item.detail || "ไม่มีรายละเอียด"}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BroadcastList({ items, loaded }: { items: BroadcastRecord[]; loaded: boolean }) {
+  if (!loaded) {
+    return <SkeletonRows count={3} />;
+  }
+  if (!items.length) {
+    return <EmptyState text="ยังไม่มีประกาศ" icon={BellRing} />;
+  }
+  return (
+    <div className="grid gap-3">
+      {items.map((item) => (
+        <div key={item.id} className="homework-row">
+          <p className="whitespace-pre-wrap text-sm leading-6 text-emerald-950">{item.message || "ไม่มีข้อความ"}</p>
+          <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-500">
+            <span>ส่งสำเร็จ {item.sent_count ?? 0} คน</span>
+            {item.failed_count ? <span className="text-rose-700">ส่งไม่สำเร็จ {item.failed_count} คน</span> : null}
+            {item.timestamp ? <span>{new Date(item.timestamp).toLocaleString("th-TH")}</span> : null}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ServiceStatus({ services }: { services?: ServiceMap }) {
+  if (!services) {
+    return <SkeletonRows count={4} />;
+  }
+  return (
+    <div className="grid gap-3">
+      {Object.entries(services).map(([name, ok]) => (
+        <div key={name} className="service-row">
+          <div className="flex items-center gap-3">
+            <span className={`service-dot ${ok ? "service-dot-ready" : "service-dot-degraded"}`} />
+            <span className="font-mono text-sm font-semibold capitalize text-emerald-950">{name}</span>
+          </div>
+          <span className={`service-badge ${ok ? "service-badge-ready" : "service-badge-degraded"}`}>
+            <CheckCircle2 size={15} />
+            {ok ? "พร้อมใช้งาน" : "มีปัญหาชั่วคราว"}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DataTile({ value, label }: { value: string | number; label: string }) {
+  return (
+    <div className="data-tile">
+      <p className="font-mono text-2xl font-semibold text-[var(--color-text-main)] tabular-nums">{value}</p>
+      <p className="mt-1 text-xs font-medium text-[var(--color-text-muted)]">{label}</p>
+    </div>
+  );
+}
+
+function CaptureResult({ result }: { result: PaperlessCaptureResult }) {
+  return (
+    <div className="result-card">
+      <div className="flex items-center gap-2 text-emerald-950">
+        <Sparkles size={17} />
+        <p className="text-sm font-semibold">{result.analysis.title}</p>
+      </div>
+      <ul className="mt-3 grid gap-2 text-sm leading-6 text-slate-700">
+        {result.analysis.summary.map((item, index) => (
+          <li key={`${item}-${index}`} className="flex gap-2">
+            <Check size={15} className="mt-1 shrink-0 text-emerald-700" />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+      {result.analysis.homework_candidates.length ? (
+        <div className="mt-4 border-t border-emerald-900/10 pt-3">
+          <p className="text-xs font-semibold text-emerald-700">รายการที่อาจเป็นการบ้าน</p>
+          <p className="mt-2 text-sm text-emerald-950">{result.analysis.homework_candidates.join(" / ")}</p>
+        </div>
+      ) : null}
+      {result.analysis.paperless_value ? <p className="mt-3 text-sm leading-6 text-slate-700">{result.analysis.paperless_value}</p> : null}
+    </div>
+  );
+}
+
+function maskLineUserId(userId: string) {
+  if (userId.length <= 10) {
+    return `${userId.slice(0, 3)}•••${userId.slice(-2)}`;
+  }
+  return `${userId.slice(0, 6)}••••••${userId.slice(-4)}`;
 }
 
 function Metric({
@@ -773,7 +927,7 @@ function Metric({
     <div className="metric-card">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--color-text-muted)]">{label}</p>
+          <p className="text-xs font-medium text-[var(--color-text-muted)]">{label}</p>
           <p className="mt-2 font-mono text-[32px] font-semibold leading-[1.1] text-[var(--color-text-main)] tabular-nums">{value}</p>
         </div>
         <span className="metric-icon">
@@ -798,7 +952,7 @@ function SkeletonMetric({ label, icon: Icon }: { label: string; icon: LucideIcon
     <div className="metric-card" aria-busy="true">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--color-text-muted)]">{label}</p>
+          <p className="text-xs font-medium text-[var(--color-text-muted)]">{label}</p>
           <div className="skeleton-block mt-3 h-9 w-28" />
         </div>
         <span className="metric-icon">
@@ -862,8 +1016,8 @@ function UsersTable({ data, loading }: { data: UserRow[]; loading?: boolean }) {
     () => [
       {
         accessorKey: "user_id",
-        header: "User ID",
-        cell: (info) => <span className="font-mono text-xs tabular-nums">{String(info.getValue())}</span>,
+        header: "LINE User ID",
+        cell: (info) => <MaskedUserId value={String(info.getValue())} />,
       },
     ],
     [],
@@ -886,7 +1040,7 @@ function UsersTable({ data, loading }: { data: UserRow[]; loading?: boolean }) {
         <input
           value={globalFilter}
           onChange={(event) => setGlobalFilter(event.target.value)}
-          placeholder="Search users"
+          placeholder="ค้นหาสมาชิกด้วย LINE User ID"
           className="h-full flex-1 border-0 bg-transparent text-sm text-emerald-950 outline-none placeholder:text-slate-400"
         />
       </div>
@@ -922,7 +1076,7 @@ function UsersTable({ data, loading }: { data: UserRow[]; loading?: boolean }) {
           </tbody>
         </table>
         ) : null}
-        {!loading && table.getRowModel().rows.length === 0 ? <EmptyState text="No users found." icon={Users} /> : null}
+        {!loading && table.getRowModel().rows.length === 0 ? <EmptyState text="ไม่พบสมาชิก" icon={Users} /> : null}
       </div>
     </div>
   );
@@ -941,10 +1095,14 @@ function StatusNotice({ tone, title, text, error }: { tone: "success" | "danger"
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm font-semibold">{title}</p>
-          {code ? <span className="status-code">{code}</span> : null}
         </div>
         {displayText ? <p className="mt-1 text-sm leading-6 opacity-82">{displayText}</p> : null}
-        {apiError ? <p className="mt-2 font-mono text-xs uppercase tracking-[0.12em] opacity-62">Status {apiError.status}</p> : null}
+        {apiError ? (
+          <details className="mt-2 text-xs opacity-72">
+            <summary className="cursor-pointer font-semibold">รายละเอียดทางเทคนิค</summary>
+            <p className="mt-2 font-mono">{code} · HTTP {apiError.status}</p>
+          </details>
+        ) : null}
       </div>
     </div>
   );
@@ -958,7 +1116,26 @@ function EmptyState({ text, icon: Icon }: { text: string; icon?: LucideIcon }) {
         <EmptyIcon size={28} strokeWidth={1.7} />
       </span>
       <p className="text-sm font-semibold text-emerald-950">{text}</p>
-      <p className="mt-1 font-mono text-xs uppercase tracking-[0.10em] text-[var(--color-text-muted)]">Awaiting signal</p>
+    </div>
+  );
+}
+
+function MaskedUserId({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copyUserId() {
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="font-mono text-xs tabular-nums">{maskLineUserId(value)}</span>
+      <button type="button" className="mini-button" onClick={copyUserId} aria-label="คัดลอก LINE User ID">
+        <Copy size={14} />
+        {copied ? "คัดลอกแล้ว" : "คัดลอก"}
+      </button>
     </div>
   );
 }
