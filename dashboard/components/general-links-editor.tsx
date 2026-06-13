@@ -1,231 +1,131 @@
 "use client";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useState } from "react";
-import { Link as LinkIcon, RefreshCcw, Save, Search } from "lucide-react";
+import { ExternalLink, Pencil } from "lucide-react";
+import { apiGet, apiSend, validationError } from "@/lib/dashboard-api";
+import { formatDateTime, safeHostname } from "@/lib/dashboard-formatters";
+import type { Workspace } from "@/lib/dashboard-types";
+import {
+  Dialog,
+  EmptyState,
+  InlineAlert,
+  LoadingState,
+  PageHeader,
+  StatusBadge,
+  Surface,
+} from "@/components/ui/dashboard-ui";
 
 type LinkKey = "worksheet_url" | "school_url" | "grade_url" | "absence_form_url";
-
 type LinksPayload = Record<LinkKey, string>;
-
 type LinksResponse = {
-  class_id: string;
-  term_id: string;
   links: LinksPayload;
   effective_links: Partial<LinksPayload>;
   updated_at?: string;
-  updated_by?: string;
 };
 
-type ApiErrorPayload = {
-  error?: {
-    code?: unknown;
-    message?: unknown;
-  };
-};
-
-const DEFAULT_CLASS_ID = "mtc13";
-const DEFAULT_TERM_ID = "2569-t1";
-const LINK_FIELDS: { key: LinkKey; label: string; helper: string }[] = [
-  { key: "worksheet_url", label: "ลิงก์ใบงาน", helper: "ใช้กับคำสั่ง งาน และ ใบงาน" },
-  { key: "school_url", label: "เว็บไซต์โรงเรียน", helper: "ใช้กับคำสั่ง เว็บโรงเรียน" },
-  { key: "grade_url", label: "ลิงก์ตรวจผลการเรียน", helper: "ใช้กับคำสั่ง เกรด" },
-  { key: "absence_form_url", label: "แบบฟอร์มลา", helper: "ใช้กับคำสั่ง ลา" },
+const LINK_FIELDS: Array<{ key: LinkKey; label: string; commands: string }> = [
+  { key: "worksheet_url", label: "ใบงาน", commands: "งาน, ใบงาน" },
+  { key: "school_url", label: "เว็บไซต์โรงเรียน", commands: "เว็บโรงเรียน" },
+  { key: "grade_url", label: "ผลการเรียน", commands: "เกรด" },
+  { key: "absence_form_url", label: "แบบฟอร์มลา", commands: "ลา" },
 ];
 
-const EMPTY_LINKS: LinksPayload = {
-  worksheet_url: "",
-  school_url: "",
-  grade_url: "",
-  absence_form_url: "",
-};
-
-function getApiError(payload: unknown, fallback: string) {
-  const apiError = isApiErrorPayload(payload) ? payload.error : undefined;
-  return typeof apiError?.message === "string" && apiError.message.trim()
-    ? apiError.message
-    : fallback;
+function pathFor(workspace: Workspace) {
+  return `classes/${encodeURIComponent(workspace.class_id)}/terms/${encodeURIComponent(workspace.active_term_id)}/config/links`;
 }
 
-function isApiErrorPayload(payload: unknown): payload is ApiErrorPayload {
-  return typeof payload === "object" && payload !== null && "error" in payload;
-}
-
-function linksPath(classId: string, termId: string) {
-  return `/api/admin/classes/${encodeURIComponent(classId)}/terms/${encodeURIComponent(termId)}/config/links`;
-}
-
-async function readLinks(classId: string, termId: string) {
-  const response = await fetch(linksPath(classId, termId), { cache: "no-store" });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(getApiError(payload, "ไม่สามารถโหลดลิงก์ได้ กรุณาลองอีกครั้ง"));
-  }
-  return (payload as { data: LinksResponse }).data;
-}
-
-async function writeLinks(classId: string, termId: string, links: LinksPayload) {
-  const response = await fetch(linksPath(classId, termId), {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(links),
+export function GeneralLinksEditor({ workspace }: { workspace: Workspace | null }) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState<(typeof LINK_FIELDS)[number] | null>(null);
+  const [value, setValue] = useState("");
+  const query = useQuery({
+    queryKey: ["links", workspace?.class_id, workspace?.active_term_id],
+    queryFn: () => apiGet<LinksResponse>(pathFor(workspace as Workspace)),
+    enabled: Boolean(workspace),
   });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(getApiError(payload, "ไม่สามารถบันทึกได้ ข้อมูลที่กรอกยังอยู่ กรุณาลองอีกครั้ง"));
-  }
-  return (payload as { data: LinksResponse }).data;
-}
-
-function validateClientLinks(classId: string, termId: string, links: LinksPayload) {
-  if (!classId.trim()) {
-    return "กรุณาระบุห้องเรียน";
-  }
-  if (!termId.trim()) {
-    return "กรุณาระบุภาคเรียน";
-  }
-  for (const field of LINK_FIELDS) {
-    const value = links[field.key].trim();
-    if (value && !value.startsWith("https://")) {
-      return `${field.label} ต้องเว้นว่างหรือขึ้นต้นด้วย https://`;
-    }
-  }
-  return "";
-}
-
-export function GeneralLinksEditor() {
-  const [classId, setClassId] = useState(DEFAULT_CLASS_ID);
-  const [termId, setTermId] = useState(DEFAULT_TERM_ID);
-  const [links, setLinks] = useState<LinksPayload>(EMPTY_LINKS);
-  const [loaded, setLoaded] = useState<LinksResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-
-  async function loadCurrentLinks() {
-    setLoading(true);
-    setError("");
-    setSuccess("");
-    try {
-      const data = await readLinks(classId.trim(), termId.trim());
-      setLinks(data.links);
-      setLoaded(data);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "ไม่สามารถโหลดลิงก์ได้ กรุณาลองอีกครั้ง");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function saveLinks(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError("");
-    setSuccess("");
-    const trimmedLinks = Object.fromEntries(
-      LINK_FIELDS.map(({ key }) => [key, links[key].trim()]),
-    ) as LinksPayload;
-    const validationError = validateClientLinks(classId, termId, trimmedLinks);
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const data = await writeLinks(classId.trim(), termId.trim(), trimmedLinks);
-      setLinks(data.links);
-      setLoaded(data);
-      setSuccess("บันทึกลิงก์เรียบร้อยแล้ว");
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "ไม่สามารถบันทึกได้ ข้อมูลที่กรอกยังอยู่ กรุณาลองอีกครั้ง");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function updateLink(key: LinkKey, value: string) {
-    setLinks((current) => ({ ...current, [key]: value }));
-    setSuccess("");
+  const save = useMutation({
+    mutationFn: () => {
+      if (!workspace || !editing || !query.data) throw validationError("ไม่พบพื้นที่จัดการที่เลือก");
+      const nextValue = value.trim();
+      if (nextValue && !nextValue.startsWith("https://")) {
+        throw validationError("URL ต้องเว้นว่างหรือขึ้นต้นด้วย https://");
+      }
+      return apiSend<LinksResponse>(pathFor(workspace), "PUT", {
+        ...query.data.links,
+        [editing.key]: nextValue,
+      });
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["links", workspace?.class_id, workspace?.active_term_id], data);
+      setEditing(null);
+    },
+  });
+  function openEditor(field: (typeof LINK_FIELDS)[number]) {
+    setEditing(field);
+    setValue(query.data?.links[field.key] || "");
+    save.reset();
   }
 
   return (
-    <section className="glass-panel mt-6">
-      <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="panel-icon">
-            <LinkIcon size={18} strokeWidth={2.2} />
-          </span>
-          <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold text-emerald-950">ลิงก์ที่ใช้ในห้องเรียน</h2>
-            <p className="mt-1 text-sm text-slate-600">จัดการลิงก์ที่นักเรียนเปิดผ่านคำสั่งใน LINE</p>
+    <>
+      <PageHeader
+        title="ลิงก์และสื่อ"
+        description="จัดการลิงก์พื้นฐานที่ใช้โดยคำสั่งหลักใน LINE ของห้องที่เลือก"
+        workspace={workspace}
+        action={<button className="button secondary" onClick={() => query.refetch()} disabled={!workspace || query.isFetching}>อัปเดตข้อมูล</button>}
+      />
+      {!workspace ? <InlineAlert tone="warning" title="ยังไม่มีพื้นที่จัดการ">ไม่สามารถโหลดลิงก์ได้ กรุณาตรวจสอบการเชื่อมต่อพื้นที่จัดการ</InlineAlert> : null}
+      {query.isError ? <InlineAlert title="ไม่สามารถโหลดลิงก์พื้นฐานได้" error={query.error}>กรุณาลองอัปเดตข้อมูลอีกครั้ง</InlineAlert> : null}
+      <Surface title="ลิงก์พื้นฐาน" description="รองรับเฉพาะลิงก์ที่ระบบ LINE ใช้งานจริง 4 รายการ">
+        {query.isLoading ? <LoadingState rows={4} /> : null}
+        {query.data ? (
+          <div className="links-list">
+            {LINK_FIELDS.map((field) => {
+              const configured = query.data.links[field.key];
+              const effective = configured || query.data.effective_links[field.key] || "";
+              return (
+                <article key={field.key}>
+                  <div className="link-main">
+                    <strong>{field.label}</strong>
+                    <span>คำสั่ง: {field.commands}</span>
+                  </div>
+                  <div className="link-status">
+                    <StatusBadge tone={configured ? "success" : "neutral"}>
+                      {configured ? "ตั้งค่าแล้ว" : "ยังไม่ได้ตั้งค่า"}
+                    </StatusBadge>
+                    <span>{safeHostname(effective) || "ไม่มี URL"}</span>
+                  </div>
+                  <button className="button secondary compact" type="button" onClick={() => openEditor(field)}>
+                    <Pencil size={16} />แก้ไข
+                  </button>
+                </article>
+              );
+            })}
           </div>
-        </div>
-        {loaded?.updated_at ? (
-          <span className="font-mono text-xs font-semibold text-slate-500">
-            อัปเดต {new Date(loaded.updated_at).toLocaleString("th-TH")}
-          </span>
-        ) : null}
-      </div>
-
-      <form onSubmit={saveLinks} className="grid gap-4">
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-          <label className="grid gap-2">
-            <span className="field-label">ห้องเรียน</span>
-            <input
-              value={classId}
-              onChange={(event) => setClassId(event.target.value)}
-              className="mission-input h-12 px-4"
-              autoComplete="off"
-            />
-          </label>
-          <label className="grid gap-2">
-            <span className="field-label">ภาคเรียน</span>
-            <input
-              value={termId}
-              onChange={(event) => setTermId(event.target.value)}
-              className="mission-input h-12 px-4"
-              autoComplete="off"
-            />
-          </label>
-          <div className="flex items-end gap-2">
-            <button type="button" onClick={loadCurrentLinks} disabled={loading || saving} className="secondary-button h-12">
-              <Search size={17} />
-              {loading ? "กำลังโหลด..." : "โหลดข้อมูล"}
-            </button>
-            <button type="button" onClick={loadCurrentLinks} disabled={loading || saving} className="mini-button h-12">
-              <RefreshCcw size={16} />
-              โหลดใหม่
-            </button>
+        ) : !query.isLoading && !query.isError ? <EmptyState>ยังไม่ได้ตั้งค่าลิงก์</EmptyState> : null}
+        {query.data?.updated_at ? <p className="updated-note">อัปเดตล่าสุด {formatDateTime(query.data.updated_at)}</p> : null}
+      </Surface>
+      <Dialog
+        open={Boolean(editing)}
+        title={editing ? `แก้ไขลิงก์${editing.label}` : "แก้ไขลิงก์"}
+        description={editing ? `ใช้กับคำสั่ง ${editing.commands}` : undefined}
+        onClose={() => !save.isPending && setEditing(null)}
+      >
+        <form onSubmit={(event: FormEvent) => { event.preventDefault(); save.mutate(); }} className="form-stack">
+          <label htmlFor="link-url">URL</label>
+          <div className="input-with-icon">
+            <ExternalLink size={17} />
+            <input id="link-url" value={value} onChange={(event) => setValue(event.target.value)} placeholder="https://..." autoFocus />
           </div>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-2">
-          {LINK_FIELDS.map((field) => (
-            <label key={field.key} className="grid gap-2">
-              <span className="field-label">{field.label}</span>
-              <input
-                value={links[field.key]}
-                onChange={(event) => updateLink(field.key, event.target.value)}
-                placeholder="https://..."
-                className="mission-input h-12 px-4"
-                autoComplete="off"
-              />
-              <span className="text-xs text-slate-500">{field.helper}</span>
-            </label>
-          ))}
-        </div>
-
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-h-6">
-            {error ? <p className="text-sm font-semibold text-rose-700" role="alert">{error}</p> : null}
-            {success ? <p className="text-sm font-semibold text-emerald-700" role="status">{success}</p> : null}
+          <p className="field-help">เว้นว่างได้เมื่อต้องการใช้ค่าพื้นฐานของระบบ</p>
+          {save.isError ? <InlineAlert title="ไม่สามารถบันทึกลิงก์ได้" error={save.error}>ข้อมูลที่กรอกยังอยู่ กรุณาลองอีกครั้ง</InlineAlert> : null}
+          <div className="dialog-actions">
+            <button type="button" className="button secondary" onClick={() => setEditing(null)} disabled={save.isPending}>ยกเลิก</button>
+            <button type="submit" className="button primary" disabled={save.isPending}>{save.isPending ? "กำลังบันทึก..." : "บันทึกลิงก์"}</button>
           </div>
-          <button type="submit" disabled={saving || loading} className="primary-button">
-            <Save size={17} />
-            {saving ? "กำลังบันทึก..." : "บันทึกลิงก์"}
-          </button>
-        </div>
-      </form>
-    </section>
+        </form>
+      </Dialog>
+    </>
   );
 }

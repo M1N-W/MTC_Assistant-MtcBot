@@ -31,31 +31,27 @@ export default function LoginPage() {
 
   return (
     <main className="login-shell">
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="mission-grid" />
-        <div className="login-ambient login-ambient-cyan" />
-        <div className="login-ambient login-ambient-lime" />
-      </div>
-
-      <div className="relative mx-auto flex min-h-[calc(100svh-3rem)] items-center justify-center">
-        <section className="login-card w-full">
-          <div className="flex flex-col items-center text-center">
-            <div className="login-mark">
-              <Bot size={26} strokeWidth={2.5} />
-            </div>
-            <p className="mt-6 text-sm font-semibold text-emerald-700">
-              MTC Assistant
-            </p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-[-0.01em] text-emerald-950">
-              เข้าสู่ระบบ MTC Dashboard
-            </h1>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              จัดการข้อมูลและการใช้งานของห้องเรียน MTC Assistant
-            </p>
+      <section className="login-brand-panel">
+        <div className="login-brand">
+          <span><Bot size={24} /></span>
+          <div>
+            <strong>MTC Assistant</strong>
+            <small>MTC Dashboard</small>
           </div>
-
-          <form onSubmit={submit} className="mt-8 grid gap-4">
-            <label className="login-field-label" htmlFor="password">
+        </div>
+        <div className="login-brand-copy">
+          <h2>พื้นที่จัดการงานห้องเรียน</h2>
+          <p>ดูข้อมูลล่าสุด จัดการลิงก์ และดูแลเครื่องมือของ MTC Assistant ในที่เดียว</p>
+        </div>
+        <div className="login-pattern" aria-hidden="true" />
+      </section>
+      <section className="login-form-panel">
+        <div className="login-form-wrap">
+          <p className="login-product">MTC Assistant</p>
+          <h1>เข้าสู่ระบบ MTC Dashboard</h1>
+          <p className="login-description">จัดการข้อมูลและการใช้งานของห้องเรียน MTC Assistant</p>
+          <form onSubmit={submit} className="login-form">
+            <label htmlFor="password">
               <LockKeyhole size={15} />
               รหัสผ่าน
             </label>
@@ -74,21 +70,21 @@ export default function LoginPage() {
               onChange={(event) => setPassword(event.target.value)}
               type="password"
               autoComplete="current-password"
-              className="mission-input login-password-input h-12 px-4 text-base"
+              aria-describedby={error ? "login-error" : "login-help"}
               required
             />
             {error ? (
-              <p className="login-error" role="alert">
+              <p id="login-error" className="login-error" role="alert">
                 {error}
               </p>
-            ) : null}
-            <button type="submit" disabled={loading} className="primary-button h-12 justify-center">
+            ) : <p id="login-help" className="login-help">สำหรับผู้ดูแลระบบและผู้ที่ได้รับอนุญาต</p>}
+            <button type="submit" disabled={loading} className="button primary">
               {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่แดชบอร์ด"}
               <ArrowRight size={17} />
             </button>
           </form>
-        </section>
-      </div>
+        </div>
+      </section>
     </main>
   );
 }
