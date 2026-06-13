@@ -6,25 +6,29 @@ This roadmap supports the June 20, 2026 MTC OS v1 Foundation Release. The
 foundation requires individual `super_admin`, `class_admin`, and `teacher`
 accounts with Flask-owned authentication, sessions, and authorization.
 
-The dashboard must stay aligned with the current MTC Assistant architecture: LINE remains the main student interface, the dashboard remains a separate Next.js service, and Flask remains the bot/admin API service. Auth work must protect the existing server-side proxy boundary and preserve class-aware behavior for MTC13, MTC14, and later generations.
+The dashboard must stay aligned with the current MTC Assistant architecture: LINE remains the main student interface, the dashboard remains a separate Next.js service, and Flask remains the bot/admin API service. Auth work must protect the existing server-side proxy boundary and preserve class-aware behavior for MTC12, MTC13, and later generations.
 
 ## Naming Model
 
 - Admin Dashboard: the super-admin workspace for Mawin and any future explicitly trusted super admins.
+- MTC12 Dashboard: the class-scoped workspace for MTC12 class admins.
 - MTC13 Dashboard: the class-scoped workspace for MTC13 class admins.
-- MTC14 Dashboard: the class-scoped workspace for MTC14 class admins.
 - MTC[x] Dashboard: the generic name for any future class dashboard, where `x` is the MTC generation.
 - Dashboard portal: the first signed-in screen where a user chooses the Admin Dashboard or one of the MTC[x] Dashboards they are allowed to access.
 
 This is one web app, one codebase, and one deploy. The app splits access by route, role, and permission. Do not create multiple dashboard websites or separate dashboard codebases unless a future architecture decision explicitly changes this.
 
-The existing MTC Dashboard becomes the Admin Dashboard. Class dashboards should use names like MTC13 Dashboard or MTC14 Dashboard so future maintainers understand which class workspace they are editing.
+The existing MTC Dashboard becomes the Admin Dashboard. Current class
+workspaces should use names such as MTC12 Dashboard and MTC13 Dashboard.
+Future classes use the generic MTC[x] pattern.
 
 ## Role Model
 
 - `super_admin`: can manage all classes, global system settings, class admin accounts, and high-risk operations. Mawin is the current super admin.
 - `class_admin`: belongs to exactly one class in MTC OS v1. One class may have
-  multiple class admins.
+  multiple class admins. Long-term MTC OS v1 capabilities include ordinary
+  management of links, learning resources, timetable, homework, exams,
+  announcements, and other content for that assigned class.
 - `teacher`: belongs to one or more explicitly assigned classes. One class may
   have multiple teachers.
 - `student` or `user`: can use LINE features and may have a bound class identity, but does not receive dashboard edit access by default.
@@ -34,6 +38,11 @@ Only `super_admin` may appoint, remove, disable, recover, or change assignments
 for class admins and teachers. Role, capability, and class scope must be
 enforced by Flask for every protected request. Frontend visibility is only UX;
 hidden buttons are not security.
+
+Each class-admin write capability becomes active only when its module, backend
+authorization, and permission tests exist. Account administration, term
+lifecycle, global settings, and class BYOK remain `super_admin`-only unless a
+later explicit decision changes them.
 
 ## Route Model
 
@@ -83,7 +92,7 @@ Student identity proofing is for binding a LINE user to a class roster record. I
 
 Suggested flow:
 
-- User chooses a class such as MTC13 or MTC14.
+- User chooses a class such as MTC12 or MTC13.
 - User submits roster proofing fields such as name, surname, class number, or student ID.
 - Backend compares the submitted fields with class-scoped roster data.
 - On a match, backend binds the LINE user ID to the roster record and class user document.
@@ -91,7 +100,12 @@ Suggested flow:
 
 Student ID is not a password. It is only proofing material. Do not force every student to set a password unless a later product need requires student web login.
 
-Store only the minimum necessary identity data. Keep LINE user IDs internal and avoid exposing them unnecessarily in dashboard tables, exports, or logs.
+Store only the minimum necessary identity data. Student and public interfaces
+must never expose LINE user IDs. Super admins may view full IDs across all
+classes; class admins may view full IDs only for their one assigned class; and
+teachers may view full IDs only for explicitly assigned classes. List views
+may mask IDs by default with an authorized details/reveal interaction. Bulk
+export is not automatically allowed.
 
 ## Forgot Password / Recovery Model
 
@@ -133,7 +147,10 @@ Recommended Firestore shape:
 
 Roster documents should store only the data needed for identity proofing and class operations. Use `student_id_hash` or HMAC instead of raw student ID where practical. Store `SERVER_SECRET_PEPPER` in environment variables, not in the repo.
 
-Do not commit real roster CSVs, real student data, real accounts, secrets, tokens, or production credentials. Use fake examples only. Keep LINE user IDs internal and avoid exposing them unnecessarily to class admins unless the workflow requires it.
+Do not commit real roster CSVs, real student data, real accounts, secrets,
+tokens, or production credentials. Use fake examples only. Every full LINE
+user ID read must be authorized server-side against the current role and class
+scope.
 
 General links remain class/term-scoped under:
 
@@ -185,6 +202,15 @@ Admin Dashboard can be more operations-focused. It should prioritize monitoring,
 MTC[x] Dashboard should be simpler, task-focused, and handoff-friendly. It should show only what the signed-in user can edit. It should avoid overwhelming class admins with global settings or unrelated operational tools.
 
 The recommended visual direction is Classroom OS from `CONTEXT.md`: clean, modular, long-lived, and suitable for class admin handoff, timetable editing, config management, and multi-generation support. Keep MTC Assistant identity and mascot where appropriate, but do not let branding obscure maintenance tasks.
+
+Thai is the primary language for normal Dashboard navigation, headings, forms,
+buttons, confirmations, empty states, and errors. The teacher-first policy
+means task-first language understandable to non-technical teachers, class
+admins, and future student maintainers. English remains for product names and
+familiar technical names such as MTC Assistant, MTC Dashboard, Classroom OS,
+LINE, AI, URL, Google, and Gemini. Hide `class_id`, `term_id`, BYOK,
+credentials, API tokens, and audit schemas from normal UX; show them only in
+advanced or system contexts when necessary.
 
 Section navigation should use stable URL hashes without another routing
 framework: `#overview`, `#members`, `#homework`, `#announcements`,
@@ -282,6 +308,8 @@ permission tests exist.
 
 ## Open Questions
 
+- Which class-admin write modules are required for the June 20 Foundation
+  Release versus later MTC OS v1 work?
 - Should student LINE onboarding require only roster verification, or should any student web password exist later?
 - How should the system handle students who transfer rooms?
 - How should admin roles rotate each generation?

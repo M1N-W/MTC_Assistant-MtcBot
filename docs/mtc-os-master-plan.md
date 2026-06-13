@@ -109,7 +109,7 @@ By June 20 a teacher may:
 - sign in with an individual account;
 - access only explicitly assigned classes;
 - view existing assigned-class operational data;
-- view class members without raw LINE user IDs;
+- view full LINE user IDs for members of explicitly assigned classes;
 - read assigned-class homework;
 - use existing safe class-scoped homework writes when the endpoint and
   permission tests exist;
@@ -126,10 +126,19 @@ Teachers cannot manage accounts, roles, assignments, term lifecycle, global
 settings, system-wide broadcasts, class BYOK, AI credentials, raw AI
 conversations, deployment settings, or system-wide audit logs.
 
-Raw LINE user IDs are `super_admin`-only and may be revealed only for support,
-abuse response, or delivery diagnosis with audit logging. Teachers and class
-admins use display names, roster identity, binding status, and a masked
-reference.
+LINE identity access remains server-side and class-scoped:
+
+- `super_admin` may view full LINE user IDs across all classes.
+- `class_admin` may view full LINE user IDs only for the one assigned class.
+- `teacher` may view full LINE user IDs only for explicitly assigned classes.
+- Student and public interfaces never expose LINE user IDs.
+- List views may mask IDs by default and provide an authorized details/reveal
+  interaction.
+- Bulk export is not automatically allowed and requires a separate capability.
+
+Raw AI prompt and response access remains `super_admin`-only. It is a separate
+AI audit permission and does not restrict authorized class-scoped LINE
+identity access.
 
 ### Capability Model
 
@@ -217,6 +226,16 @@ Students, teachers, and class admins should not need to understand
 `class_id`, `term_id`, Firestore paths, credentials, BYOK, idempotency, cron
 expressions, dry-run mechanics, audit schemas, or API tokens.
 
+- Thai is the primary language for normal Dashboard navigation, headings,
+  forms, buttons, confirmations, empty states, and errors.
+- The teacher-first policy means task-first language that non-technical
+  teachers, class admins, and future student maintainers can understand.
+- English remains for product names and familiar technical names such as
+  MTC Assistant, MTC Dashboard, Classroom OS, LINE, AI, URL, Google, and
+  Gemini.
+- Technical terms such as `class_id`, `term_id`, BYOK, credentials, API
+  tokens, and audit schemas appear only in advanced or system contexts when
+  necessary.
 - Use human-facing class and term labels.
 - Use safe defaults and explicit previews for risky actions.
 - Open a single allowed workspace directly.
@@ -284,7 +303,8 @@ The June 20 foundation is complete only when:
 - `class_admin` is limited to exactly one assigned class.
 - Multi-class teachers can switch only among explicit assignments.
 - Only `super_admin` can manage accounts or term lifecycle.
-- Raw LINE user IDs remain super-admin-only.
+- Full LINE user ID access is enforced by role and class scope, with no student
+  or public exposure and no implicit bulk-export permission.
 - Broadcast resolution and history are class-scoped.
 - Existing production behavior and MTC67 invariants pass regression checks.
 - Bot and Dashboard health checks pass after Manual Deploy.
@@ -312,11 +332,17 @@ or restore the recorded term/account state without deleting audit history.
   granting them to teachers or class admins.
 - Keep term lifecycle operations super-admin-only until a later explicit
   decision changes that boundary.
+- Long-term MTC OS v1 class-admin capabilities include ordinary management of
+  links, learning resources, timetable, homework, exams, announcements, and
+  other assigned-class content. Activate each capability only after its
+  module, backend authorization, and permission tests exist.
+- Account administration, term lifecycle, global settings, and class BYOK
+  remain `super_admin`-only unless a later explicit decision changes them.
 
 ## Open Questions
 
 - Exact audit-log and session retention periods.
 - The emergency super-admin recovery procedure.
-- Whether class admins later receive ordinary timetable, link, or resource
-  editing capabilities.
+- Which class-admin write modules are required for the June 20 Foundation
+  Release versus later MTC OS v1 work.
 - The final scheduler mechanism for reminders.

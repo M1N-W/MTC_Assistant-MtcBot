@@ -438,12 +438,15 @@ Constraints:
 
 - Class admins must not read or mutate other classes.
 - Teachers must not read or mutate classes outside explicit assignments.
-- Raw LINE user IDs are super-admin-only and require an audited support,
-  abuse-response, or delivery-diagnosis purpose.
+- Super admins may view full LINE user IDs across all classes.
+- Class admins may view full LINE user IDs only for their one assigned class.
+- Teachers may view full LINE user IDs only for explicitly assigned classes.
+- Member lists may mask LINE user IDs by default and reveal them through an
+  authorized details interaction. Bulk export requires separate authorization.
 - A user's `class_id` must be resolved server-side.
 - Do not trust client-provided `class_id` without checking permissions.
 - Keep super admin powers explicit.
-- Do not expose raw LINE user IDs unnecessarily in student-facing features.
+- Student and public interfaces must never expose LINE user IDs.
 
 ### Secret Handling
 

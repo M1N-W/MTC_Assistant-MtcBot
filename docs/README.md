@@ -22,7 +22,6 @@ specifications.
 - [Dashboard Auth and Admin Roadmap](dashboard-auth-roadmap.md)
 - [Exam Calendar and Reminder Roadmap](p3-exam-calendar-reminder-roadmap.md)
 - [Learning Resources Seed/Config Workflow](learning-resources-seed-config-workflow.md)
-- [VPS Migration Plan](deployment/vps-migration-plan.md)
 
 Active roadmaps provide implementation detail. They must remain consistent with
 the canonical product hierarchy and MTC OS master plan.
@@ -32,6 +31,13 @@ the canonical product hierarchy and MTC OS master plan.
 - [Dashboard Architecture](dashboard-architecture.md)
 - [Term Readiness Check](term-readiness-check.md)
 - [Learning Resources Seed Validator Usage](learning-resources-seed-validator-usage.md)
+
+## Dormant / Future Infrastructure Option
+
+- [VPS Migration Plan](deployment/vps-migration-plan.md): retained for future
+  evaluation. Render remains the production platform through MTC OS v1. The
+  plan must be revalidated before implementation and is not the current
+  deployment source of truth.
 
 ## Historical Manual-Test Evidence
 
