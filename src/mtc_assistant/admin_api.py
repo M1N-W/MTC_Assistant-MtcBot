@@ -15,6 +15,7 @@ import os
 import re
 import threading
 from dataclasses import dataclass
+from itertools import islice
 from typing import Any, Callable, Dict, Optional, Tuple
 
 from flask import Blueprint, g, jsonify, request
@@ -29,7 +30,10 @@ from mtc_assistant.ai_credential_service import (
 )
 from mtc_assistant.ai_provider_adapters import AIProviderError
 from mtc_assistant.ai_provider_registry import get_provider_definition
-from mtc_assistant.class_context import get_class_registry_entry
+from mtc_assistant.class_context import (
+    get_active_term_metadata,
+    get_class_registry_entry,
+)
 from mtc_assistant.config import (
     DASHBOARD_ALLOWED_ORIGINS,
     LOCAL_TZ,
@@ -58,6 +62,8 @@ SECRET_VALUE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 LOCAL_PATH_PATTERN = re.compile(r"^([A-Za-z]:\\|/Users/|/home/|/|\.{1,2}[/\\]|~[/\\])")
+MAX_WORKSPACES = 100
+PAPERLESS_RECENT_LIMIT = 10
 
 
 @dataclass(frozen=True)
@@ -125,7 +131,6 @@ def create_admin_api_blueprint(
         homework_items = _get_recent_homeworks(db, limit=6)
         blacklist = get_blacklist_manager().get_all_banned()
         recent_broadcasts = _get_recent_broadcasts(db, limit=5)
-        sustainability = _build_sustainability_impact(db, metrics)
 
         return jsonify({
             "data": {
@@ -139,7 +144,6 @@ def create_admin_api_blueprint(
                     "banned_users": len(blacklist),
                     "recent_broadcasts": len(recent_broadcasts),
                 },
-                "sustainability": sustainability,
                 "homework_preview": homework_items,
                 "recent_broadcasts": recent_broadcasts,
             }
@@ -151,6 +155,34 @@ def create_admin_api_blueprint(
         return jsonify({
             "data": _build_sustainability_impact(db, get_metrics())
         }), 200
+
+    @blueprint.get("/workspaces")
+    def workspaces():
+        db = get_db()
+        if not db:
+            return _error("FIREBASE_UNAVAILABLE", "Firebase is not connected.", 503)
+
+        try:
+            items = _get_workspaces(db)
+        except Exception as e:
+            logger.warning("Could not load dashboard workspaces: %s", e)
+            return _error("FIREBASE_UNAVAILABLE", "Firebase is not connected.", 503)
+
+        return jsonify({"data": {"workspaces": items}}), 200
+
+    @blueprint.get("/paperless-captures/summary")
+    def paperless_capture_summary():
+        db = get_db()
+        if not db:
+            return _error("FIREBASE_UNAVAILABLE", "Firebase is not connected.", 503)
+
+        try:
+            summary = _get_paperless_capture_summary(db)
+        except Exception as e:
+            logger.warning("Could not load paperless capture summary: %s", e)
+            return _error("FIREBASE_UNAVAILABLE", "Firebase is not connected.", 503)
+
+        return jsonify({"data": summary}), 200
 
     @blueprint.post("/paperless-capture")
     def paperless_capture():
@@ -740,6 +772,105 @@ def _links_doc_ref(db, class_id: str, term_id: str):
         .collection("config")
         .document("links")
     )
+
+
+def _get_workspaces(db) -> list[Dict[str, Any]]:
+    registry_root = db.collection("system").document("class_registry")
+    workspaces = []
+
+    for class_collection in islice(registry_root.collections(), MAX_WORKSPACES):
+        class_id = str(getattr(class_collection, "id", "") or "").strip()
+        registry = get_class_registry_entry(db, class_id)
+        if not registry or not registry.active_term_id:
+            continue
+
+        term = get_active_term_metadata(db, class_id)
+        if not term or term.term_id != registry.active_term_id:
+            continue
+
+        workspaces.append({
+            "class_id": registry.class_id,
+            "label": registry.display_name or registry.class_id.upper(),
+            "active_term_id": registry.active_term_id,
+            "active_term_label": (
+                term.display_name or _format_term_label(registry.active_term_id)
+            ),
+            "status": registry.status,
+            "can_edit_active_term": (
+                registry.status == "active" and term.status == "active"
+            ),
+        })
+
+    return sorted(workspaces, key=lambda item: item["label"].casefold())
+
+
+def _format_term_label(term_id: str) -> str:
+    match = re.fullmatch(r"(\d{4})-t(\d+)", term_id, re.IGNORECASE)
+    if match:
+        year, term_number = match.groups()
+        return f"ภาคเรียนที่ {int(term_number)}/{year}"
+    return term_id
+
+
+def _get_paperless_capture_summary(db) -> Dict[str, Any]:
+    collection = db.collection("paperless_captures")
+    successful_capture_count = _aggregate_count_value(collection.count().get())
+    docs = (
+        collection.order_by("timestamp", direction=firestore.Query.DESCENDING)
+        .limit(PAPERLESS_RECENT_LIMIT)
+        .stream()
+    )
+    recent = [_safe_paperless_summary_item(doc) for doc in docs]
+
+    return {
+        "successful_capture_count": successful_capture_count,
+        "latest_success_at": next(
+            (item["created_at"] for item in recent if item["created_at"]),
+            None,
+        ),
+        "recent": recent,
+    }
+
+
+def _aggregate_count_value(result: Any) -> int:
+    pending = [result]
+    while pending:
+        value = pending.pop(0)
+        if isinstance(value, (list, tuple)):
+            pending.extend(value)
+            continue
+        count = getattr(value, "value", None)
+        if isinstance(count, int) and count >= 0:
+            return count
+    return 0
+
+
+def _safe_paperless_summary_item(doc: Any) -> Dict[str, Any]:
+    data = doc.to_dict() or {}
+    analysis = data.get("analysis")
+    if not isinstance(analysis, dict):
+        analysis = {}
+
+    summary = analysis.get("summary")
+    homework_candidates = analysis.get("homework_candidates")
+    created_at = data.get("created_at")
+    mime_type = data.get("mime_type")
+    image_size_bytes = data.get("image_size_bytes")
+
+    return {
+        "id": str(getattr(doc, "id", "") or ""),
+        "created_at": created_at if isinstance(created_at, str) else None,
+        "mime_type": mime_type if isinstance(mime_type, str) else None,
+        "image_size_bytes": (
+            image_size_bytes
+            if isinstance(image_size_bytes, int) and image_size_bytes >= 0
+            else None
+        ),
+        "summary_item_count": len(summary) if isinstance(summary, list) else 0,
+        "homework_candidate_count": (
+            len(homework_candidates) if isinstance(homework_candidates, list) else 0
+        ),
+    }
 
 
 def _validate_links_payload(payload: Dict[str, Any]) -> Tuple[Dict[str, str], Optional[Any]]:

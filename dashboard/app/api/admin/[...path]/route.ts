@@ -66,13 +66,12 @@ async function proxy(request: NextRequest, context: RouteContext) {
       ...init,
       signal: AbortSignal.timeout(upstreamTimeoutMs),
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown network error";
+  } catch {
     return Response.json(
       {
         error: {
           code: "BOT_API_UNREACHABLE",
-          message: `Could not reach Flask bot API at ${apiBase}. Start the bot API or set MTC_BOT_API_BASE_URL to the running Flask service. (${message})`,
+          message: "ไม่สามารถเชื่อมต่อบริการข้อมูลได้ในขณะนี้ กรุณาลองอีกครั้ง",
         },
       },
       { status: 502 },

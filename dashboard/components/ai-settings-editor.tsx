@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useCallback, useMemo, useState } from "react";
 import {
   CheckCircle2,
   KeyRound,
@@ -10,6 +10,8 @@ import {
   ShieldCheck,
   Trash2,
 } from "lucide-react";
+import type { Workspace } from "@/lib/dashboard-types";
+import { PageHeader, Surface } from "@/components/ui/dashboard-ui";
 
 type Provider = {
   provider_id: "gemini" | "openai" | "anthropic";
@@ -39,8 +41,6 @@ type CredentialsResponse = {
   settings: Settings;
 };
 
-const DEFAULT_CLASS_ID = "mtc13";
-
 function apiPath(classId: string, suffix = "") {
   return `/api/admin/classes/${encodeURIComponent(classId)}/ai${suffix}`;
 }
@@ -62,8 +62,8 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   return (payload as { data: T }).data;
 }
 
-export function AISettingsEditor() {
-  const [classId, setClassId] = useState(DEFAULT_CLASS_ID);
+export function AISettingsEditor({ workspace }: { workspace: Workspace | null }) {
+  const classId = workspace?.class_id || "";
   const [data, setData] = useState<CredentialsResponse | null>(null);
   const [providerId, setProviderId] = useState<Provider["provider_id"]>("gemini");
   const [model, setModel] = useState("");
@@ -80,7 +80,7 @@ export function AISettingsEditor() {
     [data, providerId],
   );
 
-  async function loadCredentials() {
+  const loadCredentials = useCallback(async () => {
     setBusy("load");
     setError("");
     setSuccess("");
@@ -108,7 +108,7 @@ export function AISettingsEditor() {
     } finally {
       setBusy("");
     }
-  }
+  }, [classId]);
 
   async function validateKey() {
     if (!apiKey.trim()) {
@@ -233,30 +233,23 @@ export function AISettingsEditor() {
   }
 
   return (
-    <section id="ai-settings" className="ai-settings-panel mt-6">
+    <>
+      <PageHeader
+        title="การตั้งค่า AI"
+        description="จัดการผู้ให้บริการ โมเดล และ API key สำหรับพื้นที่ที่เลือก"
+        workspace={workspace}
+        action={<button className="button secondary" type="button" onClick={loadCredentials} disabled={Boolean(busy) || !classId}><RefreshCcw size={16} /> อัปเดตข้อมูล</button>}
+      />
+      <Surface className="ai-settings-panel">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-start gap-3">
           <span className="ai-settings-icon"><KeyRound size={20} /></span>
           <div>
-            <p className="font-mono text-xs font-bold uppercase tracking-[0.14em] text-[#F4B942]">
-              Classroom OS
-            </p>
-            <h2 className="mt-1 text-xl font-semibold text-[#12372A]">การเชื่อมต่อ AI ของห้องเรียน</h2>
+            <h2 className="text-xl font-semibold text-[#12372A]">การเชื่อมต่อ AI</h2>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
               สำหรับผู้ดูแลระบบ ใช้เชื่อมต่อ Gemini หรือผู้ให้บริการ AI ที่ห้องเรียนเลือก
             </p>
           </div>
-        </div>
-        <div className="flex gap-2">
-          <input
-            aria-label="ห้องเรียน"
-            className="field-input w-32"
-            value={classId}
-            onChange={(event) => setClassId(event.target.value)}
-          />
-          <button className="secondary-button" type="button" onClick={loadCredentials} disabled={Boolean(busy)}>
-            <RefreshCcw size={16} /> โหลดข้อมูล
-          </button>
         </div>
       </div>
 
@@ -265,7 +258,7 @@ export function AISettingsEditor() {
 
       {!data ? (
         <div className="mt-5 rounded-lg border border-dashed border-[#12372A]/25 bg-white/45 p-6 text-center text-sm text-slate-600">
-          เลือกห้องเรียนแล้วกดโหลดข้อมูลเพื่อดูสถานะการเชื่อมต่อ AI
+          {workspace ? "กดอัปเดตข้อมูลเพื่อดูสถานะการเชื่อมต่อ AI" : "ยังไม่มีพื้นที่จัดการสำหรับการตั้งค่า AI"}
         </div>
       ) : (
         <div className="mt-5 grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
@@ -361,6 +354,7 @@ export function AISettingsEditor() {
           </div>
         </div>
       )}
-    </section>
+      </Surface>
+    </>
   );
 }
