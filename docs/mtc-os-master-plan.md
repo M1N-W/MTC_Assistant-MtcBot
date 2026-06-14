@@ -38,7 +38,8 @@ June 20, 2026 is a production deployment deadline. The required release is the
    - Previous-term history and rollback procedure.
 3. Dashboard authentication and authorization:
    - individual username/password accounts;
-   - `super_admin`, `class_admin`, and `teacher`;
+   - backend role support for `student`, `teacher`, `class_admin`, and
+     `super_admin`;
    - secure Flask-owned sessions;
    - server-side role and capability checks;
    - server-side class-scope enforcement.
@@ -101,6 +102,23 @@ independent authentication authorities long-term. Keep
 Google login is a later authentication method mapped to a pre-approved local
 Flask account. It is not required by June 20 and must never auto-register an
 arbitrary Google account.
+
+The backend-first auth foundation establishes additive account, username
+reservation, opaque session, login throttle, and security-audit storage under
+`/system`. It does not migrate the Next.js login, create production accounts,
+or authorize existing global admin endpoints for teachers or class admins.
+Those operations remain on the shared-password compatibility path until the
+Next.js session and Admin API principal migrations are verified.
+
+The foundation session lifetime is 12 hours. Session documents carry
+`purge_after` metadata for 30 days after expiry, and security audit records
+carry `retain_until` metadata for 365 days. Automated TTL cleanup is not part
+of the foundation milestone.
+
+The complete Web Platform still requires the Student Portal and the teacher,
+class-admin, and super-admin workspaces. The Student Portal is a required later
+milestone, not an optional idea, and is not implemented by this backend-only
+foundation.
 
 ### Teacher Baseline
 
