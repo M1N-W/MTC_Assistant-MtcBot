@@ -5,6 +5,7 @@ import {
   ReactNode,
   RefObject,
   useEffect,
+  useId,
   useRef,
 } from "react";
 import type { Workspace } from "@/lib/dashboard-types";
@@ -42,18 +43,22 @@ export function PageHeader({
   title,
   description,
   workspace,
+  context,
   action,
 }: {
   title: string;
   description: string;
   workspace?: Workspace | null;
+  context?: string;
   action?: ReactNode;
 }) {
   return (
     <header className="page-header">
       <div>
         <div className="page-context">
-          {workspace ? (
+          {context ? (
+            <span>{context}</span>
+          ) : workspace ? (
             <>
               <span>{workspace.label}</span>
               <span aria-hidden="true">·</span>
@@ -79,6 +84,22 @@ export function StatusBadge({
   children: ReactNode;
 }) {
   return <span className={`status-badge status-${tone}`}>{children}</span>;
+}
+
+export function ServiceStatusBadge({
+  loading,
+  error,
+  available,
+}: {
+  loading: boolean;
+  error: boolean;
+  available?: boolean;
+}) {
+  if (loading) return <StatusBadge tone="neutral">กำลังตรวจสอบ</StatusBadge>;
+  if (error) return <StatusBadge tone="information">ไม่สามารถตรวจสอบได้</StatusBadge>;
+  return available
+    ? <StatusBadge tone="success">พร้อมใช้งาน</StatusBadge>
+    : <StatusBadge tone="warning">มีปัญหาชั่วคราว</StatusBadge>;
 }
 
 export function InlineAlert({
@@ -133,31 +154,30 @@ export function Dialog({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const titleId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
-  const returnFocusRef = useRef<HTMLElement | null>(null);
-  useEscapeClose(open, onClose);
-  useEffect(() => {
-    if (open) {
-      returnFocusRef.current = document.activeElement as HTMLElement | null;
-      closeRef.current?.focus();
-    } else {
-      returnFocusRef.current?.focus();
-      returnFocusRef.current = null;
-    }
-  }, [open]);
+  const dialogRef = useRef<HTMLElement>(null);
+  useModalBehavior({
+    open,
+    onClose,
+    containerRef: dialogRef,
+    initialFocusRef: closeRef,
+  });
   if (!open) return null;
   return (
     <div className="overlay" role="presentation" onMouseDown={onClose}>
       <section
+        ref={dialogRef}
         className="dialog"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="dialog-title"
+        aria-labelledby={titleId}
+        tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header>
           <div>
-            <h2 id="dialog-title">{title}</h2>
+            <h2 id={titleId}>{title}</h2>
             {description ? <p>{description}</p> : null}
           </div>
           <button ref={closeRef} type="button" className="icon-button" onClick={onClose} aria-label="ปิดหน้าต่าง">
@@ -183,18 +203,22 @@ export function Drawer({
   returnFocusRef: RefObject<HTMLButtonElement | null>;
   children: ReactNode;
 }) {
+  const titleId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
-  useEscapeClose(open, onClose);
-  useEffect(() => {
-    if (open) closeRef.current?.focus();
-    if (!open) returnFocusRef.current?.focus();
-  }, [open, returnFocusRef]);
+  const drawerRef = useRef<HTMLElement>(null);
+  useModalBehavior({
+    open,
+    onClose,
+    containerRef: drawerRef,
+    initialFocusRef: closeRef,
+    returnFocusRef,
+  });
   if (!open) return null;
   return (
     <div className="overlay drawer-overlay" role="presentation" onMouseDown={onClose}>
-      <aside className="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" onMouseDown={(event) => event.stopPropagation()}>
+      <aside ref={drawerRef} className="drawer" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
         <header>
-          <h2 id="drawer-title">{title}</h2>
+          <h2 id={titleId}>{title}</h2>
           <button ref={closeRef} type="button" className="icon-button" onClick={onClose} aria-label="ปิดเมนู">
             <X size={20} />
           </button>
@@ -205,13 +229,78 @@ export function Drawer({
   );
 }
 
-function useEscapeClose(open: boolean, onClose: () => void) {
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
+function useModalBehavior({
+  open,
+  onClose,
+  containerRef,
+  initialFocusRef,
+  returnFocusRef,
+}: {
+  open: boolean;
+  onClose: () => void;
+  containerRef: RefObject<HTMLElement | null>;
+  initialFocusRef: RefObject<HTMLElement | null>;
+  returnFocusRef?: RefObject<HTMLElement | null>;
+}) {
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     if (!open) return;
+    const body = document.body;
+    const previousOverflow = body.style.overflow;
+    const returnTarget = returnFocusRef?.current
+      ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    body.style.overflow = "hidden";
+    initialFocusRef.current?.focus();
+
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const container = containerRef.current;
+      if (!container) return;
+      const focusable = Array.from(
+        container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+      ).filter((element) => element.getAttribute("aria-hidden") !== "true");
+      if (focusable.length === 0) {
+        event.preventDefault();
+        container.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !container.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === last || !container.contains(active))) {
+        event.preventDefault();
+        first.focus();
+      }
     }
+
     document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      body.style.overflow = previousOverflow;
+      returnTarget?.focus();
+    };
+  }, [containerRef, initialFocusRef, open, returnFocusRef]);
 }

@@ -3,11 +3,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useState } from "react";
 import { apiGet, apiSend, validationError } from "@/lib/dashboard-api";
-import type { BroadcastRecord, Workspace } from "@/lib/dashboard-types";
+import type { BroadcastRecord } from "@/lib/dashboard-types";
 import { BroadcastList } from "./section-content";
 import { Dialog, InlineAlert, PageHeader, Surface } from "@/components/ui/dashboard-ui";
 
-export function AnnouncementsSection({ workspace }: { workspace: Workspace | null }) {
+export function AnnouncementsSection() {
   const queryClient = useQueryClient();
   const [message, setMessage] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -39,7 +39,7 @@ export function AnnouncementsSection({ workspace }: { workspace: Workspace | nul
   }
   return (
     <>
-      <PageHeader title="ประกาศ" description="เขียนและส่งข้อความผ่าน LINE ถึงผู้ใช้ทั้งหมดที่ลงทะเบียนในระบบ" workspace={workspace} />
+      <PageHeader title="ประกาศ" description="เขียนและส่งข้อความผ่าน LINE ถึงผู้ใช้ทั้งหมดที่ลงทะเบียนในระบบ" context="ข้อมูลรวมทั้งระบบ" />
       <div className="two-column announcements-layout">
         <Surface title="ส่งประกาศถึงผู้ใช้ทั้งหมด">
           <form onSubmit={preview} className="form-stack">

@@ -39,6 +39,7 @@ export function GeneralLinksEditor({ workspace }: { workspace: Workspace | null 
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<(typeof LINK_FIELDS)[number] | null>(null);
   const [value, setValue] = useState("");
+  const [success, setSuccess] = useState("");
   const query = useQuery({
     queryKey: ["links", workspace?.class_id, workspace?.active_term_id],
     queryFn: () => apiGet<LinksResponse>(pathFor(workspace as Workspace)),
@@ -59,9 +60,11 @@ export function GeneralLinksEditor({ workspace }: { workspace: Workspace | null 
     onSuccess: (data) => {
       queryClient.setQueryData(["links", workspace?.class_id, workspace?.active_term_id], data);
       setEditing(null);
+      setSuccess("บันทึกลิงก์เรียบร้อยแล้ว");
     },
   });
   function openEditor(field: (typeof LINK_FIELDS)[number]) {
+    setSuccess("");
     setEditing(field);
     setValue(query.data?.links[field.key] || "");
     save.reset();
@@ -77,6 +80,7 @@ export function GeneralLinksEditor({ workspace }: { workspace: Workspace | null 
       />
       {!workspace ? <InlineAlert tone="warning" title="ยังไม่มีพื้นที่จัดการ">ไม่สามารถโหลดลิงก์ได้ กรุณาตรวจสอบการเชื่อมต่อพื้นที่จัดการ</InlineAlert> : null}
       {query.isError ? <InlineAlert title="ไม่สามารถโหลดลิงก์พื้นฐานได้" error={query.error}>กรุณาลองอัปเดตข้อมูลอีกครั้ง</InlineAlert> : null}
+      {success ? <InlineAlert tone="success" title={success} /> : null}
       <Surface title="ลิงก์พื้นฐาน" description="รองรับเฉพาะลิงก์ที่ระบบ LINE ใช้งานจริง 4 รายการ">
         {query.isLoading ? <LoadingState rows={4} /> : null}
         {query.data ? (

@@ -132,8 +132,9 @@ function WorkspaceSelector({
   error: boolean;
 }) {
   return (
-    <section className="workspace-selector" aria-label="พื้นที่จัดการ">
-      <label htmlFor={id}>พื้นที่จัดการ</label>
+    <section className="workspace-selector" aria-label="ห้องสำหรับการตั้งค่า">
+      <label htmlFor={id}>ห้องสำหรับการตั้งค่า</label>
+      <p>ใช้กับลิงก์พื้นฐานและการตั้งค่า AI</p>
       <select
         id={id}
         value={selected?.class_id ?? ""}

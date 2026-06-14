@@ -131,7 +131,6 @@ def create_admin_api_blueprint(
         homework_items = _get_recent_homeworks(db, limit=6)
         blacklist = get_blacklist_manager().get_all_banned()
         recent_broadcasts = _get_recent_broadcasts(db, limit=5)
-        sustainability = _build_sustainability_impact(db, metrics)
 
         return jsonify({
             "data": {
@@ -145,7 +144,6 @@ def create_admin_api_blueprint(
                     "banned_users": len(blacklist),
                     "recent_broadcasts": len(recent_broadcasts),
                 },
-                "sustainability": sustainability,
                 "homework_preview": homework_items,
                 "recent_broadcasts": recent_broadcasts,
             }

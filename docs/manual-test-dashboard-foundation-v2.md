@@ -67,3 +67,17 @@ Selected direction: Quiet Academic Operations because it best supports teacher-f
 - Proxy errors do not reveal the Flask base URL.
 - No raw credentials, extracted image text, raw LINE IDs, or student records appear in screenshots.
 - No hidden feature code, asset, or UI reference is introduced.
+
+## Correctness Follow-up
+
+Verified on 2026-06-14 against the local branch with mocked Admin API responses:
+
+- Global pages show `ข้อมูลรวมทั้งระบบ`; General Links and AI Settings retain the selected room and active term.
+- The workspace selector explains that it applies only to General Links and AI Settings.
+- Valid, invalid, changed, and empty workspace persistence states behave as specified.
+- Service badges distinguish loading, ready, degraded, and request-error states without an outage flash.
+- The drawer and announcement dialog trap forward and reverse Tab navigation, lock body scrolling, close with Escape, and restore focus.
+- The announcement preview identifies all registered users as the audience.
+- General Links announces a successful save, clears old success feedback on the next edit, and preserves the URL and open dialog after failure.
+- The document has no page-level horizontal overflow at 1440x900, 1024x768, 768x1024, or 390x844.
+- Review screenshot: `%TEMP%\mtc-dashboard-pr6-390.png` (not committed).

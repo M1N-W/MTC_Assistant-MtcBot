@@ -10,21 +10,20 @@ import type {
   Overview,
   PaperlessCaptureResult,
   PaperlessSummary,
-  Workspace,
 } from "@/lib/dashboard-types";
 import {
   EmptyState,
   InlineAlert,
   LoadingState,
   PageHeader,
-  StatusBadge,
+  ServiceStatusBadge,
   Surface,
 } from "@/components/ui/dashboard-ui";
 
 const MAX_CAPTURE_BYTES = 6 * 1024 * 1024;
 const ALLOWED_CAPTURE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
-export function SystemSection({ workspace }: { workspace: Workspace | null }) {
+export function SystemSection() {
   const queryClient = useQueryClient();
   const [userId, setUserId] = useState("");
   const [reason, setReason] = useState("");
@@ -67,16 +66,18 @@ export function SystemSection({ workspace }: { workspace: Workspace | null }) {
   const metrics = overview.data?.metrics;
   return (
     <>
-      <PageHeader title="ระบบ" description="สถานะบริการ ประสิทธิภาพ เครื่องมือทดลอง และการดูแลความปลอดภัย" workspace={workspace} />
+      <PageHeader title="ระบบ" description="สถานะบริการ ประสิทธิภาพ เครื่องมือทดลอง และการดูแลความปลอดภัย" context="ข้อมูลรวมทั้งระบบ" />
       <Surface title="สถานะระบบ">
         {overview.isError ? <InlineAlert title="ไม่สามารถโหลดสถานะระบบได้" error={overview.error}>กรุณาลองอัปเดตข้อมูลอีกครั้ง</InlineAlert> : null}
         <div className="service-grid">
           {(["line", "firebase", "gemini", "broadcast"] as const).map((key) => (
             <div key={key}>
               <strong>{key === "gemini" ? "AI" : key === "broadcast" ? "Broadcast" : key.toUpperCase()}</strong>
-              <StatusBadge tone={overview.data?.services[key] ? "success" : "warning"}>
-                {overview.data?.services[key] ? "พร้อมใช้งาน" : "มีปัญหาชั่วคราว"}
-              </StatusBadge>
+              <ServiceStatusBadge
+                loading={overview.isLoading}
+                error={overview.isError}
+                available={overview.data?.services[key]}
+              />
             </div>
           ))}
         </div>

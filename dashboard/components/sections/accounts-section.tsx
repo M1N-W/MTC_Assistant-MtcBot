@@ -4,11 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { apiGet } from "@/lib/dashboard-api";
-import type { UserRow, Workspace } from "@/lib/dashboard-types";
+import type { UserRow } from "@/lib/dashboard-types";
 import { MaskedLineId } from "./section-content";
 import { EmptyState, InlineAlert, LoadingState, PageHeader, Surface } from "@/components/ui/dashboard-ui";
 
-export function AccountsSection({ workspace }: { workspace: Workspace | null }) {
+export function AccountsSection() {
   const [search, setSearch] = useState("");
   const query = useQuery({
     queryKey: ["users"],
@@ -23,7 +23,7 @@ export function AccountsSection({ workspace }: { workspace: Workspace | null }) 
       <PageHeader
         title="บัญชี LINE ที่เชื่อมต่อ"
         description="บัญชี LINE ที่เชื่อมต่อกับ MTC Assistant ในระบบปัจจุบัน"
-        workspace={workspace}
+        context="ข้อมูลรวมทั้งระบบ"
       />
       <Surface
         title="บัญชีที่พบ"

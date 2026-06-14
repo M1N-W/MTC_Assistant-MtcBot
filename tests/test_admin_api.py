@@ -148,6 +148,30 @@ class AdminApiTest(unittest.TestCase):
     def auth(self):
         return {"Authorization": f"Bearer {TOKEN}"}
 
+    def test_overview_excludes_sustainability_without_calculating_it(self):
+        with (
+            patch(
+                "mtc_assistant.admin_api._build_sustainability_impact"
+            ) as build_sustainability,
+            patch(
+                "mtc_assistant.admin_api._get_recent_homeworks",
+                return_value=[],
+            ),
+            patch(
+                "mtc_assistant.admin_api._get_recent_broadcasts",
+                return_value=[],
+            ),
+            patch("mtc_assistant.admin_api.get_blacklist_manager") as blacklist,
+            patch("mtc_assistant.admin_api.broadcast.get_user_count", return_value=0),
+        ):
+            blacklist.return_value.get_all_banned.return_value = []
+
+            response = self.client.get("/api/admin/overview", headers=self.auth())
+
+        self.assertEqual(200, response.status_code)
+        self.assertNotIn("sustainability", response.get_json()["data"])
+        build_sustainability.assert_not_called()
+
     def test_workspaces_returns_safe_human_readable_entries(self):
         seed_workspace(self.db)
 
@@ -228,6 +252,9 @@ class AdminApiTest(unittest.TestCase):
                 FakeSnapshot(
                     f"capture-{index}",
                     {
+                        "timestamp": (
+                            datetime.datetime(2026, 6, 13, 8, index).isoformat()
+                        ),
                         "created_at": (
                             datetime.datetime(2026, 6, 13, 8, index).isoformat()
                         ),
@@ -253,7 +280,9 @@ class AdminApiTest(unittest.TestCase):
         self.assertEqual(200, response.status_code)
         self.assertEqual(14, data["successful_capture_count"])
         self.assertEqual(10, len(data["recent"]))
-        self.assertEqual("2026-06-13T08:00:00", data["latest_success_at"])
+        self.assertEqual("capture-13", data["recent"][0]["id"])
+        self.assertEqual("capture-4", data["recent"][-1]["id"])
+        self.assertEqual("2026-06-13T08:13:00", data["latest_success_at"])
         self.assertEqual(2, data["recent"][0]["summary_item_count"])
         self.assertEqual(1, data["recent"][0]["homework_candidate_count"])
         self.assertNotIn("raw_text", str(data))

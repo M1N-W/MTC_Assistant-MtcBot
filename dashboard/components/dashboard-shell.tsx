@@ -16,33 +16,32 @@ import {
   type DashboardSection,
 } from "@/lib/dashboard-sections";
 import type { Workspace } from "@/lib/dashboard-types";
-
-const WORKSPACE_STORAGE_KEY = "mtc-dashboard:workspace:v2";
+import {
+  storeWorkspaceId,
+  useStoredWorkspaceId,
+} from "@/lib/dashboard-workspaces";
 
 export function DashboardShell() {
   const [activeSection, setActiveSection] = useState<DashboardSection>("overview");
-  const [selectedClassId, setSelectedClassId] = useState("");
+  const storedWorkspaceId = useStoredWorkspaceId();
   const workspacesQuery = useQuery({
     queryKey: ["workspaces"],
-    queryFn: async () => {
-      const data = await apiGet<{ workspaces: Workspace[] }>("workspaces");
-      const stored = window.localStorage.getItem(WORKSPACE_STORAGE_KEY) || "";
-      const validStored = data.workspaces.some((workspace) => workspace.class_id === stored);
-      setSelectedClassId((current) => {
-        const validCurrent = data.workspaces.some((workspace) => workspace.class_id === current);
-        return validCurrent ? current : validStored ? stored : data.workspaces[0]?.class_id || "";
-      });
-      return data;
-    },
+    queryFn: () => apiGet<{ workspaces: Workspace[] }>("workspaces"),
   });
   const workspaces = useMemo(
     () => workspacesQuery.data?.workspaces || [],
     [workspacesQuery.data],
   );
   const selectedWorkspace = useMemo(
-    () => workspaces.find((workspace) => workspace.class_id === selectedClassId) || workspaces[0] || null,
-    [selectedClassId, workspaces],
+    () => workspaces.find((workspace) => workspace.class_id === storedWorkspaceId) || workspaces[0] || null,
+    [storedWorkspaceId, workspaces],
   );
+
+  useEffect(() => {
+    if (!workspacesQuery.isSuccess || storedWorkspaceId === null) return;
+    const nextWorkspaceId = selectedWorkspace?.class_id || "";
+    if (storedWorkspaceId !== nextWorkspaceId) storeWorkspaceId(nextWorkspaceId);
+  }, [selectedWorkspace, storedWorkspaceId, workspacesQuery.isSuccess]);
 
   useEffect(() => {
     function syncSectionFromHash() {
@@ -70,8 +69,9 @@ export function DashboardShell() {
   }
 
   function selectWorkspace(classId: string) {
-    setSelectedClassId(classId);
-    window.localStorage.setItem(WORKSPACE_STORAGE_KEY, classId);
+    if (workspaces.some((workspace) => workspace.class_id === classId)) {
+      storeWorkspaceId(classId);
+    }
   }
 
   return (
@@ -84,12 +84,12 @@ export function DashboardShell() {
       workspaceLoading={workspacesQuery.isLoading}
       workspaceError={workspacesQuery.isError}
     >
-      {activeSection === "overview" ? <OverviewSection workspace={selectedWorkspace} onNavigate={navigate} /> : null}
-      {activeSection === "members" ? <AccountsSection workspace={selectedWorkspace} /> : null}
-      {activeSection === "homework" ? <HomeworkSection workspace={selectedWorkspace} /> : null}
-      {activeSection === "announcements" ? <AnnouncementsSection workspace={selectedWorkspace} /> : null}
+      {activeSection === "overview" ? <OverviewSection onNavigate={navigate} /> : null}
+      {activeSection === "members" ? <AccountsSection /> : null}
+      {activeSection === "homework" ? <HomeworkSection /> : null}
+      {activeSection === "announcements" ? <AnnouncementsSection /> : null}
       {activeSection === "resources" ? <GeneralLinksEditor key={selectedWorkspace?.class_id} workspace={selectedWorkspace} /> : null}
-      {activeSection === "system" ? <SystemSection workspace={selectedWorkspace} /> : null}
+      {activeSection === "system" ? <SystemSection /> : null}
       {activeSection === "ai-settings" ? <AISettingsEditor key={selectedWorkspace?.class_id} workspace={selectedWorkspace} /> : null}
     </ApplicationShell>
   );

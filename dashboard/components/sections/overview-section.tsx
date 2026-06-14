@@ -4,15 +4,13 @@ import { useQuery } from "@tanstack/react-query";
 import { BookOpenCheck, Link, MessageSquareText, Users } from "lucide-react";
 import { apiGet } from "@/lib/dashboard-api";
 import type { DashboardSection } from "@/lib/dashboard-sections";
-import type { Overview, Workspace } from "@/lib/dashboard-types";
+import type { Overview } from "@/lib/dashboard-types";
 import { BroadcastList, HomeworkList } from "./section-content";
-import { InlineAlert, PageHeader, StatusBadge, Surface } from "@/components/ui/dashboard-ui";
+import { InlineAlert, PageHeader, ServiceStatusBadge, Surface } from "@/components/ui/dashboard-ui";
 
 export function OverviewSection({
-  workspace,
   onNavigate,
 }: {
-  workspace: Workspace | null;
   onNavigate: (section: DashboardSection) => void;
 }) {
   const query = useQuery({
@@ -25,7 +23,7 @@ export function OverviewSection({
       <PageHeader
         title="ภาพรวม"
         description="งานประจำและข้อมูลล่าสุดที่ควรตรวจสอบ"
-        workspace={workspace}
+        context="ข้อมูลรวมทั้งระบบ"
         action={<button className="button secondary" onClick={() => query.refetch()}>อัปเดตข้อมูล</button>}
       />
       {query.isError ? (
@@ -50,9 +48,11 @@ export function OverviewSection({
             {(["line", "firebase", "gemini", "broadcast"] as const).map((key) => (
               <span key={key}>
                 {key === "gemini" ? "AI" : key === "broadcast" ? "Broadcast" : key.toUpperCase()}
-                <StatusBadge tone={overview?.services[key] ? "success" : "warning"}>
-                  {overview?.services[key] ? "พร้อมใช้งาน" : "มีปัญหาชั่วคราว"}
-                </StatusBadge>
+                <ServiceStatusBadge
+                  loading={query.isLoading}
+                  error={query.isError}
+                  available={overview?.services[key]}
+                />
               </span>
             ))}
           </div>

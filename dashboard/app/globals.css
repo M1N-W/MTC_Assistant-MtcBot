@@ -113,6 +113,7 @@ label, .field-label { color: var(--text-primary); font-size: .9rem; font-weight:
 .app-brand small { margin-top: .1rem; color: rgba(245,251,248,.68); font-size: .76rem; }
 .workspace-selector { margin-top: 1.25rem; padding-bottom: 1.1rem; border-bottom: 1px solid rgba(255,255,255,.12); }
 .workspace-selector label { color: rgba(245,251,248,.66); font-size: .75rem; }
+.workspace-selector > p { margin: .25rem 0 0; color: rgba(245,251,248,.56); font-size: .72rem; line-height: 1.45; }
 .workspace-selector select { margin-top: .45rem; border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.08); color: white; }
 .workspace-selector option { color: var(--text-primary); }
 .workspace-term { margin-top: .65rem; display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; color: rgba(245,251,248,.78); font-size: .76rem; }
