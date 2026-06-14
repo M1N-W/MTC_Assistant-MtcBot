@@ -5,6 +5,8 @@
 This roadmap supports the June 20, 2026 MTC OS v1 Foundation Release. The
 foundation requires individual `super_admin`, `class_admin`, and `teacher`
 accounts with Flask-owned authentication, sessions, and authorization.
+The backend role model also includes `student` for the required later Student
+Portal. This phase does not implement that portal UI.
 
 The dashboard must stay aligned with the current MTC Assistant architecture: LINE remains the main student interface, the dashboard remains a separate Next.js service, and Flask remains the bot/admin API service. Auth work must protect the existing server-side proxy boundary and preserve class-aware behavior for MTC12, MTC13, and later generations.
 
@@ -234,12 +236,21 @@ Phase B: Flask auth and authorization foundation.
   and current-principal models/endpoints.
 - Add authorization middleware and positive/negative permission tests.
 - Preserve the current production login only during migration.
+- Foundation implementation adds `/api/admin/auth/login`, `/auth/me`, and
+  `/auth/logout` behind separate service and human-session trust layers.
+- Only self-session capabilities and tested super-admin account-management
+  service capabilities are active at this stage. Existing class operations
+  remain on the transitional principal path until a later migration.
+- Additive Firestore records use hashed username reservations and hashed
+  opaque-session lookup keys. No production account is created automatically.
 
 Phase C: Next.js session migration.
 
 - Proxy credentials to Flask and store only the Flask-issued opaque session.
 - Add role-aware navigation and a safe Flask-owned `/api/admin/auth/me`.
 - Migrate Mawin to the first `super_admin` account.
+- Add CSRF protection at the Next.js mutation boundary; Flask does not set a
+  browser-facing cookie in Phase B.
 
 Phase D: role and class-scope production verification.
 
@@ -248,6 +259,10 @@ Phase D: role and class-scope production verification.
 - Add super-admin appointment, removal, reassignment, and recovery workflows.
 - Remove the shared password as the normal production login authority after
   verification.
+
+The full Web Platform Definition of Done includes the later Student Portal as
+a required milestone alongside teacher, class-admin, and super-admin
+workspaces. It is not represented as complete by the backend foundation.
 
 Phase E: links editor.
 

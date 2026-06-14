@@ -41,7 +41,7 @@ from mtc_assistant.config import (
     GEMINI_API_KEY_V3, GEMINI_API_KEY_V25,
     FIREBASE_KEY_PATH,
     GEMINI_MODEL_V3, GEMINI_MODEL_V25,
-    LOCAL_TZ
+    LOCAL_TZ, MTC_DASHBOARD_API_TOKEN
 )
 
 from mtc_assistant.handlers import handler
@@ -49,6 +49,10 @@ from mtc_assistant.handlers import handler
 import mtc_assistant.features as features  # Import features module to set global variables
 import mtc_assistant.broadcast as broadcast  # Import broadcast module
 from mtc_assistant.admin_api import create_admin_api_blueprint
+from mtc_assistant.dashboard_auth_api import create_dashboard_auth_blueprint
+from mtc_assistant.dashboard_auth_repository import FirestoreDashboardAuthRepository
+from mtc_assistant.dashboard_auth_service import DashboardAuthService
+from mtc_assistant.dashboard_security_audit import SecurityAuditOperationalState
 
 # ============================================================================
 # FLASK APP INITIALIZATION
@@ -75,6 +79,7 @@ _metrics = {
     "cache_misses": 0,
     "start_time": time.time(),
 }
+dashboard_security_audit_state = SecurityAuditOperationalState()
 
 
 def _increment_metric(key: str, value: float = 1) -> None:
@@ -98,6 +103,7 @@ def _metrics_snapshot() -> dict:
             "cache_misses": _metrics["cache_misses"],
             "cache_hit_rate_percent": round((_metrics["cache_hits"] / max(cache_total, 1)) * 100, 2),
         }
+    snapshot.update(dashboard_security_audit_state.snapshot())
 
     try:
         from mtc_assistant.rate_limit import get_rate_limit_stats
@@ -307,6 +313,20 @@ app.register_blueprint(
     )
 )
 
+dashboard_auth_repository = FirestoreDashboardAuthRepository(
+    _ensure_firebase_connected
+)
+dashboard_auth_service = DashboardAuthService(
+    dashboard_auth_repository,
+    audit_state=dashboard_security_audit_state,
+)
+app.register_blueprint(
+    create_dashboard_auth_blueprint(
+        get_service=lambda: dashboard_auth_service,
+        service_token_provider=lambda: MTC_DASHBOARD_API_TOKEN,
+    )
+)
+
 # ============================================================================
 # FLASK ROUTES
 # ============================================================================
@@ -390,6 +410,7 @@ def healthz():
         "gemini": bool((GEMINI_API_KEY_V3 or GEMINI_API_KEY_V25) and (gemini_client_v3 or gemini_client_v25)),
         "firebase": bool(db),
         "broadcast": bool(line_config),
+        "security_audit": dashboard_security_audit_state.snapshot()["security_audit"],
     }
 
     # Probe Firebase with a hard 3-second timeout using a daemon thread.
@@ -425,8 +446,10 @@ def healthz():
     all_critical_ok = services_status["line"]
     status_code = 200 if all_critical_ok else 503
 
+    security_audit_ok = services_status["security_audit"]
+
     return jsonify({
-        "status": "healthy" if all_critical_ok else "degraded",
+        "status": "healthy" if all_critical_ok and security_audit_ok else "degraded",
         "version": "21-optimized-impersonate",
         "response_time_ms": round(response_time, 2),
         "timestamp": datetime.datetime.now(tz=LOCAL_TZ).isoformat(),
