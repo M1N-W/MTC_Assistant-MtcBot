@@ -110,6 +110,17 @@ or authorize existing global admin endpoints for teachers or class admins.
 Those operations remain on the shared-password compatibility path until the
 Next.js session and Admin API principal migrations are verified.
 
+PR #7 merged the Flask Auth Foundation. The repository now also contains the
+Next.js Flask-session migration layer: server-side credential proxying,
+HttpOnly opaque-session transport, `/auth/me` principal resolution,
+same-origin mutation checks, and a `super_admin` gate for the current global
+Dashboard. Existing global Flask Admin APIs still consume transitional
+principal headers built by the verified Next.js BFF; they are not yet migrated
+to native Flask human-session authorization. Teacher, class-admin, and student
+workspaces, production account bootstrap, environment rollout, and deployment
+remain future controlled milestones. The explicit legacy mode is rollback
+only and must not become an automatic fallback.
+
 The foundation session lifetime is 12 hours. Session documents carry
 `purge_after` metadata for 30 days after expiry, and security audit records
 carry `retain_until` metadata for 365 days. Automated TTL cleanup is not part

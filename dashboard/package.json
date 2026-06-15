@@ -2,17 +2,19 @@
   "name": "mtc-assistant-dashboard",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:auth": "node --test --experimental-strip-types --conditions=react-server tests/*.test.ts"
   },
   "dependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
     "@tanstack/react-query": "^5.90.0",
     "@tanstack/react-table": "^8.21.0",
-    "@tailwindcss/postcss": "^4.0.0",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
@@ -22,6 +24,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^3.8.1",
+    "server-only": "0.0.1",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.0"
   },

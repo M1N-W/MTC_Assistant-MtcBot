@@ -243,14 +243,26 @@ Phase B: Flask auth and authorization foundation.
   remain on the transitional principal path until a later migration.
 - Additive Firestore records use hashed username reservations and hashed
   opaque-session lookup keys. No production account is created automatically.
+- The foundation was merged in PR #7. This statement describes repository
+  state only and does not claim production rollout or account bootstrap.
 
 Phase C: Next.js session migration.
 
-- Proxy credentials to Flask and store only the Flask-issued opaque session.
-- Add role-aware navigation and a safe Flask-owned `/api/admin/auth/me`.
-- Migrate Mawin to the first `super_admin` account.
-- Add CSRF protection at the Next.js mutation boundary; Flask does not set a
-  browser-facing cookie in Phase B.
+- The repository now supports explicit `flask` and temporary `legacy` modes.
+- Flask mode proxies username/password credentials server-side, stores the
+  opaque Flask session in an HttpOnly cookie, and resolves the current
+  principal through `/api/admin/auth/me`.
+- The current global Dashboard and its transitional Admin API proxy are
+  restricted to a verified `super_admin` in Flask mode.
+- Authenticated `teacher`, `class_admin`, and `student` accounts receive a
+  truthful limited state without mounting global Dashboard data sections.
+- Login, logout, and Admin API mutations use a centralized same-origin guard.
+- Existing global Flask Admin APIs still use transitional principal headers;
+  their Flask-side principal migration remains separate work.
+- `legacy` remains a temporary explicit rollback mode. Flask mode never falls
+  back automatically to the shared password.
+- Production environment changes, first-account bootstrap, rollout
+  verification, and deployment are not part of this repository milestone.
 
 Phase D: role and class-scope production verification.
 
