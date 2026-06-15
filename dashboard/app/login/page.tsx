@@ -1,32 +1,28 @@
-"use client";
+import { Bot } from "lucide-react";
 
-import { FormEvent, useState } from "react";
-import { ArrowRight, Bot, LockKeyhole } from "lucide-react";
+import {
+  AuthConfigurationError,
+  getDashboardAuthMode,
+} from "@/lib/auth-mode";
+import { LoginForm } from "@/components/login-form";
 
 export default function LoginPage() {
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setLoading(true);
-    setError("");
-    const response = await fetch("/api/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
-    setLoading(false);
-    if (!response.ok) {
-      setError(
-        response.status === 503
-          ? "ระบบเข้าสู่ระบบยังไม่พร้อมใช้งาน กรุณาติดต่อผู้ดูแลระบบ"
-          : "รหัสผ่านไม่ถูกต้อง กรุณาลองอีกครั้ง",
+  let mode;
+  try {
+    mode = getDashboardAuthMode();
+  } catch (caught) {
+    if (caught instanceof AuthConfigurationError) {
+      return (
+        <main className="auth-state-shell">
+          <section className="surface auth-state-card">
+            <p className="login-product">MTC Assistant</p>
+            <h1>ระบบเข้าสู่ระบบยังตั้งค่าไม่สมบูรณ์</h1>
+            <p>กรุณาติดต่อผู้ดูแลระบบเพื่อตรวจสอบการตั้งค่าการยืนยันตัวตน</p>
+          </section>
+        </main>
       );
-      return;
     }
-    window.location.href = "/";
+    throw caught;
   }
 
   return (
@@ -50,41 +46,12 @@ export default function LoginPage() {
           <p className="login-product">MTC Assistant</p>
           <h1>เข้าสู่ระบบ MTC Dashboard</h1>
           <p className="login-description">จัดการข้อมูลและการใช้งานของห้องเรียน MTC Assistant</p>
-          <form onSubmit={submit} className="login-form">
-            <label htmlFor="password">
-              <LockKeyhole size={15} />
-              รหัสผ่าน
-            </label>
-            <input
-              className="sr-only"
-              type="text"
-              name="username"
-              autoComplete="username"
-              value="mtc-dashboard-admin"
-              readOnly
-              tabIndex={-1}
-            />
-            <input
-              id="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              type="password"
-              autoComplete="current-password"
-              aria-describedby={error ? "login-error" : "login-help"}
-              required
-            />
-            {error ? (
-              <p id="login-error" className="login-error" role="alert">
-                {error}
-              </p>
-            ) : <p id="login-help" className="login-help">สำหรับผู้ดูแลระบบและผู้ที่ได้รับอนุญาต</p>}
-            <button type="submit" disabled={loading} className="button primary">
-              {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่แดชบอร์ด"}
-              <ArrowRight size={17} />
-            </button>
-          </form>
+          <LoginForm mode={mode} />
         </div>
       </section>
     </main>
   );
 }
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;

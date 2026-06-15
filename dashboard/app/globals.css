@@ -270,10 +270,16 @@ label, .field-label { color: var(--text-primary); font-size: .9rem; font-weight:
 .login-description { margin: 0; color: var(--text-secondary); line-height: 1.65; }
 .login-form { display: grid; gap: .8rem; margin-top: 2rem; }
 .login-form label { display: flex; align-items: center; gap: .4rem; }
-.login-form input[type="password"] { min-height: 48px; }
+.login-form input { min-height: 48px; }
 .login-form .button { margin-top: .35rem; }
 .login-help { margin: 0; color: var(--text-secondary); font-size: .83rem; }
 .login-error { margin: 0; border-left: 3px solid var(--danger); background: #fff1f0; padding: .7rem .8rem; color: #7a271a; font-size: .88rem; font-weight: 650; }
+.auth-state-shell { min-height: 100svh; display: grid; place-items: center; padding: 1.25rem; }
+.auth-state-card { width: min(560px, 100%); margin: 0; padding: clamp(1.25rem, 4vw, 2rem); }
+.auth-state-card h1 { margin: .65rem 0; font-size: clamp(1.55rem, 4vw, 2rem); line-height: 1.3; }
+.auth-state-card p { color: var(--text-secondary); line-height: 1.7; }
+.auth-state-card .button { margin-top: .75rem; }
+.auth-state-icon { width: 48px; height: 48px; display: grid; place-items: center; border-radius: var(--radius-sm); background: var(--primary-muted); color: var(--primary); }
 
 @media (max-width: 1100px) {
   .sidebar { width: 216px; }

@@ -1,8 +1,14 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
+import "server-only";
 
-const COOKIE_NAME = "mtc_dashboard_session";
-const MAX_AGE_SECONDS = 60 * 60 * 8;
+import {
+  LEGACY_MAX_AGE_SECONDS,
+  LEGACY_SESSION_COOKIE_NAME,
+  buildLegacySessionCookie,
+} from "./auth-cookies.ts";
+
+export { LEGACY_SESSION_COOKIE_NAME };
 
 export type DashboardPrincipal = {
   adminId: string;
@@ -14,16 +20,16 @@ type SessionPayload = DashboardPrincipal & {
   issuedAt: number;
 };
 
-function sessionSecret() {
+function legacySessionSecret() {
   return process.env.DASHBOARD_SESSION_SECRET || "";
 }
 
-function expectedPassword() {
+function expectedLegacyPassword() {
   return process.env.DASHBOARD_PASSWORD || "";
 }
 
 function sign(value: string) {
-  return createHmac("sha256", sessionSecret()).update(value).digest("hex");
+  return createHmac("sha256", legacySessionSecret()).update(value).digest("hex");
 }
 
 function safeEqual(left: string, right: string) {
@@ -32,12 +38,12 @@ function safeEqual(left: string, right: string) {
   return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
 }
 
-export function isAuthConfigured() {
-  return Boolean(sessionSecret() && expectedPassword());
+export function isLegacyAuthConfigured() {
+  return Boolean(legacySessionSecret() && expectedLegacyPassword());
 }
 
-export function verifyPassword(password: string) {
-  const configured = expectedPassword();
+export function verifyLegacyPassword(password: string) {
+  const configured = expectedLegacyPassword();
   return Boolean(configured) && safeEqual(password, configured);
 }
 
@@ -55,38 +61,26 @@ function configuredPrincipal(): DashboardPrincipal {
   };
 }
 
-export async function createSession() {
+export function createLegacySessionCookie() {
   const payload: SessionPayload = {
     ...configuredPrincipal(),
     issuedAt: Date.now(),
   };
   const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const value = `${encoded}.${sign(encoded)}`;
-  const cookieStore = await cookies();
-  cookieStore.set(COOKIE_NAME, value, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    maxAge: MAX_AGE_SECONDS,
-    path: "/",
-  });
+  return buildLegacySessionCookie(value);
 }
 
-export async function clearSession() {
-  const cookieStore = await cookies();
-  cookieStore.delete(COOKIE_NAME);
+export async function isLegacyAuthenticated() {
+  return Boolean(await getLegacySessionPrincipal());
 }
 
-export async function isAuthenticated() {
-  return Boolean(await getSessionPrincipal());
-}
-
-export async function getSessionPrincipal(): Promise<DashboardPrincipal | null> {
-  if (!isAuthConfigured()) {
+export async function getLegacySessionPrincipal(): Promise<DashboardPrincipal | null> {
+  if (!isLegacyAuthConfigured()) {
     return null;
   }
   const cookieStore = await cookies();
-  const raw = cookieStore.get(COOKIE_NAME)?.value || "";
+  const raw = cookieStore.get(LEGACY_SESSION_COOKIE_NAME)?.value || "";
   const [encoded, signature] = raw.split(".");
   if (!encoded || !signature || !safeEqual(sign(encoded), signature)) {
     return null;
@@ -98,7 +92,7 @@ export async function getSessionPrincipal(): Promise<DashboardPrincipal | null> 
     return null;
   }
   const ageMs = Date.now() - Number(payload.issuedAt);
-  if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > MAX_AGE_SECONDS * 1000) {
+  if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > LEGACY_MAX_AGE_SECONDS * 1000) {
     return null;
   }
   if (
