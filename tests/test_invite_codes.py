@@ -148,7 +148,9 @@ class InviteCodesTest(unittest.TestCase):
         self.assertEqual(1, self.db.store["class_invites/ABC123"]["used_count"])
         self.assertEqual("mtc13", self.db.store["users/user-a"]["active_class_id"])
         self.assertEqual(["mtc13"], self.db.store["users/user-a"]["class_ids"])
+        self.assertEqual("unverified", self.db.store["users/user-a"]["identity_status"])
         self.assertEqual("user-a", self.db.store["classes/mtc13/users/user-a"]["user_id"])
+        self.assertEqual("unverified", self.db.store["classes/mtc13/users/user-a"]["verification_status"])
 
     def test_transaction_path_is_used_when_available(self):
         class TransactionalDb(FakeDb):

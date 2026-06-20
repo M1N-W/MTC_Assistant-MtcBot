@@ -66,9 +66,16 @@ from mtc_assistant.homework_session import (
     cancel_homework_session,
     session_read_failure_message,
 )
+from mtc_assistant.class_selection import select_active_class
+from mtc_assistant.identity_verification import (
+    IdentitySessionService,
+    has_identity_session,
+    redacted_message_for_logging,
+)
 from mtc_assistant.rate_limit import is_rate_limited
 from mtc_assistant.invite_codes import is_join_command, join_class_with_invite
 from mtc_assistant.quick_replies import build_unknown_message_quick_reply
+from mtc_assistant.user_account_service import build_account_message
 
 # ============================================================================
 # LINE BOT CONFIGURATION
@@ -81,6 +88,10 @@ handler = WebhookHandler(CHANNEL_SECRET) if CHANNEL_SECRET else None
 # ============================================================================
 _line_api_client: Optional[MessagingApi] = None
 _api_client_lock = threading.Lock()
+
+ACCOUNT_COMMANDS = {"บัญชี", "โปรไฟล์", "ข้อมูลของฉัน", "account"}
+IDENTITY_START_COMMANDS = {"ยืนยันตัวตน"}
+CLASS_SELECTION_COMMANDS = {"เลือกห้อง", "เปลี่ยนห้อง"}
 
 def get_line_api() -> Optional[MessagingApi]:
     """Get or create LINE API client (singleton pattern)"""
@@ -154,7 +165,10 @@ def handle_message(event):
     if not user_id:
         user_id = f"anon-{request.remote_addr or 'unknown'}"
     
-    logged_message = "[join command redacted]" if is_join_command(user_message) else user_message[:100]
+    if is_join_command(user_message):
+        logged_message = "[join command redacted]"
+    else:
+        logged_message = redacted_message_for_logging(features.db, user_id, user_message)
     logger.info("Message from %s: %s", user_id, logged_message)
     
     # ========================================================================
@@ -191,6 +205,16 @@ def handle_message(event):
         reply_to_line(event.reply_token, [TextMessage(text=result.message)])
         return
 
+    account_reply = handle_account_identity_or_class_command(
+        db=db,
+        user_id=user_id,
+        user_message=user_message,
+        line_api=get_line_api(),
+    )
+    if account_reply:
+        reply_to_line(event.reply_token, [account_reply])
+        return
+
     class_context = resolve_line_class_context(db, user_id)
     if class_context is None:
         if user_message_lower in ("help", "ช่วยเหลือ", "คำสั่ง"):
@@ -211,6 +235,16 @@ def handle_message(event):
             pass
     except Exception as e:
         logger.error(f"Failed to track user: {e}")
+
+    account_reply = handle_account_identity_or_class_command(
+        db=db,
+        user_id=user_id,
+        user_message=user_message,
+        line_api=get_line_api(),
+    )
+    if account_reply:
+        reply_to_line(event.reply_token, [account_reply])
+        return
     
     # ========================================================================
     # INTERACTIVE HOMEWORK SYSTEM
@@ -416,6 +450,24 @@ def handle_non_text_message(event):
         )
     )])
 
+
+def handle_account_identity_or_class_command(db, user_id: str, user_message: str, line_api=None):
+    """Handle student account, identity, and class-selection commands before AI."""
+    text = (user_message or "").strip()
+    lowered = text.lower()
+    if has_identity_session(user_id, db=db):
+        result = IdentitySessionService(db).handle_message(user_id, text)
+        return result.message if result else None
+    if lowered in ACCOUNT_COMMANDS:
+        return build_account_message(db, user_id, line_api=line_api)
+    if lowered in IDENTITY_START_COMMANDS:
+        return IdentitySessionService(db).start(user_id).message
+    if lowered in CLASS_SELECTION_COMMANDS:
+        return select_active_class(db, user_id).message
+    if lowered.startswith("เลือกห้อง "):
+        return select_active_class(db, user_id, text[len("เลือกห้อง "):]).message
+    return None
+
 # ============================================================================
 # EXPORTS
 # ============================================================================
@@ -425,5 +477,6 @@ __all__ = [
     'handle_follow',
     'handle_message',
     'handle_non_text_message',
+    'handle_account_identity_or_class_command',
     'reply_to_line',
 ]
