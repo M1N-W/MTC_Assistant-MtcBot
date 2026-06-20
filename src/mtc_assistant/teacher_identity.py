@@ -103,8 +103,17 @@ def _verify_teacher_code_and_bind_once(db, user_id: str, teacher_id: str, code: 
     if not verify_password(password_hash, str(code or "")):
         attempts = int(verification.get("failed_attempts", 0) or 0) + 1
         payload = {"failed_attempts": attempts, "updated_at": now_provider().isoformat()}
-        if attempts >= MAX_TEACHER_FAILED_ATTEMPTS:
+
+        raw_max = verification.get("max_attempts")
+        try:
+            max_attempts = int(raw_max) if raw_max is not None else MAX_TEACHER_FAILED_ATTEMPTS
+        except (ValueError, TypeError):
+            max_attempts = MAX_TEACHER_FAILED_ATTEMPTS
+
+        effective_max = min(max(max_attempts, 1), 10)
+        if attempts >= effective_max:
             payload["status"] = "disabled"
+
         _txn_set(verification_ref, payload, merge=True, transaction=transaction)
         return TeacherVerificationResult(False, "รหัสยืนยันไม่ถูกต้องหรือหมดอายุ")
 

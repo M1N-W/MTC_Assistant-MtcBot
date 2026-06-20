@@ -132,6 +132,107 @@ class TeacherIdentityTest(unittest.TestCase):
         self.assertNotIn("t-fake-1", payload)
         self.assertNotIn("mtc_math_adviser", payload)
 
+    def test_custom_max_attempts_disables_after_limit(self):
+        # 1. Test custom max_attempts = 3
+        self.db.store["system/teacher_verification/records/t-fake-1"] = {
+            "verification_code_hash": hash_password("teacher-code-1234", "t-fake-1"),
+            "status": "active",
+            "max_attempts": 3,
+            "failed_attempts": 0,
+        }
+        from mtc_assistant.teacher_identity import verify_teacher_code_and_bind
+
+        # Attempt 1 (fail)
+        r1 = verify_teacher_code_and_bind(self.db, "user-a", "t-fake-1", "wrong")
+        self.assertFalse(r1.success)
+        self.assertEqual(1, self.db.store["system/teacher_verification/records/t-fake-1"]["failed_attempts"])
+        self.assertEqual("active", self.db.store["system/teacher_verification/records/t-fake-1"]["status"])
+
+        # Attempt 2 (fail)
+        r2 = verify_teacher_code_and_bind(self.db, "user-a", "t-fake-1", "wrong")
+        self.assertFalse(r2.success)
+        self.assertEqual(2, self.db.store["system/teacher_verification/records/t-fake-1"]["failed_attempts"])
+        self.assertEqual("active", self.db.store["system/teacher_verification/records/t-fake-1"]["status"])
+
+        # Attempt 3 (fail -> reaches 3 attempts, disables)
+        r3 = verify_teacher_code_and_bind(self.db, "user-a", "t-fake-1", "wrong")
+        self.assertFalse(r3.success)
+        self.assertEqual(3, self.db.store["system/teacher_verification/records/t-fake-1"]["failed_attempts"])
+        self.assertEqual("disabled", self.db.store["system/teacher_verification/records/t-fake-1"]["status"])
+
+        # Attempt 4 (fail, status already disabled)
+        r4 = verify_teacher_code_and_bind(self.db, "user-a", "t-fake-1", "teacher-code-1234")
+        self.assertFalse(r4.success)
+
+    def test_default_missing_max_attempts_falls_back_to_five(self):
+        self.db.store["system/teacher_verification/records/t-fake-1"] = {
+            "verification_code_hash": hash_password("teacher-code-1234", "t-fake-1"),
+            "status": "active",
+            "failed_attempts": 4, # 4 attempts done
+        }
+        from mtc_assistant.teacher_identity import verify_teacher_code_and_bind
+
+        # Attempt 5 (fail -> reaches 5 attempts, disables)
+        r = verify_teacher_code_and_bind(self.db, "user-a", "t-fake-1", "wrong")
+        self.assertFalse(r.success)
+        self.assertEqual(5, self.db.store["system/teacher_verification/records/t-fake-1"]["failed_attempts"])
+        self.assertEqual("disabled", self.db.store["system/teacher_verification/records/t-fake-1"]["status"])
+
+    def test_max_attempts_bounds_correctly(self):
+        from mtc_assistant.teacher_identity import verify_teacher_code_and_bind
+
+        # Value below 1 should bound to 1
+        self.db.store["system/teacher_verification/records/t-fake-1"] = {
+            "verification_code_hash": hash_password("teacher-code-1234", "t-fake-1"),
+            "status": "active",
+            "max_attempts": 0,
+            "failed_attempts": 0,
+        }
+        r1 = verify_teacher_code_and_bind(self.db, "user-a", "t-fake-1", "wrong")
+        self.assertFalse(r1.success)
+        self.assertEqual("disabled", self.db.store["system/teacher_verification/records/t-fake-1"]["status"])
+
+        # Value above 10 should bound to 10
+        self.db.store["system/teacher_verification/records/t-fake-1"] = {
+            "verification_code_hash": hash_password("teacher-code-1234", "t-fake-1"),
+            "status": "active",
+            "max_attempts": 100,
+            "failed_attempts": 9,
+        }
+        r2 = verify_teacher_code_and_bind(self.db, "user-a", "t-fake-1", "wrong")
+        self.assertFalse(r2.success)
+        self.assertEqual("disabled", self.db.store["system/teacher_verification/records/t-fake-1"]["status"])
+
+        # Malformed value should fallback to 5
+        self.db.store["system/teacher_verification/records/t-fake-1"] = {
+            "verification_code_hash": hash_password("teacher-code-1234", "t-fake-1"),
+            "status": "active",
+            "max_attempts": "not-an-integer",
+            "failed_attempts": 4,
+        }
+        r3 = verify_teacher_code_and_bind(self.db, "user-a", "t-fake-1", "wrong")
+        self.assertFalse(r3.success)
+        self.assertEqual("disabled", self.db.store["system/teacher_verification/records/t-fake-1"]["status"])
+
+    def test_successful_verification_before_limit_succeeds_and_prevents_reuse(self):
+        self.db.store["system/teacher_verification/records/t-fake-1"] = {
+            "verification_code_hash": hash_password("teacher-code-1234", "t-fake-1"),
+            "status": "active",
+            "max_attempts": 3,
+            "failed_attempts": 2,
+        }
+        from mtc_assistant.teacher_identity import verify_teacher_code_and_bind
+
+        # Verification succeeds (only 2 failed attempts prior, limit is 3)
+        r1 = verify_teacher_code_and_bind(self.db, "user-a", "t-fake-1", "teacher-code-1234")
+        self.assertTrue(r1.success)
+        self.assertEqual("used", self.db.store["system/teacher_verification/records/t-fake-1"]["status"])
+        self.assertIsNotNone(self.db.store["system/teacher_verification/records/t-fake-1"].get("used_at"))
+
+        # Re-verification attempt fails (reuse blocked)
+        r2 = verify_teacher_code_and_bind(self.db, "user-b", "t-fake-1", "teacher-code-1234")
+        self.assertFalse(r2.success)
+
 
 if __name__ == "__main__":
     unittest.main()

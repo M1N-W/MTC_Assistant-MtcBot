@@ -60,11 +60,25 @@ def get_timetable_image_message(db=None, class_context=None):
 
 def get_timetable_status_text(db=None, class_context=None, now: datetime.datetime | None = None) -> str:
     schedule = _load_schedule_for_context(db, class_context)
+    if schedule is None:
+        label = getattr(class_context, "class_id", "") or "ห้องนี้"
+        if db and class_context:
+            registry = get_class_registry_entry(db, class_context.class_id)
+            if registry and registry.display_name:
+                label = registry.display_name
+        return f"ขออภัย ตารางเรียนของ {label} ยังไม่พร้อมใช้งานในขณะนี้"
     return format_timetable_status(schedule, now or datetime.datetime.now(LOCAL_TZ))
 
 
 def get_next_class_text(db=None, class_context=None, now: datetime.datetime | None = None) -> str:
     schedule = _load_schedule_for_context(db, class_context)
+    if schedule is None:
+        label = getattr(class_context, "class_id", "") or "ห้องนี้"
+        if db and class_context:
+            registry = get_class_registry_entry(db, class_context.class_id)
+            if registry and registry.display_name:
+                label = registry.display_name
+        return f"ขออภัย ตารางเรียนของ {label} ยังไม่พร้อมใช้งานในขณะนี้"
     return format_next_class(schedule, now or datetime.datetime.now(LOCAL_TZ))
 
 
@@ -203,10 +217,13 @@ def normalize_timetable_config(config: dict[str, Any] | None) -> dict[int, list[
     return normalized
 
 
-def _load_schedule_for_context(db, class_context) -> dict[int, list[dict[str, Any]]]:
+def _load_schedule_for_context(db, class_context) -> dict[int, list[dict[str, Any]]] | None:
+    is_legacy = not class_context or getattr(class_context, "is_legacy_fallback", False)
     config = _load_timetable_config(db, class_context)
     normalized = normalize_timetable_config(config)
-    return normalized or SCHEDULE
+    if normalized is not None:
+        return normalized
+    return SCHEDULE if is_legacy else None
 
 
 def _load_timetable_config(db, class_context, validate_days: bool = True) -> dict[str, Any] | None:

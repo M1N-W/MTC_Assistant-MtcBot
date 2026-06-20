@@ -192,7 +192,94 @@ class TimetableServiceTest(unittest.TestCase):
 
         text = get_timetable_status_text(db, ClassContext("mtc13", "user-a"), monday(8, 40))
 
+        self.assertNotIn("ฟิสิกส์ (ครูจิราภรณ์)", text)
+        self.assertIn("ขออภัย ตารางเรียนของ MTC13 ยังไม่พร้อมใช้งานในขณะนี้", text)
+
+    def test_mtc11_missing_timetable_does_not_use_global_mtc12_schedule(self):
+        db = FakeDb()
+        db.store["system/class_registry/mtc11/main"] = {
+            "display_name": "MTC11",
+            "status": "active",
+            "active_term_id": "2569-t1",
+        }
+        # No config document at classes/mtc11/terms/2569-t1/config/timetable
+        text = get_timetable_status_text(db, ClassContext("mtc11", "user-a"), monday(8, 40))
+        self.assertNotIn("ฟิสิกส์ (ครูจิราภรณ์)", text)
+        self.assertIn("ขออภัย ตารางเรียนของ MTC11 ยังไม่พร้อมใช้งานในขณะนี้", text)
+
+    def test_mtc11_invalid_timetable_does_not_use_global_mtc12_schedule(self):
+        db = FakeDb()
+        db.store["system/class_registry/mtc11/main"] = {
+            "display_name": "MTC11",
+            "status": "active",
+            "active_term_id": "2569-t1",
+        }
+        db.store["classes/mtc11/terms/2569-t1/config/timetable"] = {"days": "corrupted"}
+        text = get_timetable_status_text(db, ClassContext("mtc11", "user-a"), monday(8, 40))
+        self.assertNotIn("ฟิสิกส์ (ครูจิราภรณ์)", text)
+        self.assertIn("ขออภัย ตารางเรียนของ MTC11 ยังไม่พร้อมใช้งานในขณะนี้", text)
+
+    def test_mtc13_missing_timetable_does_not_use_global_mtc12_schedule(self):
+        db = FakeDb()
+        db.store["system/class_registry/mtc13/main"] = {
+            "display_name": "MTC13",
+            "status": "active",
+            "active_term_id": "2569-t1",
+        }
+        # No config document at classes/mtc13/terms/2569-t1/config/timetable
+        text = get_timetable_status_text(db, ClassContext("mtc13", "user-a"), monday(8, 40))
+        self.assertNotIn("ฟิสิกส์ (ครูจิราภรณ์)", text)
+        self.assertIn("ขออภัย ตารางเรียนของ MTC13 ยังไม่พร้อมใช้งานในขณะนี้", text)
+
+    def test_explicit_mtc12_context_missing_config_does_not_silently_use_legacy_fallback(self):
+        db = FakeDb()
+        db.store["system/class_registry/mtc12/main"] = {
+            "display_name": "MTC12",
+            "status": "active",
+            "active_term_id": "2569-t1",
+        }
+        # Explicitly not a legacy fallback context (is_legacy_fallback = False)
+        text = get_timetable_status_text(db, ClassContext("mtc12", "user-a"), monday(8, 40))
+        self.assertNotIn("ฟิสิกส์ (ครูจิราภรณ์)", text)
+        self.assertIn("ขออภัย ตารางเรียนของ MTC12 ยังไม่พร้อมใช้งานในขณะนี้", text)
+
+    def test_legacy_fallback_context_still_uses_schedule(self):
+        db = FakeDb()
+        # No database records, resolving legacy fallback context (is_legacy_fallback = True)
+        text = get_timetable_status_text(db, ClassContext("mtc12", "user-a", is_legacy_fallback=True), monday(8, 40))
         self.assertIn("ฟิสิกส์ (ครูจิราภรณ์)", text)
+
+    def test_valid_mtc11_timetable_still_works(self):
+        db = FakeDb()
+        db.store["system/class_registry/mtc11/main"] = {
+            "display_name": "MTC11",
+            "status": "active",
+            "active_term_id": "2569-t1",
+        }
+        db.store["classes/mtc11/terms/2569-t1/config/timetable"] = build_timetable_config(SAMPLE_SCHEDULE)
+        text = get_timetable_status_text(db, ClassContext("mtc11", "user-a"), monday(8, 40))
+        self.assertIn("ฟิสิกส์", text)
+        self.assertNotIn("ครูจิราภรณ์", text)
+
+    def test_valid_mtc12_and_mtc13_timetable_behavior_remains_unchanged(self):
+        db = FakeDb()
+        db.store["system/class_registry/mtc12/main"] = {
+            "display_name": "MTC12",
+            "status": "active",
+            "active_term_id": "2569-t1",
+        }
+        db.store["classes/mtc12/terms/2569-t1/config/timetable"] = build_timetable_config(SAMPLE_SCHEDULE)
+        text12 = get_timetable_status_text(db, ClassContext("mtc12", "user-a"), monday(8, 40))
+        self.assertIn("ฟิสิกส์", text12)
+
+        db.store["system/class_registry/mtc13/main"] = {
+            "display_name": "MTC13",
+            "status": "active",
+            "active_term_id": "2569-t1",
+        }
+        db.store["classes/mtc13/terms/2569-t1/config/timetable"] = build_timetable_config(SAMPLE_SCHEDULE)
+        text13 = get_timetable_status_text(db, ClassContext("mtc13", "user-a"), monday(8, 40))
+        self.assertIn("ฟิสิกส์", text13)
 
     def test_normalize_rejects_invalid_shape(self):
         self.assertIsNone(normalize_timetable_config({"days": "bad"}))
