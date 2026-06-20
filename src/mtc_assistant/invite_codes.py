@@ -153,6 +153,7 @@ def _join_class_with_invite_once(
         "display_name": display_name,
         "active_class_id": class_id,
         "class_ids": sorted(set(existing_classes + [class_id])),
+        "identity_status": (existing_data or {}).get("identity_status", "unverified"),
         "status": "active",
         "last_seen_at": firestore.SERVER_TIMESTAMP,
     }
@@ -161,6 +162,7 @@ def _join_class_with_invite_once(
         "display_name": display_name,
         "role": (existing_data or {}).get("role", "student"),
         "status": "active",
+        "verification_status": "unverified",
         "joined_at": (existing_data or {}).get("joined_at") or now.isoformat(),
         "last_seen_at": firestore.SERVER_TIMESTAMP,
     }

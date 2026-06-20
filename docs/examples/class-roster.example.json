@@ -1,0 +1,12 @@
+{
+  "class_id": "mtc-example",
+  "students": [
+    {
+      "student_id": "EXAMPLE-001",
+      "first_name": "ตัวอย่าง",
+      "last_name": "นักเรียน",
+      "class_number": 1,
+      "status": "active"
+    }
+  ]
+}

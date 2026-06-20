@@ -48,6 +48,23 @@ class FakeDb:
 
 
 class ClassRegistryTest(unittest.TestCase):
+    def test_academic_year_2569_three_class_grade_matrix(self):
+        cases = {
+            "mtc11": ("MTC11", "m6"),
+            "mtc12": ("MTC12", "m5"),
+            "mtc13": ("MTC13", "m4"),
+        }
+
+        for class_id, (display_name, grade_level) in cases.items():
+            with self.subTest(class_id=class_id):
+                entry = parse_class_registry_entry(class_id, {
+                    "display_name": display_name,
+                    "status": "active",
+                    "grade_level": grade_level,
+                })
+                self.assertEqual(display_name, entry.display_name)
+                self.assertEqual(grade_level, entry.grade_level)
+
     def test_parse_class_registry_entry(self):
         entry = parse_class_registry_entry("mtc13", {
             "display_name": "MTC13",

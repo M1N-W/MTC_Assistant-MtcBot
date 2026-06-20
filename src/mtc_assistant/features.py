@@ -30,7 +30,7 @@ from mtc_assistant.links_service import (
     get_links_config,
 )
 from mtc_assistant.learning_resources_service import get_learning_resources
-from mtc_assistant.timetable_service import get_next_class_text, get_timetable_image_url, get_timetable_status_text
+from mtc_assistant.timetable_service import get_next_class_text, get_timetable_image_message as build_timetable_image_message, get_timetable_status_text
 from mtc_assistant.flex_messages import get_help_menu_message
 
 # ============================================================================
@@ -217,10 +217,9 @@ def get_school_link_message(user_message: str = "", class_context=None) -> TextM
         text=f"เว็บไซต์โรงเรียนอยู่ที่นี่\n{get_links_config(db, class_context)[SCHOOL_URL]}"
     )
 
-def get_timetable_image_message(user_message: str = "", class_context=None) -> ImageMessage:
+def get_timetable_image_message(user_message: str = "", class_context=None):
     """ส่งรูปตารางเรียน"""
-    image_url = get_timetable_image_url(db, class_context)
-    return ImageMessage(original_content_url=image_url, preview_image_url=image_url)
+    return build_timetable_image_message(db, class_context)
 
 def get_grade_link_message(user_message: str = "", class_context=None) -> TextMessage:
     """ส่งลิงก์เช็คเกรด"""

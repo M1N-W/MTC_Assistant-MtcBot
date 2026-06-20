@@ -7,6 +7,8 @@ import datetime
 import math
 from typing import Any
 
+from linebot.v3.messaging import ImageMessage, TextMessage
+
 from mtc_assistant.class_context import get_class_registry_entry
 from mtc_assistant.config import LOCAL_TZ, SCHEDULE, TIMETABLE_IMG, logger
 
@@ -37,10 +39,23 @@ def build_timetable_config(schedule: dict[int, list[dict[str, Any]]], image_url:
     return config
 
 
-def get_timetable_image_url(db=None, class_context=None) -> str:
+def get_timetable_image_url(db=None, class_context=None) -> str | None:
     config = _load_timetable_config(db, class_context, validate_days=False)
     image_url = str((config or {}).get("image_url") or "").strip()
+    if class_context and not getattr(class_context, "is_legacy_fallback", False):
+        return image_url or None
     return image_url or TIMETABLE_IMG
+
+
+def get_timetable_image_message(db=None, class_context=None):
+    image_url = get_timetable_image_url(db, class_context)
+    if image_url:
+        return ImageMessage(original_content_url=image_url, preview_image_url=image_url)
+    label = getattr(class_context, "class_id", "") or "ห้องนี้"
+    registry = get_class_registry_entry(db, class_context.class_id) if db and class_context else None
+    if registry and registry.display_name:
+        label = registry.display_name
+    return TextMessage(text=f"{label} ยังไม่ได้ตั้งค่าภาพตารางเรียน แต่สามารถใช้คำสั่ง คาบต่อไป หรือ เช็คเวลาเรียน ได้")
 
 
 def get_timetable_status_text(db=None, class_context=None, now: datetime.datetime | None = None) -> str:

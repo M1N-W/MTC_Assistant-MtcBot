@@ -45,6 +45,59 @@ from mtc_assistant.timetable_service import build_timetable_config  # noqa: E402
 
 
 DEFAULT_TERM_ID = "2569-t1"
+MTC11_SCHEDULE = {
+    0: [
+        {"period": 1, "start": "08:30", "end": "09:25", "subject": "จ33207 · ครูไพลิน", "room": "634"},
+        {"period": 2, "start": "09:25", "end": "10:20", "subject": "ค33101 · ครูทักษิณ", "room": "634"},
+        {"period": 3, "start": "10:20", "end": "11:15", "subject": "ค33201 · ครูสุนิสา", "room": "634"},
+        {"period": 4, "start": "11:15", "end": "12:10", "subject": "ว30225 · ครูวรรณี", "room": "313"},
+        {"period": 5, "start": "12:10", "end": "13:05", "subject": "พัก", "room": "-"},
+        {"period": 6, "start": "13:05", "end": "14:00", "subject": "ว30205 · ครูจิราภรณ์", "room": "335"},
+        {"period": 7, "start": "14:00", "end": "14:55", "subject": "ว30205 · ครูจิราภรณ์", "room": "335"},
+        {"period": 8, "start": "14:55", "end": "15:50", "subject": "ท33101 · ครูวาทิยา", "room": "634"},
+    ],
+    1: [
+        {"period": 1, "start": "08:30", "end": "09:25", "subject": "ค33201 · ครูสุนิสา", "room": "634"},
+        {"period": 2, "start": "09:25", "end": "10:20", "subject": "ว30161 · ครูพัชราภรณ์", "room": "329"},
+        {"period": 3, "start": "10:20", "end": "11:15", "subject": "ว30161 · ครูพัชราภรณ์", "room": "329"},
+        {"period": 4, "start": "11:15", "end": "12:10", "subject": "ส33101 · ครูพงศ์พิชิต", "room": "634"},
+        {"period": 5, "start": "12:10", "end": "13:05", "subject": "พัก", "room": "-"},
+        {"period": 6, "start": "13:05", "end": "14:00", "subject": "อ33101 · ครูพัชรี(พ)", "room": "634"},
+        {"period": 7, "start": "14:00", "end": "14:55", "subject": "อ33207 · T3/พัชรี", "room": "634"},
+        {"period": 8, "start": "14:55", "end": "15:50", "subject": "ว30245 · ครูปาณิศา", "room": "323"},
+    ],
+    2: [
+        {"period": 1, "start": "08:30", "end": "09:25", "subject": "ว30245 · ครูปาณิศา", "room": "323"},
+        {"period": 2, "start": "09:25", "end": "10:20", "subject": "ว30245 · ครูปาณิศา", "room": "323"},
+        {"period": 3, "start": "10:20", "end": "11:15", "subject": "ค33201 · ครูสุนิสา", "room": "634"},
+        {"period": 4, "start": "11:15", "end": "12:10", "subject": "แนะแนว · ครูสมฤทัย", "room": "634"},
+        {"period": 5, "start": "12:10", "end": "13:05", "subject": "พัก", "room": "-"},
+        {"period": 6, "start": "13:05", "end": "14:00", "subject": "อ33101 · พัชรี*", "room": "634"},
+        {"period": 7, "start": "14:00", "end": "14:55", "subject": "โฮมรูม/ประชุม ม.6", "room": "-"},
+        {"period": 8, "start": "14:55", "end": "15:50", "subject": "กิจกรรม", "room": "-"},
+    ],
+    3: [
+        {"period": 1, "start": "08:30", "end": "09:25", "subject": "ว30225 · ครูวรรณี", "room": "313"},
+        {"period": 2, "start": "09:25", "end": "10:20", "subject": "ว30225 · ครูวรรณี", "room": "313"},
+        {"period": 3, "start": "10:20", "end": "11:15", "subject": "จ33207 · ครูไพลิน", "room": "634"},
+        {"period": 4, "start": "11:15", "end": "12:10", "subject": "ค33201 · ครูสุนิสา", "room": "634"},
+        {"period": 5, "start": "12:10", "end": "13:05", "subject": "พัก", "room": "-"},
+        {"period": 6, "start": "13:05", "end": "14:00", "subject": "ว30205 · ครูจิราภรณ์", "room": "634"},
+        {"period": 7, "start": "14:00", "end": "14:55", "subject": "ว30205 · ครูจิราภรณ์", "room": "634"},
+        {"period": 8, "start": "14:55", "end": "15:50", "subject": "ค33203 · ครูชลิต", "room": "634"},
+        {"period": 9, "start": "15:50", "end": "16:45", "subject": "ค33203 · ครูชลิต", "room": "634"},
+    ],
+    4: [
+        {"period": 1, "start": "08:30", "end": "09:25", "subject": "ค33101 · ครูทักษิณ", "room": "634"},
+        {"period": 2, "start": "09:25", "end": "10:20", "subject": "ส33101 · ครูพงศ์พิชิต", "room": "634"},
+        {"period": 3, "start": "10:20", "end": "11:15", "subject": "อ33101 · ครูพัชรี(พ)", "room": "634"},
+        {"period": 4, "start": "11:15", "end": "12:10", "subject": "ท33101 · ครูวาทิยา", "room": "634"},
+        {"period": 5, "start": "12:10", "end": "13:05", "subject": "พัก", "room": "-"},
+        {"period": 6, "start": "13:05", "end": "14:00", "subject": "ศ33101 · ครูอภิรดี", "room": "411"},
+        {"period": 7, "start": "14:00", "end": "14:55", "subject": "ว30161 · ครูพัชราภรณ์", "room": "329"},
+        {"period": 8, "start": "14:55", "end": "15:50", "subject": "พ33101 · ครูประกิต", "room": "โดม2"},
+    ],
+}
 MTC13_SCHEDULE = {
     0: [
         {"start": "08:30", "end": "09:25", "subject": "คอมพิวเตอร์ (ครูจินดาพร)", "room": "221"},
@@ -96,10 +149,12 @@ MTC13_SCHEDULE = {
     ],
 }
 TIMETABLE_SEEDS = {
+    "mtc11": MTC11_SCHEDULE,
     "mtc12": SCHEDULE,
     "mtc13": MTC13_SCHEDULE,
 }
 TIMETABLE_IMAGE_URLS = {
+    "mtc11": "https://img2.pic.in.th/290922.jpg",
     "mtc12": "https://img2.pic.in.th/186308.jpg",
     "mtc13": "https://img2.pic.in.th/SaveClip.App_702397967_18144615751449592_1572400629043110676_n.jpg",
 }
@@ -117,6 +172,15 @@ LINK_SEEDS = {
     },
 }
 CLASS_SEEDS = {
+    "mtc11": {
+        "display_name": "MTC11",
+        "status": "active",
+        "active_term_id": DEFAULT_TERM_ID,
+        "grade_level": "m6",
+        "room_label": "ม.6/2",
+        "homeroom_room": "634",
+        "term_display_name": "ภาคเรียนที่ 1/2569",
+    },
     "mtc12": {
         "display_name": "MTC12",
         "status": "active",
@@ -154,32 +218,39 @@ def build_seed_operations(invite_args: list[str] | None = None) -> list[SeedOper
         class_metadata = {
             "display_name": seed["display_name"],
             "status": seed["status"],
-            "active_term_id": seed["active_term_id"],
             "grade_level": seed["grade_level"],
-            "room_label": seed["room_label"],
             "default_timezone": "Asia/Bangkok",
             "updated_at": now,
         }
-        term_metadata = {
-            "term_id": seed["active_term_id"],
-            "display_name": seed["active_term_id"],
-            "status": "active",
-            "updated_at": now,
-        }
+        if seed.get("active_term_id"):
+            class_metadata["active_term_id"] = seed["active_term_id"]
+        if seed.get("room_label"):
+            class_metadata["room_label"] = seed["room_label"]
+        if seed.get("homeroom_room"):
+            class_metadata["homeroom_room"] = seed["homeroom_room"]
 
         operations.extend([
             SeedOperation(f"system/class_registry/{class_id}/main", registry_data),
             SeedOperation(f"classes/{class_id}/metadata/main", class_metadata),
-            SeedOperation(f"classes/{class_id}/terms/{seed['active_term_id']}/metadata/main", term_metadata),
-            SeedOperation(
+        ])
+        if seed.get("active_term_id"):
+            term_metadata = {
+                "term_id": seed["active_term_id"],
+                "display_name": seed.get("term_display_name") or seed["active_term_id"],
+                "status": "active",
+                "updated_at": now,
+            }
+            operations.append(SeedOperation(f"classes/{class_id}/terms/{seed['active_term_id']}/metadata/main", term_metadata))
+        if seed.get("active_term_id") and class_id in TIMETABLE_SEEDS:
+            operations.append(SeedOperation(
                 f"classes/{class_id}/terms/{seed['active_term_id']}/config/timetable",
                 build_timetable_config(TIMETABLE_SEEDS[class_id], image_url=TIMETABLE_IMAGE_URLS.get(class_id)),
-            ),
-            SeedOperation(
+            ))
+        if seed.get("active_term_id") and class_id in LINK_SEEDS:
+            operations.append(SeedOperation(
                 f"classes/{class_id}/terms/{seed['active_term_id']}/config/links",
                 LINK_SEEDS[class_id],
-            ),
-        ])
+            ))
 
     for invite_arg in invite_args or []:
         class_id, invite_code = _parse_invite_arg(invite_arg)

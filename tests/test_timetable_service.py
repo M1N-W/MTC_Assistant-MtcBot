@@ -6,6 +6,7 @@ from mtc_assistant.config import LOCAL_TZ
 from mtc_assistant.timetable_service import (
     build_timetable_config,
     format_timetable_status,
+    get_timetable_image_message,
     get_timetable_image_url,
     get_timetable_status_text,
     normalize_timetable_config,
@@ -147,6 +148,38 @@ class TimetableServiceTest(unittest.TestCase):
         image_url = get_timetable_image_url(db, ClassContext("mtc13", "user-a"))
 
         self.assertEqual("https://example.com/mtc13.png", image_url)
+
+    def test_mtc11_timetable_image_uses_class_specific_reviewed_url(self):
+        db = FakeDb()
+        db.store["system/class_registry/mtc11/main"] = {
+            "display_name": "MTC11",
+            "status": "active",
+            "active_term_id": "2569-t1",
+        }
+        db.store["classes/mtc11/terms/2569-t1/config/timetable"] = {
+            "timezone": "Asia/Bangkok",
+            "image_url": "https://img2.pic.in.th/290922.jpg",
+        }
+
+        image_url = get_timetable_image_url(db, ClassContext("mtc11", "user-a"))
+
+        self.assertEqual("https://img2.pic.in.th/290922.jpg", image_url)
+
+    def test_non_legacy_class_missing_image_does_not_fallback_to_mtc12_image(self):
+        db = FakeDb()
+        db.store["system/class_registry/mtc11/main"] = {
+            "display_name": "MTC11",
+            "status": "active",
+            "active_term_id": "2569-t1",
+        }
+        db.store["classes/mtc11/terms/2569-t1/config/timetable"] = build_timetable_config(SAMPLE_SCHEDULE)
+
+        image_url = get_timetable_image_url(db, ClassContext("mtc11", "user-a"))
+        message = get_timetable_image_message(db, ClassContext("mtc11", "user-a"))
+
+        self.assertIsNone(image_url)
+        self.assertIn("ยังไม่ได้ตั้งค่าภาพตารางเรียน", message.text)
+        self.assertIn("MTC11", message.text)
 
     def test_invalid_firestore_config_falls_back_safely(self):
         db = FakeDb()
