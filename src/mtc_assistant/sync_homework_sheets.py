@@ -287,6 +287,7 @@ def export_firestore_to_sheet(class_id: str, rows: list[list[str]], repo: Homewo
     _headers, parsed_rows = _parse_sheet_rows(rows)
     result = SyncResult(class_id=class_id, rows_scanned=len(parsed_rows))
     row_by_homework_id: dict[str, tuple[int, dict]] = {}
+    duplicate_homework_ids: set[str] = set()
 
     for row_number, row in parsed_rows:
         homework_id = str(row.get("_homework_id", "")).strip()
@@ -295,6 +296,7 @@ def export_firestore_to_sheet(class_id: str, rows: list[list[str]], repo: Homewo
                 result.skipped_blank_rows += 1
             continue
         if homework_id in row_by_homework_id:
+            duplicate_homework_ids.add(homework_id)
             result.add_conflict(row_number=row_number, code=ConflictCode.DUPLICATE_HOMEWORK_ID, homework_id=homework_id)
             continue
         row_by_homework_id[homework_id] = (row_number, row)
@@ -304,6 +306,8 @@ def export_firestore_to_sheet(class_id: str, rows: list[list[str]], repo: Homewo
     for doc in repo.list_homeworks(class_id):
         homework_id = str(doc.get("homework_id") or "").strip()
         if not homework_id:
+            continue
+        if homework_id in duplicate_homework_ids:
             continue
         row = _row_from_doc(doc)
         result.planned_rows.append(row)

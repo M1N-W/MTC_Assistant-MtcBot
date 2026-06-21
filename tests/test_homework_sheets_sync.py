@@ -143,10 +143,39 @@ class HomeworkSheetsSyncTest(unittest.TestCase):
 
         result = export_firestore_to_sheet("mtc11", rows, repo, apply=False)
 
-        self.assertEqual(1, result.would_update)
+        self.assertEqual(0, result.would_update)
         self.assertEqual(1, result.would_append)
         self.assertEqual(1, result.conflicts)
         self.assertEqual(0, result.sheet_writes)
+
+    def test_export_apply_skips_ambiguous_duplicate_homework_id(self):
+        db = FakeDb()
+        repo = HomeworkSheetsRepository(db)
+        repo.set_homework(
+            "mtc11",
+            "hw-1",
+            {"homework_id": "hw-1", "class_id": "mtc11", "subject": "คณิต", "details": "งาน", "revision": 1},
+        )
+        repo.set_homework(
+            "mtc11",
+            "hw-2",
+            {"homework_id": "hw-2", "class_id": "mtc11", "subject": "ฟิสิกส์", "details": "งาน", "revision": 1},
+        )
+        rows = [
+            HEADER,
+            ["", "คณิต", "งาน", "", "FALSE", "", "hw-1", "1", "", "firestore", ""],
+            ["", "ซ้ำ", "งาน", "", "FALSE", "", "hw-1", "1", "", "firestore", ""],
+        ]
+        client = FakeSheetClient()
+
+        result = export_firestore_to_sheet("mtc11", rows, repo, apply=True, sheet_client=client)
+
+        self.assertEqual(1, result.conflicts)
+        self.assertEqual(0, result.would_update)
+        self.assertEqual(1, result.would_append)
+        self.assertEqual(1, result.sheet_writes)
+        self.assertEqual([], client.updated)
+        self.assertEqual("hw-2", client.appended[0][1][0]["_homework_id"])
 
     def test_export_closed_homework_maps_to_checkbox(self):
         db = FakeDb()
