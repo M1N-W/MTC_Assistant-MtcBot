@@ -6,6 +6,12 @@ This belongs to Master Plan 1, Phase 5: Homework System Maturity.
 
 Subphase: Google Sheets Bidirectional Homework Sync.
 
+Current implementation status: Phase 5A foundation only. It provides a
+dry-run-first importer/exporter, class Sheet mapping, schema validation, stable
+`homework_id`/`revision` handling, and conflict detection. It does not enable
+Apps Script, realtime sync, scheduler jobs, production Sheet writes, or LINE
+Quick Reply changes.
+
 It is not part of the LINE account identity proofing implementation.
 
 ## Confirmed Sheet IDs
@@ -74,3 +80,55 @@ Future Quick Reply after the sync foundation exists:
 
 Do not add this Quick Reply before the schema, importer, exporter, conflict
 handling, and authorization tests exist.
+
+## Phase 5A Command Surface
+
+Dry-run is the default operating posture:
+
+```powershell
+$env:PYTHONPATH='src'
+python -m mtc_assistant.sync_homework_sheets import --class-id mtc12 --dry-run
+python -m mtc_assistant.sync_homework_sheets export --class-id mtc12 --dry-run
+```
+
+`--apply` is reserved for reviewed operator runs after credentials and Sheet
+sharing are configured. It must not be used as part of deployment.
+
+Safe output is aggregate-only by default:
+
+- class ID;
+- rows scanned;
+- valid homework rows;
+- skipped blank rows;
+- create/update/append counts;
+- conflict counts and row numbers;
+- error counts.
+
+It must not print homework details, student identifiers, LINE IDs, Google
+credentials, tokens, or Firestore paths.
+
+## Phase 5A Sheet Schema
+
+Visible columns:
+
+| Column | Header |
+| --- | --- |
+| A | วันที่สั่ง |
+| B | วิชา |
+| C | รายละเอียดงาน |
+| D | กำหนดส่ง |
+| E | ปิดงานแล้ว |
+| F | หมายเหตุ |
+
+Hidden system columns:
+
+| Column | Header |
+| --- | --- |
+| G | _homework_id |
+| H | _revision |
+| I | _updated_at |
+| J | _updated_source |
+| K | _sync_status |
+
+A row is homework only when both `วิชา` and `รายละเอียดงาน` are present.
+Checkbox-only blank rows are ignored.
