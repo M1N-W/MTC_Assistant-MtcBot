@@ -373,31 +373,61 @@ def callback():
 @app.route("/", methods=['GET'])
 def home():
     """Health check and status endpoint"""
+    _ensure_firebase_connected()
+
     cfg_ok = "OK" if ACCESS_TOKEN and CHANNEL_SECRET else "CONFIG_MISSING"
     gemini_status = "OK" if (GEMINI_API_KEY_V3 or GEMINI_API_KEY_V25) else "MISSING"
     db_status = "OK" if db else "DISCONNECTED"
     broadcast_status = "OK" if line_config else "DISABLED"
 
+    # Firebase Connectivity Probe
+    db_conn_status = "PENDING"
+    if db:
+        try:
+            list(db.collection("health_check").limit(1).stream())
+            db_conn_status = "OK"
+        except Exception:
+            db_conn_status = "FAILED"
+    else:
+        db_conn_status = "DISCONNECTED"
+
+    # Config checks
+    pepper_val = os.environ.get("STUDENT_ID_PEPPER")
+    pepper_status = f"SET ({len(pepper_val)} chars)" if pepper_val else "MISSING"
+
+    from mtc_assistant.config import ADMIN_USER_IDS, MTC_DASHBOARD_API_TOKEN
+    admin_status = f"SET ({len(ADMIN_USER_IDS)} admins)" if ADMIN_USER_IDS else "EMPTY"
+    token_status = "SET" if MTC_DASHBOARD_API_TOKEN else "MISSING"
+
     uptime = int(time.time() - _metrics["start_time"])
+    total_reqs = _metrics['total_requests']
+    total_errs = _metrics['total_errors']
+    avg_time = _metrics['total_response_time'] / max(total_reqs, 1)
 
     return (
         f"🤖 MTC Assistant v21 (Optimized + Impersonate Edition)\n\n"
-        f"Status:\n"
-        f"  LINE: {cfg_ok}\n"
-        f"  Gemini AI: {gemini_status}\n"
-        f"  Firebase: {db_status}\n"
-        f"  Broadcast: {broadcast_status}\n\n"
-        f"Performance:\n"
+        f"System Status:\n"
+        f"  LINE Integration: {cfg_ok}\n"
+        f"  Gemini AI Client: {gemini_status}\n"
+        f"  Firebase Admin SDK: {db_status}\n"
+        f"  Firebase Connectivity: {db_conn_status}\n"
+        f"  Broadcast Engine: {broadcast_status}\n\n"
+        f"Configuration Checklist:\n"
+        f"  STUDENT_ID_PEPPER: {pepper_status}\n"
+        f"  ADMIN_USER_IDS: {admin_status}\n"
+        f"  MTC_DASHBOARD_API_TOKEN: {token_status}\n\n"
+        f"Performance & Diagnostics:\n"
         f"  Uptime: {uptime}s\n"
-        f"  Total Requests: {_metrics['total_requests']}\n"
-        f"  Total Errors: {_metrics['total_errors']}\n"
-        f"  Avg Response Time: {_metrics['total_response_time'] / max(_metrics['total_requests'], 1):.2f}ms\n\n"
-        f"Endpoints:\n"
-        f"  /callback - LINE webhook\n"
-        f"  /healthz - Health check (JSON)\n"
-        f"  /metrics - Performance metrics\n"
-        f"  /stats - Bot statistics\n"
+        f"  Total Requests: {total_reqs}\n"
+        f"  Total Errors: {total_errs}\n"
+        f"  Avg Response Time: {avg_time:.2f}ms\n\n"
+        f"System Endpoints:\n"
+        f"  /callback - LINE Webhook Handler (POST)\n"
+        f"  /healthz  - Health check (JSON, GET)\n"
+        f"  /metrics  - Performance metrics (JSON, GET)\n"
+        f"  /stats    - Bot statistics (JSON, GET)\n"
     )
+
 
 @app.route("/healthz", methods=['GET'])
 def healthz():
